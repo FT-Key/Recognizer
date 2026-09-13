@@ -233,5 +233,5 @@ def test_repo_config_loads_expected_mappings() -> None:
     assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
     assert mappings["Victory"] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))
     assert mappings["ILoveYou"] == OpenLinksActionConfig(
-        urls=("https://www.youtube.com/watch?v=mlabBbn_fHI",)
+        urls=("https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s",)
     )

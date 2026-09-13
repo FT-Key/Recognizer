@@ -13,7 +13,7 @@
   - Acción `open_links` con `urls: [..]` que recorre la lista en orden (índice rotatorio),
     sin aleatoriedad; mapeable a cualquier gesto.
   - `ILoveYou` queda mapeado por defecto al enlace acordado
-    (`https://www.youtube.com/watch?v=mlabBbn_fHI`).
+    (`https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s`).
   - Ruta de Chrome autodetectada (o configurable con `browser`); si no se encuentra,
     `ActionError` controlado y la app sigue.
   - Tests, config.yaml, README y gate verde.

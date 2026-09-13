@@ -82,7 +82,7 @@ actions:
     ILoveYou:
       type: open_links
       urls:
-        - "https://www.youtube.com/watch?v=mlabBbn_fHI"
+        - "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
       # browser: ""   # opcional: ruta a chrome.exe; vacio = autodetectar
     # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
     # Ejemplos de acciones script (descomenta y asigna a un gesto):

@@ -102,7 +102,7 @@ actions:
     ILoveYou:
       type: open_links
       urls:
-        - "https://www.youtube.com/watch?v=mlabBbn_fHI"
+        - "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
         # añade más enlaces aquí (se abren en orden)
       browser: ""   # opcional: ruta a chrome.exe; vacío = autodetectar
 ```
