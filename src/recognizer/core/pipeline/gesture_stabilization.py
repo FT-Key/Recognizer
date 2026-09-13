@@ -3,7 +3,12 @@
 from dataclasses import dataclass, replace
 
 from recognizer.core.domain.events import GestureDetected, GestureReleased
-from recognizer.core.domain.gesture import DetectedGesture, GestureName, StableGesture
+from recognizer.core.domain.gesture import (
+    GESTURE_NONE,
+    DetectedGesture,
+    GestureId,
+    StableGesture,
+)
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.processor import Processor
@@ -18,9 +23,9 @@ INITIAL_CONFIDENCE = 0.0
 class _SideState:
     """Estado de estabilizacion de una lateralidad."""
 
-    confirmed: GestureName | None = None
+    confirmed: GestureId | None = None
     confidence: float = INITIAL_CONFIDENCE
-    candidate: GestureName | None = None
+    candidate: GestureId | None = None
     candidate_frames: int = INITIAL_FRAME_COUNT
     missing_frames: int = INITIAL_FRAME_COUNT
 
@@ -80,7 +85,7 @@ class GestureStabilizerProcessor(Processor):
         for detection in detections:
             if detection.handedness is Handedness.UNKNOWN:
                 continue
-            if detection.name is GestureName.NONE:
+            if detection.name == GESTURE_NONE:
                 continue
             if detection.confidence < self._min_gesture_confidence:
                 continue
@@ -98,13 +103,13 @@ class GestureStabilizerProcessor(Processor):
     ) -> None:
         state = self._states[handedness]
 
-        if observation is not None and state.confirmed is observation.name:
+        if observation is not None and state.confirmed == observation.name:
             state.confidence = observation.confidence
             state.reset_pending()
             return
 
         if observation is not None:
-            if state.candidate is observation.name:
+            if state.candidate == observation.name:
                 state.candidate_frames += 1
             else:
                 state.candidate = observation.name
@@ -142,7 +147,7 @@ class GestureStabilizerProcessor(Processor):
         timestamp: float,
     ) -> None:
         previous = state.confirmed
-        if previous is not None and previous is not observation.name:
+        if previous is not None and previous != observation.name:
             self._bus.publish(
                 GestureReleased(timestamp=timestamp, gesture=previous, handedness=handedness)
             )

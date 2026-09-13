@@ -1,9 +1,12 @@
 """Overlay de landmarks de manos dibujado con OpenCV."""
 
+from collections.abc import Sequence
+
 import cv2
 import numpy as np
 from numpy.typing import NDArray
 
+from recognizer.core.actions.menus import Menu
 from recognizer.core.domain.gesture import StableGesture
 from recognizer.core.domain.hand import (
     HAND_CONNECTIONS,
@@ -32,6 +35,11 @@ POINTER_COLOR_BGR = (255, 0, 255)
 POINTER_RADIUS_PIXELS = 12
 POINTER_THICKNESS = 2
 POINTER_TEXT_OFFSET_PIXELS = 24
+MENU_COLOR_BGR = (0, 255, 255)
+MENU_TEXT_START_X_PIXELS = 10
+MENU_TEXT_START_Y_PIXELS = 60
+MENU_OPTION_INDENT_PIXELS = 24
+MENU_LINE_HEIGHT_PIXELS = 20
 
 
 def _draw_hand(*, data: NDArray[np.uint8], hand: HandLandmarks) -> None:
@@ -158,4 +166,50 @@ class PointerOverlay(Processor):
         """Dibuja el puntero; sin posicion no hace nada."""
         if context.pointer is not None:
             _draw_pointer(data=context.frame.data, position=context.pointer)
+        return context
+
+
+def _menu_is_active(*, gestures: tuple[StableGesture, ...], menu: Menu) -> bool:
+    return any(
+        gesture.name == menu.modifier and gesture.handedness is menu.hand for gesture in gestures
+    )
+
+
+class MenuOverlay(Processor):
+    """Dibuja el nombre y las opciones de cada menu activo bajo el HUD."""
+
+    def __init__(self, menus: Sequence[Menu]) -> None:
+        self._menus = tuple(menus)
+
+    def process(self, context: FrameContext) -> FrameContext:
+        """Dibuja los menus activos; sin menus o sin modificador no hace nada."""
+        active = [
+            menu for menu in self._menus if _menu_is_active(gestures=context.gestures, menu=menu)
+        ]
+        if not active:
+            return context
+
+        y = MENU_TEXT_START_Y_PIXELS
+        for menu in active:
+            cv2.putText(
+                context.frame.data,
+                menu.name,
+                (MENU_TEXT_START_X_PIXELS, y),
+                TEXT_FONT,
+                TEXT_SCALE,
+                MENU_COLOR_BGR,
+                TEXT_THICKNESS,
+            )
+            y += MENU_LINE_HEIGHT_PIXELS
+            for option in menu.options:
+                cv2.putText(
+                    context.frame.data,
+                    option.value,
+                    (MENU_OPTION_INDENT_PIXELS, y),
+                    TEXT_FONT,
+                    TEXT_SCALE,
+                    MENU_COLOR_BGR,
+                    TEXT_THICKNESS,
+                )
+                y += MENU_LINE_HEIGHT_PIXELS
         return context

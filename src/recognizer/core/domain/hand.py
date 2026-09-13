@@ -5,7 +5,32 @@ from enum import StrEnum
 
 HAND_LANDMARK_COUNT = 21
 WRIST_LANDMARK_INDEX = 0
+
+# Topologia oficial del modelo de 21 landmarks de MediaPipe: CMC/MCP/IP/PIP/DIP/TIP.
+THUMB_CMC_LANDMARK_INDEX = 1
+THUMB_MCP_LANDMARK_INDEX = 2
+THUMB_IP_LANDMARK_INDEX = 3
+THUMB_TIP_LANDMARK_INDEX = 4
+
+INDEX_FINGER_MCP_LANDMARK_INDEX = 5
+INDEX_FINGER_PIP_LANDMARK_INDEX = 6
+INDEX_FINGER_DIP_LANDMARK_INDEX = 7
 INDEX_FINGER_TIP_LANDMARK_INDEX = 8
+
+MIDDLE_FINGER_MCP_LANDMARK_INDEX = 9
+MIDDLE_FINGER_PIP_LANDMARK_INDEX = 10
+MIDDLE_FINGER_DIP_LANDMARK_INDEX = 11
+MIDDLE_FINGER_TIP_LANDMARK_INDEX = 12
+
+RING_FINGER_MCP_LANDMARK_INDEX = 13
+RING_FINGER_PIP_LANDMARK_INDEX = 14
+RING_FINGER_DIP_LANDMARK_INDEX = 15
+RING_FINGER_TIP_LANDMARK_INDEX = 16
+
+PINKY_MCP_LANDMARK_INDEX = 17
+PINKY_PIP_LANDMARK_INDEX = 18
+PINKY_DIP_LANDMARK_INDEX = 19
+PINKY_TIP_LANDMARK_INDEX = 20
 
 # Topologia oficial del modelo de 21 landmarks de MediaPipe.
 HAND_CONNECTIONS: tuple[tuple[int, int], ...] = (
@@ -39,6 +64,18 @@ class Handedness(StrEnum):
     LEFT = "Left"
     RIGHT = "Right"
     UNKNOWN = "Unknown"
+
+
+_HAND_SWAP: dict[Handedness, Handedness] = {
+    Handedness.LEFT: Handedness.RIGHT,
+    Handedness.RIGHT: Handedness.LEFT,
+    Handedness.UNKNOWN: Handedness.UNKNOWN,
+}
+
+
+def other_hand(hand: Handedness) -> Handedness:
+    """Devuelve la lateralidad contraria; ``UNKNOWN`` se conserva."""
+    return _HAND_SWAP[hand]
 
 
 @dataclass(frozen=True, slots=True)

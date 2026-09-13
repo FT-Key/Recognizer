@@ -8,7 +8,12 @@ from numpy.typing import NDArray
 
 from recognizer.core.domain.events import DomainEvent, PointerMoved
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName, StableGesture
+from recognizer.core.domain.gesture import (
+    GESTURE_POINTING_UP,
+    GESTURE_VICTORY,
+    GestureId,
+    StableGesture,
+)
 from recognizer.core.domain.hand import (
     HAND_LANDMARK_COUNT,
     INDEX_FINGER_TIP_LANDMARK_INDEX,
@@ -95,7 +100,7 @@ def _hand(
 
 def _gesture(
     *,
-    name: GestureName = GestureName.POINTING_UP,
+    name: GestureId = GESTURE_POINTING_UP,
     handedness: Handedness = Handedness.RIGHT,
 ) -> StableGesture:
     return StableGesture(name=name, confidence=GESTURE_CONFIDENCE, handedness=handedness)
@@ -121,7 +126,7 @@ def _processor(
     bus: RecordingBus,
     *,
     smoothing: PointerSmoothing | None = None,
-    activation_gesture: GestureName = GestureName.POINTING_UP,
+    activation_gesture: GestureId = GESTURE_POINTING_UP,
 ) -> PointerDetectionProcessor:
     return PointerDetectionProcessor(
         bus=bus,
@@ -249,12 +254,12 @@ def test_with_mismatched_handedness_resets_smoothing_and_clears_pointer() -> Non
 
 def test_configured_activation_gesture_is_used() -> None:
     bus = RecordingBus()
-    processor = _processor(bus, activation_gesture=GestureName.VICTORY)
+    processor = _processor(bus, activation_gesture=GESTURE_VICTORY)
 
     context = processor.process(
         _context(
             hands=(_hand(tip=_point(TIP_X, TIP_Y)),),
-            gestures=(_gesture(name=GestureName.VICTORY),),
+            gestures=(_gesture(name=GESTURE_VICTORY),),
         )
     )
 
@@ -296,3 +301,43 @@ def test_smoothing_is_applied_between_frames() -> None:
     assert first_event.x == pytest.approx(0.0)
     assert second_event.x == pytest.approx(SMOOTHING_ALPHA)
     assert second_event.y == pytest.approx(SMOOTHING_ALPHA)
+
+
+def test_two_hands_clear_pointer_even_with_activation_gesture_hand() -> None:
+    bus = RecordingBus()
+    spy = SpySmoothing()
+    processor = _processor(bus, smoothing=spy)
+
+    context = processor.process(
+        _context(
+            hands=(
+                _hand(tip=_point(TIP_X, TIP_Y)),
+                _hand(
+                    handedness=Handedness.LEFT,
+                    tip=_point(OTHER_X, OTHER_Y),
+                ),
+            ),
+            gestures=(_gesture(),),
+            pointer=PointerPosition(x=DEFAULT_POINT, y=DEFAULT_POINT),
+        )
+    )
+
+    assert bus.events == []
+    assert context.pointer is None
+    assert spy.resets == 1
+    assert spy.targets == []
+
+
+def test_single_hand_still_publishes_pointer() -> None:
+    bus = RecordingBus()
+    processor = _processor(bus)
+
+    context = processor.process(
+        _context(
+            hands=(_hand(tip=_point(TIP_X, TIP_Y)),),
+            gestures=(_gesture(),),
+        )
+    )
+
+    assert context.pointer is not None
+    assert _only_event(bus).x == pytest.approx(CALIBRATED_X)

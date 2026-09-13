@@ -8,7 +8,12 @@ import pytest
 from numpy.typing import NDArray
 
 from recognizer import bootstrap
-from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, PointerOverlay
+from recognizer.adapters.overlay_opencv import (
+    GestureOverlay,
+    LandmarkOverlay,
+    MenuOverlay,
+    PointerOverlay,
+)
 from recognizer.bootstrap import (
     build_action_bindings,
     build_pipeline,
@@ -16,15 +21,22 @@ from recognizer.bootstrap import (
     resolve_camera_config,
 )
 from recognizer.core.actions.decorators import ActionGate, GatedAction
+from recognizer.core.actions.links import OpenLinksAction
+from recognizer.core.actions.menus import Menu
+from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
     AppConfig,
     CameraConfig,
     GestureConfig,
+    GestureRuleConfig,
+    OpenLinksActionConfig,
     PointerConfig,
+    ScriptActionConfig,
 )
-from recognizer.core.domain.action import ActionContext, MediaKey
+from recognizer.core.constants import CONTEXT_ENV_GESTURE
+from recognizer.core.domain.action import ActionContext, MediaKey, ScriptInterpreter, ScriptRequest
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -33,8 +45,14 @@ from recognizer.core.domain.events import (
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
+    GESTURE_ILOVE_YOU,
+    GESTURE_POINTING_UP,
+    GESTURE_THUMB_UP,
+    GESTURE_VICTORY,
     DetectedGesture,
-    GestureName,
+    Finger,
+    GestureCatalog,
+    GestureId,
     GestureRecognition,
     StableGesture,
 )
@@ -47,6 +65,7 @@ from recognizer.core.domain.hand import (
 from recognizer.core.errors import ActionError, RecognizerError
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
+from recognizer.core.pipeline.landmark_rules import LandmarkRuleProcessor
 from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
 from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.ports.event_bus import EventT
@@ -93,6 +112,26 @@ class RecordingMouseController:
 
     def move_to(self, *, x: float, y: float) -> None:
         self.moves.append((x, y))
+
+
+class RecordingScriptRunner:
+    """Doble de ScriptRunner que registra los requests recibidos."""
+
+    def __init__(self) -> None:
+        self.requests: list[ScriptRequest] = []
+
+    def run(self, request: ScriptRequest) -> None:
+        self.requests.append(request)
+
+
+class RecordingLinkOpener:
+    """Doble de LinkOpener que registra las URLs abiertas."""
+
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+
+    def open(self, url: str) -> None:
+        self.urls.append(url)
 
 
 class FakeClassifier:
@@ -142,16 +181,20 @@ def _hand() -> HandLandmarks:
 
 def _recognition() -> GestureRecognition:
     detection = DetectedGesture(
-        name=GestureName.VICTORY,
+        name=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
     )
     return GestureRecognition(hands=(_hand(),), detections=(detection,))
 
 
+def _catalog() -> GestureCatalog:
+    return GestureCatalog.from_labels(custom_labels=(), rule_names=())
+
+
 def _context() -> ActionContext:
     return ActionContext(
-        gesture=GestureName.VICTORY,
+        gesture=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
         timestamp=FRAME_TIMESTAMP,
@@ -196,10 +239,11 @@ def test_resolve_camera_config_rejects_negative_override() -> None:
 
 
 def test_build_action_bindings_without_mappings_is_empty() -> None:
-    bindings = build_action_bindings(actions=ActionsConfig())
+    bindings = build_action_bindings(actions=ActionsConfig(), catalog=_catalog())
 
     assert bindings.mapping == {}
     assert bindings.gate is None
+    assert bindings.menus == ()
 
 
 def test_build_action_bindings_routes_each_action_type() -> None:
@@ -207,14 +251,15 @@ def test_build_action_bindings_routes_each_action_type() -> None:
     runner = RecordingCommandRunner()
     bindings = build_action_bindings(
         actions=_actions_config(),
+        catalog=_catalog(),
         key_sender=sender,
         command_runner=runner,
     )
     context = _context()
 
-    bindings.mapping[GestureName.THUMB_UP].execute(context)
-    bindings.mapping[GestureName.VICTORY].execute(context)
-    bindings.mapping[GestureName.I_LOVE_YOU].execute(context)
+    bindings.mapping[GESTURE_THUMB_UP].execute(context)
+    bindings.mapping[GESTURE_VICTORY].execute(context)
+    bindings.mapping[GESTURE_ILOVE_YOU].execute(context)
 
     assert sender.media == [MediaKey.VOLUME_UP]
     assert sender.hotkeys == [("ctrl", "shift", "m")]
@@ -226,6 +271,7 @@ def test_build_action_bindings_shares_single_gate() -> None:
     runner = RecordingCommandRunner()
     bindings = build_action_bindings(
         actions=_actions_config(),
+        catalog=_catalog(),
         key_sender=sender,
         command_runner=runner,
     )
@@ -235,15 +281,15 @@ def test_build_action_bindings_shares_single_gate() -> None:
     assert all(isinstance(action, GatedAction) for action in bindings.mapping.values())
 
     assert gate.toggle() is False
-    bindings.mapping[GestureName.THUMB_UP].execute(_context())
-    bindings.mapping[GestureName.VICTORY].execute(_context())
-    bindings.mapping[GestureName.I_LOVE_YOU].execute(_context())
+    bindings.mapping[GESTURE_THUMB_UP].execute(_context())
+    bindings.mapping[GESTURE_VICTORY].execute(_context())
+    bindings.mapping[GESTURE_ILOVE_YOU].execute(_context())
     assert sender.media == []
     assert sender.hotkeys == []
     assert runner.commands == []
 
     assert gate.toggle() is True
-    bindings.mapping[GestureName.THUMB_UP].execute(_context())
+    bindings.mapping[GESTURE_THUMB_UP].execute(_context())
     assert sender.media == [MediaKey.VOLUME_UP]
 
 
@@ -252,10 +298,11 @@ def test_build_action_bindings_debounces_with_cooldown() -> None:
     runner = RecordingCommandRunner()
     bindings = build_action_bindings(
         actions=_actions_config(cooldown=LONG_COOLDOWN_SECONDS),
+        catalog=_catalog(),
         key_sender=sender,
         command_runner=runner,
     )
-    action = bindings.mapping[GestureName.THUMB_UP]
+    action = bindings.mapping[GESTURE_THUMB_UP]
     context = _context()
 
     action.execute(context)
@@ -274,7 +321,142 @@ def test_build_action_rejects_unsupported_spec() -> None:
             spec=unsupported,
             key_sender=RecordingKeySender(),
             command_runner=RecordingCommandRunner(),
+            script_runner=RecordingScriptRunner(),
+            link_opener=RecordingLinkOpener(),
         )
+
+
+def test_build_action_builds_script_action_with_injected_runner() -> None:
+    runner = RecordingScriptRunner()
+    spec = ScriptActionConfig(path="scripts/celebrate.py", pass_context=True)
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=runner,
+        link_opener=RecordingLinkOpener(),
+    )
+
+    assert isinstance(action, ScriptAction)
+    action.execute(_context())
+    assert len(runner.requests) == 1
+    assert runner.requests[0].path == "scripts/celebrate.py"
+
+
+def test_build_action_builds_open_links_with_injected_opener() -> None:
+    opener = RecordingLinkOpener()
+    spec = OpenLinksActionConfig(urls=("https://a.example", "https://b.example"))
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=opener,
+    )
+
+    assert isinstance(action, OpenLinksAction)
+    action.execute(_context())
+    action.execute(_context())
+    assert opener.urls == ["https://a.example", "https://b.example"]
+
+
+def test_build_action_uses_browser_as_chrome_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[str | None] = []
+
+    class FakeChromeLinkOpener:
+        """Doble de ChromeLinkOpener que registra el ejecutable inyectado."""
+
+        def __init__(self, *, executable: str | None = None) -> None:
+            created.append(executable)
+
+        def open(self, url: str) -> None:
+            del url
+
+    monkeypatch.setattr(bootstrap, "ChromeLinkOpener", FakeChromeLinkOpener)
+    spec = OpenLinksActionConfig(urls=("https://a.example",), browser="C:\\chrome.exe")
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=RecordingLinkOpener(),
+    )
+
+    assert isinstance(action, OpenLinksAction)
+    assert created == ["C:\\chrome.exe"]
+
+
+def test_build_action_bindings_routes_script_mapping() -> None:
+    runner = RecordingScriptRunner()
+    actions = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "Victory": {
+                    "type": "script",
+                    "path": "scripts/celebrate.py",
+                    "args": ["--loud"],
+                    "interpreter": "python",
+                    "working_dir": "scripts",
+                    "blocking": True,
+                    "timeout_seconds": 3.0,
+                    "pass_context": True,
+                }
+            }
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=runner,
+    )
+
+    bindings.mapping[GESTURE_VICTORY].execute(_context())
+
+    assert len(runner.requests) == 1
+    request = runner.requests[0]
+    assert request.path == "scripts/celebrate.py"
+    assert request.args == ("--loud",)
+    assert request.interpreter is ScriptInterpreter.PYTHON
+    assert request.working_dir == "scripts"
+    assert request.blocking is True
+    assert request.timeout_seconds == 3.0
+    assert request.env is not None
+    assert request.env[CONTEXT_ENV_GESTURE] == GESTURE_VICTORY.value
+
+
+def test_build_action_bindings_routes_open_links_mapping() -> None:
+    opener = RecordingLinkOpener()
+    actions = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "ILoveYou": {
+                    "type": "open_links",
+                    "urls": ["https://a.example", "https://b.example"],
+                }
+            }
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=opener,
+    )
+
+    bindings.mapping[GESTURE_ILOVE_YOU].execute(_context())
+
+    assert opener.urls == ["https://a.example"]
 
 
 def test_build_pipeline_without_classifier_is_empty() -> None:
@@ -307,7 +489,7 @@ def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
     assert context.detections == recognition.detections
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -316,10 +498,30 @@ def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
         HandsDetected(timestamp=FRAME_TIMESTAMP, hands=recognition.hands),
         GestureDetected(
             timestamp=FRAME_TIMESTAMP,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
+    ]
+
+
+def test_build_pipeline_with_rules_appends_rule_processor() -> None:
+    gestures = GestureConfig(
+        stabilization_frames=1,
+        rules={"L_Sign": GestureRuleConfig(extended=(Finger.INDEX,))},
+    )
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=gestures,
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types[:3] == [
+        GestureDetectionProcessor,
+        LandmarkRuleProcessor,
+        GestureStabilizerProcessor,
     ]
 
 
@@ -380,7 +582,7 @@ def test_build_pipeline_pointer_detection_runs_when_gesture_is_active() -> None:
             stabilization_frames=1,
             min_gesture_confidence=MIN_GESTURE_CONFIDENCE,
         ),
-        pointer=PointerConfig(activation_gesture=GestureName.VICTORY),
+        pointer=PointerConfig(activation_gesture=GESTURE_VICTORY.value),
     )
 
     context = pipeline.run(_frame())
@@ -412,7 +614,7 @@ def test_build_pointer_mover_returns_mover_with_controller() -> None:
 def test_build_action_bindings_without_mappings_reuses_gate() -> None:
     gate = ActionGate()
 
-    bindings = build_action_bindings(actions=ActionsConfig(), gate=gate)
+    bindings = build_action_bindings(actions=ActionsConfig(), catalog=_catalog(), gate=gate)
 
     assert bindings.mapping == {}
     assert bindings.gate is gate
@@ -423,9 +625,126 @@ def test_build_action_bindings_with_mappings_reuses_gate() -> None:
 
     bindings = build_action_bindings(
         actions=_actions_config(),
+        catalog=_catalog(),
         key_sender=RecordingKeySender(),
         command_runner=RecordingCommandRunner(),
         gate=gate,
     )
 
     assert bindings.gate is gate
+
+
+def test_build_action_bindings_resolves_custom_catalog_labels() -> None:
+    catalog = GestureCatalog.from_labels(custom_labels=("Custom_Wave",), rule_names=())
+    actions = ActionsConfig.model_validate(
+        {"mappings": {"Custom_Wave": {"type": "hotkey", "keys": ["ctrl", "m"]}}}
+    )
+    sender = RecordingKeySender()
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=catalog,
+        key_sender=sender,
+        command_runner=RecordingCommandRunner(),
+    )
+
+    bindings.mapping[GestureId("Custom_Wave")].execute(_context())
+
+    assert sender.hotkeys == [("ctrl", "m")]
+
+
+class _NoopAction:
+    """Doble de Action que no ejecuta ningun efecto."""
+
+    def execute(self, context: ActionContext) -> None:
+        del context
+
+
+def _menus_config() -> ActionsConfig:
+    return ActionsConfig.model_validate(
+        {
+            "menus": {
+                "Replay": {
+                    "hand": "Left",
+                    "modifier": "Pointing_Up",
+                    "consume_trigger": True,
+                    "options": {"Victory": {"type": "hotkey", "keys": ["ctrl", "0"]}},
+                }
+            }
+        }
+    )
+
+
+def _menu() -> Menu:
+    return Menu(
+        name="Replay",
+        hand=Handedness.LEFT,
+        modifier=GESTURE_POINTING_UP,
+        consume_trigger=True,
+        options={GESTURE_VICTORY: _NoopAction()},
+    )
+
+
+def test_build_action_bindings_builds_menus_with_decorated_options() -> None:
+    sender = RecordingKeySender()
+    bindings = build_action_bindings(
+        actions=_menus_config(),
+        catalog=_catalog(),
+        key_sender=sender,
+        command_runner=RecordingCommandRunner(),
+    )
+
+    assert bindings.mapping == {}
+    assert bindings.gate is not None
+    assert len(bindings.menus) == 1
+    menu = bindings.menus[0]
+    assert menu.name == "Replay"
+    assert menu.hand is Handedness.LEFT
+    assert menu.modifier == GESTURE_POINTING_UP
+    assert menu.consume_trigger is True
+    option = menu.options[GESTURE_VICTORY]
+    assert isinstance(option, GatedAction)
+
+    option.execute(_context())
+
+    assert sender.hotkeys == [("ctrl", "0")]
+
+
+def test_build_pipeline_with_menus_appends_menu_overlay() -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        menus=(_menu(),),
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types == [
+        GestureDetectionProcessor,
+        GestureStabilizerProcessor,
+        LandmarkOverlay,
+        GestureOverlay,
+        MenuOverlay,
+    ]
+
+
+def test_build_pipeline_with_pointer_places_menu_overlay_before_pointer_overlay() -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        pointer=PointerConfig(),
+        menus=(_menu(),),
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types == [
+        GestureDetectionProcessor,
+        GestureStabilizerProcessor,
+        PointerDetectionProcessor,
+        LandmarkOverlay,
+        GestureOverlay,
+        MenuOverlay,
+        PointerOverlay,
+    ]

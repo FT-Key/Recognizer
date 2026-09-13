@@ -12,7 +12,7 @@ from recognizer.core.domain.events import (
     HandsDetected,
     PointerMoved,
 )
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_VICTORY
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.errors import ActionError
 from recognizer.core.pointer.mover import PointerMover
@@ -90,7 +90,7 @@ def test_action_error_is_logged_and_not_propagated(
         HandsDetected(timestamp=EVENT_TIMESTAMP, hands=()),
         GestureDetected(
             timestamp=EVENT_TIMESTAMP,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),

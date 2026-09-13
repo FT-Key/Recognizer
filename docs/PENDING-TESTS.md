@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-4) — verificación manual del usuario
+# Tests pendientes (etapas 0-8) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -26,7 +26,7 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 4): 290 passed, 2 deselected, cobertura 98.61%
+  Esperado de referencia (etapa 8): 442 passed, 2 deselected, cobertura 98.94%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
@@ -121,6 +121,71 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Cierre limpio con `ESC`/`q` y resumen final con el contador `PointerMoved`.
 - [ ] FPS: `uv run smoke --frames 120 --no-window` (no mueve el ratón) comparado con las
   etapas previas bajo carga similar; anotar FPS medio y carga de CPU.
+
+### Etapa 5 — gestos personalizados (reglas de landmarks)
+
+- [ ] Reglas en config: descomentar `rules:` en `config.yaml` con `L_Sign` y
+  `One_Finger_Up`, y mapear `L_Sign` (por ejemplo) a una acción. Ejecutar
+  `uv run recognizer` y comprobar que el overlay muestra el nombre del gesto de regla.
+- [ ] `rules_priority`: con `rules_first`, `One_Finger_Up` compite con `Pointing_Up` del
+  puntero. Verificar que con `model_first` el puntero sigue funcionando y con `rules_first`
+  la regla tiene preferencia. Anotar el elegido.
+- [ ] `custom_labels` (requiere modelo custom): entrenar/obtener un `.task` de Model Maker,
+  apuntar `gestures.model_path`, declarar sus etiquetas en `custom_labels` y mapear una a
+  una acción. Verificar que se detecta y ejecuta. Pendiente de tener el modelo custom.
+- [ ] Ajustar `rule_thresholds` (`straight_angle_deg`, `direction_tolerance_deg`) según tu
+  mano y anotar los valores que mejor funcionan.
+
+### Etapa 6 — acciones script
+
+- [ ] No bloqueante: mapear un gesto a `type: script` con `blocking: false` apuntando a un
+  `.py` que escriba un archivo. Verificar que el archivo se crea y que la cámara sigue.
+- [ ] Bloqueante: `blocking: true` con `timeout_seconds` (p. ej. 5). Verificar que espera,
+  que la cámara se detiene mientras corre, y que al superar el timeout registra un
+  `WARNING` y la app continúa.
+- [ ] Los 4 formatos: probar `.py`, `.ps1`, `.bat`/`.cmd` y `.sh` (este último requiere
+  `bash` instalado; si no, debe fallar con `ActionError` controlado y seguir la app).
+- [ ] `interpreter`: verificar `auto` por extensión y forzar uno distinto (p. ej. `.txt`
+  con `interpreter: python`).
+- [ ] Contexto: con `pass_context: true`, un script que imprima/registre las variables
+  `RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP`; comprobar los valores.
+- [ ] Errores: `path` inexistente y comando inválido → `WARNING` tipo
+  `Fallo la accion para ...` y la app sigue corriendo.
+
+### Etapa 7 — abrir enlaces
+
+- [ ] Cerrar Chrome y hacer `ILoveYou`: debe lanzarse Chrome y entrar al enlace de
+  YouTube. Anotar si abre y si el vídeo empieza (el autoplay puede requerir interacción).
+- [ ] Con Chrome ya abierto, repetir `ILoveYou`: debe abrirse en una pestaña nueva de la
+  ventana existente, no en un proceso nuevo.
+- [ ] Playlist secuencial: añadir un segundo enlace en `actions.mappings.ILoveYou.urls` y
+  comprobar que el primer `ILoveYou` abre el 1.º, el siguiente el 2.º y luego vuelve al 1.º
+  (sin aleatoriedad).
+- [ ] `browser` vacío (autodetección) y con ruta explícita a `chrome.exe`; probar en un
+  equipo donde Chrome esté en una ruta no estándar.
+- [ ] Chrome ausente: sin Chrome instalado debe registrarse un `WARNING` tipo
+  `Fallo la accion para ILoveYou: No se encontro Chrome...` y la app seguir corriendo.
+- [ ] Script de ejemplo: mapear un gesto a `type: script` con
+  `path: scripts/actions/log_gesture.py` y `pass_context: true`; comprobar que se crea
+  `scripts/actions/gesture_log.txt` con el gesto.
+
+### Etapa 8 — gestos compuestos y script de video
+
+- [ ] Calibrar lateralidad: con una mano izquierda y derecha, comprobar en el overlay que
+  `Left`/`Right` coinciden con tu mano real; si están invertidas, poner
+  `gestures.swap_handedness: true`.
+- [ ] Una sola mano: todo igual que antes (p. ej. `Pointing_Up` mueve el cursor; `Victory`
+  mutea). Verificar que con 2 manos el cursor NO se mueve.
+- [ ] Gesto compuesto: con la izquierda sosteniendo `Pointing_Up`, hacer `Victory` con la
+  derecha y comprobar que NO se mutea (se consume) y que el video de Chrome vuelve al
+  inicio. Probar también soltando y repitiendo (no debe repetir sin liberar la derecha).
+- [ ] Script de video: con un video reproduciéndose en Chrome, ejecutar el menú y verificar
+  que vuelve a 0:00 **y sigue reproduciéndose** (no queda en pausa). Con dos ventanas de
+  Chrome, comprobar que actúa sobre la del video reproduciéndose o la más reciente.
+  Revisar `scripts/actions/video_start.log`.
+- [ ] Añadir una segunda opción a `menus.Replay.options` (p. ej. `Thumb_Up`) y verificar que
+  se puede añadir otra con solo config.
+- [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.
 
 ## Notas de registro
 

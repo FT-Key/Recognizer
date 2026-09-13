@@ -11,8 +11,14 @@ from numpy.typing import NDArray
 from recognizer.core.config import GestureConfig
 from recognizer.core.constants import MILLISECONDS_PER_SECOND
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import DetectedGesture, GestureName, GestureRecognition
-from recognizer.core.domain.hand import Handedness, HandLandmarks, Point
+from recognizer.core.domain.gesture import (
+    CANNED_GESTURE_LABELS,
+    GESTURE_NONE,
+    DetectedGesture,
+    GestureId,
+    GestureRecognition,
+)
+from recognizer.core.domain.hand import Handedness, HandLandmarks, Point, other_hand
 from recognizer.core.errors import GestureClassifierError
 from recognizer.core.ports.gesture_classifier import GestureClassifier
 
@@ -21,8 +27,6 @@ HANDEDNESS_BY_LABEL: dict[str, Handedness] = {
     Handedness.RIGHT.value: Handedness.RIGHT,
     Handedness.UNKNOWN.value: Handedness.UNKNOWN,
 }
-
-GESTURE_NAME_BY_LABEL: dict[str, GestureName] = {name.value: name for name in GestureName}
 
 MISSING_CATEGORY_CONFIDENCE = 0.0
 
@@ -110,6 +114,7 @@ def _map_hand(
     *,
     landmarks: Sequence[_LandmarkLike],
     categories: Sequence[_CategoryLike],
+    swap_handedness: bool,
 ) -> HandLandmarks:
     if categories:
         category = categories[0]
@@ -118,6 +123,8 @@ def _map_hand(
     else:
         handedness = Handedness.UNKNOWN
         confidence = MISSING_CATEGORY_CONFIDENCE
+    if swap_handedness:
+        handedness = other_hand(handedness)
 
     points = tuple(
         Point(x=float(landmark.x), y=float(landmark.y), z=float(landmark.z))
@@ -130,26 +137,43 @@ def _map_gesture(
     *,
     categories: Sequence[_CategoryLike],
     handedness: Handedness,
+    allowed_labels: frozenset[str],
 ) -> DetectedGesture:
     if categories:
         category = categories[0]
-        name = GESTURE_NAME_BY_LABEL.get(category.category_name, GestureName.NONE)
+        label = category.category_name
+        name = GestureId(label) if label in allowed_labels else GESTURE_NONE
         confidence = float(category.score)
     else:
-        name = GestureName.NONE
+        name = GESTURE_NONE
         confidence = MISSING_CATEGORY_CONFIDENCE
     return DetectedGesture(name=name, confidence=confidence, handedness=handedness)
 
 
-def _map_result(result: _ResultLike) -> GestureRecognition:
+def _map_result(
+    result: _ResultLike,
+    *,
+    allowed_labels: frozenset[str],
+    swap_handedness: bool,
+) -> GestureRecognition:
     hands: list[HandLandmarks] = []
     detections: list[DetectedGesture] = []
     for index, landmarks in enumerate(result.hand_landmarks):
         hand_categories = result.handedness[index] if index < len(result.handedness) else ()
-        hand = _map_hand(landmarks=landmarks, categories=hand_categories)
+        hand = _map_hand(
+            landmarks=landmarks,
+            categories=hand_categories,
+            swap_handedness=swap_handedness,
+        )
         gesture_categories = result.gestures[index] if index < len(result.gestures) else ()
         hands.append(hand)
-        detections.append(_map_gesture(categories=gesture_categories, handedness=hand.handedness))
+        detections.append(
+            _map_gesture(
+                categories=gesture_categories,
+                handedness=hand.handedness,
+                allowed_labels=allowed_labels,
+            )
+        )
     return GestureRecognition(hands=tuple(hands), detections=tuple(detections))
 
 
@@ -159,6 +183,7 @@ class MediaPipeTasksGestureFacade:
     def __init__(self, config: GestureConfig) -> None:
         self._config = config
         self._recognizer: _GestureRecognizerLike | None = None
+        self._allowed_labels: frozenset[str] = CANNED_GESTURE_LABELS
 
     def open(self) -> None:
         """Crea el GestureRecognizer en modo VIDEO.
@@ -180,6 +205,7 @@ class MediaPipeTasksGestureFacade:
         except (OSError, RuntimeError, ValueError) as exc:
             msg = f"No se pudo cargar el modelo de gestos: {model_path}"
             raise GestureClassifierError(msg) from exc
+        self._allowed_labels = CANNED_GESTURE_LABELS | frozenset(self._config.custom_labels)
 
     def detect(
         self,
@@ -203,7 +229,11 @@ class MediaPipeTasksGestureFacade:
         except (cv2.error, RuntimeError, ValueError) as exc:
             msg = "Fallo la clasificacion de gestos en MediaPipe."
             raise GestureClassifierError(msg) from exc
-        return _map_result(result)
+        return _map_result(
+            result,
+            allowed_labels=self._allowed_labels,
+            swap_handedness=self._config.swap_handedness,
+        )
 
     def close(self) -> None:
         """Cierra el GestureRecognizer si esta abierto."""

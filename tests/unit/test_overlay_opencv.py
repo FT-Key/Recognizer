@@ -9,14 +9,23 @@ from recognizer.adapters.overlay_opencv import (
     GESTURE_COLOR_BGR,
     GESTURE_TEXT_OFFSET_PIXELS,
     LANDMARK_COLOR_BGR,
+    MENU_COLOR_BGR,
     POINTER_COLOR_BGR,
     POINTER_TEXT_OFFSET_PIXELS,
     GestureOverlay,
     LandmarkOverlay,
+    MenuOverlay,
     PointerOverlay,
 )
+from recognizer.core.actions.menus import Menu
+from recognizer.core.domain.action import ActionContext
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName, StableGesture
+from recognizer.core.domain.gesture import (
+    GESTURE_POINTING_UP,
+    GESTURE_VICTORY,
+    GestureId,
+    StableGesture,
+)
 from recognizer.core.domain.hand import HAND_LANDMARK_COUNT, Handedness, HandLandmarks, Point
 from recognizer.core.domain.pointer import PointerPosition
 from recognizer.core.pipeline.context import FrameContext
@@ -101,7 +110,7 @@ def test_no_hands_leaves_frame_untouched() -> None:
 
 def _gesture(
     *,
-    name: GestureName = GestureName.VICTORY,
+    name: GestureId = GESTURE_VICTORY,
     handedness: Handedness = Handedness.RIGHT,
 ) -> StableGesture:
     return StableGesture(name=name, confidence=GESTURE_CONFIDENCE, handedness=handedness)
@@ -240,3 +249,74 @@ def test_pointer_overlay_places_cross_center_at_extreme_pixels(
 
     assert result is context
     assert frame.data[pixel_y, pixel_x].tolist() == list(POINTER_COLOR_BGR)
+
+
+class _NoopAction:
+    """Doble de Action que no hace nada (el overlay solo lee las opciones)."""
+
+    def execute(self, context: ActionContext) -> None:
+        del context
+
+
+def _menu(
+    *,
+    hand: Handedness = Handedness.LEFT,
+    modifier: GestureId = GESTURE_POINTING_UP,
+) -> Menu:
+    return Menu(
+        name="Replay",
+        hand=hand,
+        modifier=modifier,
+        consume_trigger=True,
+        options={GESTURE_VICTORY: _NoopAction()},
+    )
+
+
+def test_menu_overlay_without_gestures_does_nothing() -> None:
+    frame = _frame()
+    context = FrameContext(frame=frame, hands=(), gestures=())
+
+    result = MenuOverlay((_menu(),)).process(context)
+
+    assert result is context
+    assert not frame.data.any()
+
+
+def test_menu_overlay_without_modifier_gesture_does_nothing() -> None:
+    frame = _frame()
+    context = FrameContext(
+        frame=frame,
+        gestures=(_gesture(name=GESTURE_VICTORY, handedness=Handedness.LEFT),),
+    )
+
+    result = MenuOverlay((_menu(),)).process(context)
+
+    assert result is context
+    assert not frame.data.any()
+
+
+def test_menu_overlay_with_modifier_in_other_hand_does_nothing() -> None:
+    frame = _frame()
+    context = FrameContext(
+        frame=frame,
+        gestures=(_gesture(name=GESTURE_POINTING_UP, handedness=Handedness.RIGHT),),
+    )
+
+    result = MenuOverlay((_menu(hand=Handedness.LEFT),)).process(context)
+
+    assert result is context
+    assert not frame.data.any()
+
+
+def test_menu_overlay_draws_when_modifier_is_confirmed() -> None:
+    frame = _frame()
+    context = FrameContext(
+        frame=frame,
+        gestures=(_gesture(name=GESTURE_POINTING_UP, handedness=Handedness.LEFT),),
+    )
+
+    result = MenuOverlay((_menu(),)).process(context)
+
+    assert result is context
+    menu_color = np.array(MENU_COLOR_BGR, dtype=np.uint8)
+    assert np.all(frame.data == menu_color, axis=-1).any()

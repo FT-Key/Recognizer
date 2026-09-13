@@ -62,6 +62,39 @@ Repository para config, herencia mayor a un nivel, capas sin eje de cambio.
 - Functional core / imperative shell: la lógica no tiene efectos; los efectos viven en
   `adapters/`.
 
+## Gestos personalizados (etapa 5)
+
+El vocabulario de gestos es abierto: `GestureId` (value object) sustituye al enum cerrado
+`GestureName`; `GestureCatalog` valida contra la config las etiquetas predefinidas,
+custom (`gestures.custom_labels`) y de reglas. Las reglas geométricas de landmarks viven
+en `core/pipeline/landmark_rules.py` (core puro, sin infraestructura) y
+`LandmarkRuleProcessor` resuelve reglas vs. modelo según `rules_priority`. Un modelo
+custom (Model Maker) solo requiere cambiar `gestures.model_path` y declarar
+`custom_labels`; el adaptador filtra las etiquetas por el catálogo.
+
+## Acciones locales y scripts (etapa 6)
+
+Las acciones locales son `media_key`, `hotkey`, `command` y `script`. Los scripts se
+ejecutan a través del puerto `ScriptRunner` (`core`) implementado por
+`SubprocessScriptRunner` (`adapters`), que resuelve el intérprete por extensión
+(`.py/.ps1/.bat/.cmd/.sh`) y soporta modo bloqueante (con `timeout_seconds > 0`) y no
+bloqueante (`shell=False`, `argv` desde config). El contexto del gesto se pasa de forma
+opt-in por variables de entorno `RECOGNIZER_*`.
+
+La acción `open_links` abre URLs en el navegador a través del puerto `LinkOpener`
+(implementado por `ChromeLinkOpener`), recorriendo una lista de forma secuencial; el
+adaptador autodetecta Chrome y lanza `chrome.exe <url>` (pestaña nueva o arranque del
+navegador según su estado).
+
+## Gestos compuestos y menús (etapa 8)
+
+Con dos manos, una sostiene un gesto modificador y la otra elige una opción de un menú
+(`actions.menus`). La resolución vive en `core/actions/menus.py` (domain puro:
+`HandGestureTracker`, `find_menu_match`) y la aplica `GestureActionDispatcher`, que
+consume el gesto disparador (`consume_trigger`) y evita repeticiones hasta liberar la mano.
+El puntero se desactiva con más de una mano visible (`PointerDetectionProcessor`). La
+lateralidad del modelo se puede corregir con `gestures.swap_handedness`.
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·

@@ -6,7 +6,7 @@ roles/permisos y despliegue web futuro.
 
 ## Estado del proyecto
 
-Etapa 4 (puntero virtual) completada, pendiente de merge a `dev`. Estado vivo en
+Etapa 8 (gestos compuestos) completada. Estado vivo en
 [`docs/STATE.md`](docs/STATE.md) e historial en [`docs/history/index.md`](docs/history/index.md).
 
 ## Requisitos
@@ -29,11 +29,110 @@ uv run recognizer --no-window --frames 30  # comprobación sin ventana
 ```
 
 La sección `actions` de `config.yaml` mapea gestos a teclas multimedia (`media_key`),
-atajos (`hotkey`) y comandos (`command`, argv sin shell; el ejemplo va comentado).
+atajos (`hotkey`), comandos (`command`, argv sin shell) y scripts (`script`; ejemplos
+comentados), además de abrir enlaces (`open_links`).
 
 La sección `pointer` de `config.yaml` configura el puntero virtual: gesto de activación
 (`activation_gesture`), `active_zone` (porción del fotograma que se proyecta a la pantalla),
 suavizado (`smoothing`: `none`/`ema` con `alpha`) y `mirror_x` (vista espejo).
+
+## Gestos personalizados
+
+El vocabulario de gestos es abierto (`GestureId`): además de los 7 gestos predefinidos de
+MediaPipe, se pueden declarar gestos propios y mapearles acciones. Dos fuentes:
+
+- **Modelo custom:** entrena un bundle de MediaPipe (Model Maker) y apunta
+  `gestures.model_path` a tu `.task`; declara sus etiquetas en `gestures.custom_labels`
+  para que el pipeline las acepte.
+- **Reglas de landmarks (sin entrenar):** define gestos geométricos en `gestures.rules`
+  (dedos `extended`/`folded`, `direction` de un dedo y `angle` entre dos dedos). Se
+  configura `rules_priority` (`rules_first`/`model_first`) y los umbrales en
+  `rule_thresholds`.
+
+```yaml
+gestures:
+  custom_labels: []
+  rules_priority: rules_first
+  rule_thresholds: {straight_angle_deg: 160.0, direction_tolerance_deg: 30.0}
+  rules:
+    L_Sign:
+      extended: [thumb, index]
+      folded: [middle, ring, pinky]
+      angle: {a: thumb, b: index, min_deg: 50, max_deg: 110}
+```
+
+Cualquier gesto del catálogo (predefinido, custom o de regla) puede usarse como clave en
+`actions.mappings` y en `pointer.activation_gesture`.
+
+## Acciones script
+
+Un gesto puede lanzar scripts locales en 4 formatos (`.py`, `.ps1`, `.bat`/`.cmd`, `.sh`),
+resolviendo el intérprete por extensión (`interpreter: auto`) o forzándolo:
+
+```yaml
+actions:
+  mappings:
+    ILoveYou:
+      type: script
+      path: scripts/mi_script.py
+      args: ["--modo", "rapido"]
+      interpreter: auto        # auto|python|powershell|cmd|bash|direct
+      working_dir: .
+      blocking: false          # true espera al script (detiene la cámara)
+      timeout_seconds: 0       # obligatorio > 0 si blocking: true
+      pass_context: true       # variables RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP
+```
+
+- **No bloqueante** (`blocking: false`, por defecto): lanza el script en segundo plano y
+  el bucle de cámara sigue.
+- **Bloqueante** (`blocking: true`): espera a que termine; exige `timeout_seconds > 0` para
+  no congelar la app. Si el script expira se registra un `WARNING` y la app continúa.
+- **Contexto**: con `pass_context: true` el script recibe el gesto en variables de entorno
+  `RECOGNIZER_*`. Ejecución con `shell=False` (el `argv` proviene de `config.yaml`).
+
+## Abrir enlaces (playlist)
+
+La acción `open_links` abre enlaces en Chrome de forma **secuencial** (no aleatoria): cada
+vez que se confirma el gesto se abre el siguiente de la lista y, al agotarla, vuelve al
+principio. Si Chrome ya está abierto abre una pestaña nueva; si no, lo lanza y navega.
+
+```yaml
+actions:
+  mappings:
+    ILoveYou:
+      type: open_links
+      urls:
+        - "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
+        # añade más enlaces aquí (se abren en orden)
+      browser: ""   # opcional: ruta a chrome.exe; vacío = autodetectar
+```
+
+Por defecto `ILoveYou` está mapeado a esta acción. El índice de la playlist vive en memoria
+(se reinicia al arrancar la app). El adaptador actual solo integra Chrome.
+
+## Gestos compuestos (menús)
+
+Con **una mano** todo funciona como siempre. Con **dos manos** puedes usar una como
+modificador de menú: la izquierda sostiene un gesto (p. ej. `Pointing_Up`) y el gesto de la
+derecha elige una opción de esa lista. Mientras el menú está activo el puntero se desactiva.
+
+```yaml
+actions:
+  menus:
+    Replay:
+      hand: Left
+      modifier: Pointing_Up
+      consume_trigger: true        # la opción no ejecuta además su acción global
+      options:
+        Victory: {type: script, path: scripts/actions/video_start.ps1, interpreter: powershell}
+        # añade más gestos -> comandos; también puedes crear más menús
+```
+
+- Puedes definir **varios menús** (con distintos gestos modificadores) y varias opciones.
+- `scripts/actions/video_start.ps1` devuelve al inicio (tecla `0`) el video en reproducción
+  de Chrome (detecta la sesión de media, enfoca la ventana, pulsa `0` y, si quedara en
+  pausa, reanuda la reproducción).
+- Si MediaPipe invierte izquierda/derecha en tu cámara, pon `gestures.swap_handedness: true`.
 
 ## Gate de calidad
 
@@ -66,8 +165,12 @@ docs/                     arquitectura, workflow, estado e historial
 | 2 | Gestos predefinidos + estabilizador | completada |
 | 3 | Acciones locales (teclado/multimedia, comandos) | completada |
 | 4 | Puntero virtual | completada |
-| 5 | Identidad/roles y plan web |
-| 6 | Enrolamiento facial y despliegue web |
+| 5 | Gestos personalizados (vocabulario abierto + reglas) | completada |
+| 6 | Acciones script (bloqueante/no bloqueante) | completada |
+| 7 | Abrir enlaces (playlist secuencial) | completada |
+| 8 | Gestos compuestos (menús por mano) + script de video | completada |
+| 9 | Identidad/roles y plan web |
+| 10 | Enrolamiento facial y despliegue web |
 
 ## Documentación
 

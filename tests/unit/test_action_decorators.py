@@ -12,7 +12,7 @@ from recognizer.core.actions.decorators import (
 )
 from recognizer.core.constants import ACTION_LOGGER_NAME
 from recognizer.core.domain.action import ActionContext
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_VICTORY
 from recognizer.core.domain.hand import Handedness
 
 GESTURE_CONFIDENCE = 0.9
@@ -42,7 +42,7 @@ class FakeClock:
 
 def _context() -> ActionContext:
     return ActionContext(
-        gesture=GestureName.VICTORY,
+        gesture=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
         timestamp=TIMESTAMP,
@@ -114,5 +114,5 @@ def test_logged_action_logs_gesture_and_delegates(caplog: pytest.LogCaptureFixtu
     record = caplog.records[0]
     assert record.levelno == logging.INFO
     assert record.name == ACTION_LOGGER_NAME
-    assert GestureName.VICTORY.value in record.getMessage()
+    assert GESTURE_VICTORY.value in record.getMessage()
     assert "RecordingAction" in record.getMessage()

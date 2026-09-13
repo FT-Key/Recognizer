@@ -28,7 +28,7 @@ from recognizer.core.domain.events import (
     GestureReleased,
     HandsDetected,
 )
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GestureId
 from recognizer.core.errors import RecognizerError
 from recognizer.core.pipeline.builder import Pipeline
 from recognizer.core.ports.event_bus import EventBus
@@ -50,7 +50,7 @@ class _GestureStats:
         self.max_hands = 0
         self.detected_events = 0
         self.released_events = 0
-        self.confirmed: Counter[GestureName] = Counter()
+        self.confirmed: Counter[GestureId] = Counter()
 
     def handle(self, event: DomainEvent) -> None:
         """Actualiza los contadores segun el tipo de evento."""
@@ -96,7 +96,7 @@ def _build_pipeline(
     return build_pipeline(classifier=classifier, bus=bus, gestures=gestures)
 
 
-def _format_confirmed(confirmed: Counter[GestureName]) -> str:
+def _format_confirmed(confirmed: Counter[GestureId]) -> str:
     if not confirmed:
         return NO_CONFIRMED_GESTURES
     return ", ".join(f"{name.value}={count}" for name, count in confirmed.items())
