@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-4) — verificación manual del usuario
+# Tests pendientes (etapas 0-6) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -26,7 +26,7 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 4): 290 passed, 2 deselected, cobertura 98.61%
+  Esperado de referencia (etapa 6): 378 passed, 2 deselected, cobertura 98.81%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
@@ -121,6 +121,36 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Cierre limpio con `ESC`/`q` y resumen final con el contador `PointerMoved`.
 - [ ] FPS: `uv run smoke --frames 120 --no-window` (no mueve el ratón) comparado con las
   etapas previas bajo carga similar; anotar FPS medio y carga de CPU.
+
+### Etapa 5 — gestos personalizados (reglas de landmarks)
+
+- [ ] Reglas en config: descomentar `rules:` en `config.yaml` con `L_Sign` y
+  `One_Finger_Up`, y mapear `L_Sign` (por ejemplo) a una acción. Ejecutar
+  `uv run recognizer` y comprobar que el overlay muestra el nombre del gesto de regla.
+- [ ] `rules_priority`: con `rules_first`, `One_Finger_Up` compite con `Pointing_Up` del
+  puntero. Verificar que con `model_first` el puntero sigue funcionando y con `rules_first`
+  la regla tiene preferencia. Anotar el elegido.
+- [ ] `custom_labels` (requiere modelo custom): entrenar/obtener un `.task` de Model Maker,
+  apuntar `gestures.model_path`, declarar sus etiquetas en `custom_labels` y mapear una a
+  una acción. Verificar que se detecta y ejecuta. Pendiente de tener el modelo custom.
+- [ ] Ajustar `rule_thresholds` (`straight_angle_deg`, `direction_tolerance_deg`) según tu
+  mano y anotar los valores que mejor funcionan.
+
+### Etapa 6 — acciones script
+
+- [ ] No bloqueante: mapear un gesto a `type: script` con `blocking: false` apuntando a un
+  `.py` que escriba un archivo. Verificar que el archivo se crea y que la cámara sigue.
+- [ ] Bloqueante: `blocking: true` con `timeout_seconds` (p. ej. 5). Verificar que espera,
+  que la cámara se detiene mientras corre, y que al superar el timeout registra un
+  `WARNING` y la app continúa.
+- [ ] Los 4 formatos: probar `.py`, `.ps1`, `.bat`/`.cmd` y `.sh` (este último requiere
+  `bash` instalado; si no, debe fallar con `ActionError` controlado y seguir la app).
+- [ ] `interpreter`: verificar `auto` por extensión y forzar uno distinto (p. ej. `.txt`
+  con `interpreter: python`).
+- [ ] Contexto: con `pass_context: true`, un script que imprima/registre las variables
+  `RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP`; comprobar los valores.
+- [ ] Errores: `path` inexistente y comando inválido → `WARNING` tipo
+  `Fallo la accion para ...` y la app sigue corriendo.
 
 ## Notas de registro
 
