@@ -1,11 +1,12 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 0 completada; siguiente: etapa 1 (manos)
-- **Rama:** stage/0-setup (pendiente de merge a dev)
+- **Fase actual:** etapa 0 completada y publicada en `dev`; siguiente: etapa 1 (manos)
+- **Rama:** `dev` — la etapa 1 se trabajará en `stage/1-manos`
 - **Actualizado:** 2026-09-12
 
 ## Hecho
 - Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
+- Merge `--no-ff` de `stage/0-setup` a `dev` (b613aeb) y push de `main`/`dev` al remoto.
 - uv + Python 3.12.14; dependencias runtime y dev instaladas (mediapipe 1.0.1, opencv 5,
   pydantic 2.13, pynput, pytest, ruff, mypy, import-linter).
 - Core base: `Frame`, puerto `FrameSource`, `AppConfig`/`CameraConfig`, errores del dominio.

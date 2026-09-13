@@ -50,8 +50,12 @@
 - `uv run smoke --frames 30 --no-window`: 30 fotogramas, 29.3 FPS de media.
 
 ## Commits
-- `chore(repo): scaffold inicial del repositorio` (en `main`).
-- Commits de la etapa en `stage/0-setup` (estructura, config, docs y cierre).
+- `391fa1e` `chore(repo): scaffold inicial del repositorio` (en `main`).
+- `a3e6c05` `chore(setup): proyecto uv, dependencias y gate estricto`
+- `7c814dc` `feat(core): camara, configuracion tipada, smoke y tests`
+- `7c01998` `chore(opencode): agentes, skills y comandos del flujo por etapas`
+- `6c64be9` `docs: arquitectura, workflow, estado e historial`
+- `b613aeb` `merge: etapa 0 - setup, gate estricto y configuracion opencode` (en `dev`)
 
 ## Pendientes / riesgos
 - Los subagentes quedan operativos tras reiniciar opencode (carga de configuración).
