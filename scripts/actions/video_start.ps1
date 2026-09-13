@@ -3,9 +3,9 @@
 # Pensado como accion `script` de Recognizer; no requiere dependencias externas.
 # Estrategia:
 #   1. Detectar la sesion de media en reproduccion de Chrome (WinRT GSMTC).
-#   2. Elegir su ventana (por titulo o la mas reciente).
-#   3. Traerla al frente y hacer clic en el centro del video para darle foco.
-#   4. Pulsar la tecla `0`.
+#   2. Elegir su ventana (por titulo o la mas reciente) y traerla al frente.
+#   3. Pulsar la tecla `0` (no se hace clic en el video: el clic lo pausaria).
+#   4. Si tras el salto el video quedo en pausa, reanudarlo con la tecla multimedia.
 # Registrar el resultado en scripts/actions/video_start.log.
 
 [CmdletBinding()]
@@ -17,11 +17,10 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logPath = Join-Path $scriptDir 'video_start.log'
 $keyZeroVirtualKey = 0x30
+$mediaPlayPauseVirtualKey = 0xB3
 $winrtTimeoutMilliseconds = 2000
 $focusWaitMilliseconds = 350
-$clickWaitMilliseconds = 250
-$mouseLeftDown = 0x0002
-$mouseLeftUp = 0x0004
+$resumeWaitMilliseconds = 500
 $keyEventKeyUp = 0x0002
 
 function Write-Log {
@@ -67,6 +66,22 @@ function Get-PlayingChromeVideoTitle {
     return $null
 }
 
+function Get-ChromePlaybackStatus {
+    try {
+        Add-Type -AssemblyName System.Runtime.WindowsRuntime -ErrorAction Stop
+        $managerType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+        $manager = Await-WinRtOperation -Operation ($managerType::RequestAsync()) -ResultType ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+        foreach ($session in $manager.GetSessions()) {
+            if ($session.SourceAppUserModelId -notmatch 'chrome') { continue }
+            return $session.GetPlaybackInfo().PlaybackStatus.ToString()
+        }
+    }
+    catch {
+        Write-Log "Aviso: no se pudo leer el estado de reproduccion ($($_.Exception.Message))."
+    }
+    return $null
+}
+
 if (-not ('NativeMethods' -as [type])) {
     Add-Type @'
 using System;
@@ -81,25 +96,7 @@ public static class NativeMethods
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetCursorPos(int x, int y);
-
-    [DllImport("user32.dll")]
-    public static extern void mouse_event(uint dwFlags, uint dx, uint dy, uint dwData, UIntPtr dwExtraInfo);
-
-    [DllImport("user32.dll")]
     public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
 }
 '@
 }
@@ -152,23 +149,19 @@ try {
         exit 0
     }
 
-    $rect = [NativeMethods+RECT]::new()
-    if ([NativeMethods]::GetWindowRect($target.MainWindowHandle, [ref] $rect)) {
-        $centerX = [int](($rect.Left + $rect.Right) / 2)
-        $centerY = [int](($rect.Top + $rect.Bottom) / 2)
-        [void][NativeMethods]::SetCursorPos($centerX, $centerY)
-        [NativeMethods]::mouse_event($mouseLeftDown, 0, 0, 0, [UIntPtr]::Zero)
-        [NativeMethods]::mouse_event($mouseLeftUp, 0, 0, 0, [UIntPtr]::Zero)
-        Write-Log "Clic de foco en ($centerX, $centerY)."
-    }
-    else {
-        Write-Log 'Aviso: GetWindowRect fallo; se omite el clic de foco.'
-    }
-    Start-Sleep -Milliseconds $clickWaitMilliseconds
-
     [NativeMethods]::keybd_event([byte] $keyZeroVirtualKey, 0, 0, [UIntPtr]::Zero)
     [NativeMethods]::keybd_event([byte] $keyZeroVirtualKey, 0, $keyEventKeyUp, [UIntPtr]::Zero)
     Write-Log 'Tecla 0 enviada; el video deberia volver al inicio.'
+    Start-Sleep -Milliseconds $resumeWaitMilliseconds
+
+    if ((Get-ChromePlaybackStatus) -eq 'Paused') {
+        [NativeMethods]::keybd_event([byte] $mediaPlayPauseVirtualKey, 0, 0, [UIntPtr]::Zero)
+        [NativeMethods]::keybd_event([byte] $mediaPlayPauseVirtualKey, 0, $keyEventKeyUp, [UIntPtr]::Zero)
+        Write-Log 'El video estaba en pausa; se reanudo la reproduccion.'
+    }
+    else {
+        Write-Log 'El video sigue reproduciendose.'
+    }
     exit 0
 }
 catch {
