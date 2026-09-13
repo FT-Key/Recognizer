@@ -1,0 +1,65 @@
+# Configuracion de Recognizer.
+# Este archivo es la unica fuente de verdad para umbrales, dispositivos y mapeos.
+camera:
+  device_index: 0
+  width: 640
+  height: 480
+  target_fps: 30
+
+# Deteccion de manos con MediaPipe Tasks (HandLandmarker en modo VIDEO).
+hands:
+  model_path: models/hand_landmarker.task
+  max_hands: 2
+  min_detection_confidence: 0.5
+  min_presence_confidence: 0.5
+  min_tracking_confidence: 0.5
+
+# Clasificacion de gestos con MediaPipe Tasks (GestureRecognizer en modo VIDEO).
+gestures:
+  model_path: models/gesture_recognizer.task
+  max_hands: 2
+  min_detection_confidence: 0.5
+  min_presence_confidence: 0.5
+  min_tracking_confidence: 0.5
+  stabilization_frames: 5
+  release_frames: 5
+  min_gesture_confidence: 0.5
+
+# Puntero virtual: mueve el cursor del sistema con la punta del indice mientras
+# el gesto de activacion esta confirmado. La zona activa (0..1) se proyecta
+# sobre toda la pantalla; mirror_x corrige la vista selfie de la camara.
+pointer:
+  enabled: true
+  activation_gesture: Pointing_Up
+  mirror_x: true
+  smoothing: ema
+  alpha: 0.35
+  active_zone:
+    x_min: 0.2
+    x_max: 0.8
+    y_min: 0.2
+    y_max: 0.8
+
+# Acciones locales disparadas por gestos confirmados.
+actions:
+  cooldown_seconds: 1.0
+  mappings:
+    Thumb_Up:
+      type: media_key
+      key: volume_up
+    Thumb_Down:
+      type: media_key
+      key: volume_down
+    Closed_Fist:
+      type: media_key
+      key: volume_mute
+    Open_Palm:
+      type: media_key
+      key: play_pause
+    Victory:
+      type: hotkey
+      keys: [ctrl, shift, m]
+    # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
+    # ILoveYou:
+    #   type: command
+    #   argv: [notepad.exe]
