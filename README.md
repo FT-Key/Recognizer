@@ -22,7 +22,13 @@ uv sync
 uv run python scripts/download_models.py
 uv run smoke --frames 30 --no-window   # mide FPS y sale
 uv run smoke                           # ventana en vivo (ESC o q para salir)
+uv run recognizer                      # ventana en vivo con acciones (a activa/desactiva)
+uv run recognizer --no-actions         # detección y overlay sin ejecutar acciones
+uv run recognizer --no-window --frames 30  # comprobación sin ventana
 ```
+
+La sección `actions` de `config.yaml` mapea gestos a teclas multimedia (`media_key`),
+atajos (`hotkey`) y comandos (`command`, argv sin shell; el ejemplo va comentado).
 
 ## Gate de calidad
 
