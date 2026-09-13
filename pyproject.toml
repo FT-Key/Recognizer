@@ -21,6 +21,7 @@ dependencies = [
 ]
 
 [project.scripts]
+recognizer = "recognizer.cli.app:main"
 smoke = "recognizer.cli.smoke:main"
 lint = "recognizer.cli.quality:lint"
 typecheck = "recognizer.cli.quality:typecheck"
