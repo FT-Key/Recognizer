@@ -20,6 +20,7 @@ import cv2
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.adapters.mediapipe_gesture_classifier import MediaPipeGestureClassifier
 from recognizer.bootstrap import (
+    ActionBindings,
     build_action_bindings,
     build_pipeline,
     build_pointer_mover,
@@ -148,9 +149,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         bus.subscribe(GestureReleased, stats.handle)
         bus.subscribe(PointerMoved, stats.handle)
 
-        actions_active = not args.no_actions and bool(app_config.actions.mappings)
+        actions_active = not args.no_actions and bool(
+            app_config.actions.mappings or app_config.actions.menus
+        )
         pointer_active = app_config.pointer.enabled and not args.no_pointer
         gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
+        bindings = ActionBindings(mapping={}, gate=gate)
 
         if actions_active:
             bindings = build_action_bindings(
@@ -158,8 +162,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 catalog=app_config.gesture_catalog(),
                 gate=gate,
             )
-            dispatcher = GestureActionDispatcher(actions=bindings.mapping)
+            dispatcher = GestureActionDispatcher(
+                actions=bindings.mapping,
+                menus=bindings.menus,
+            )
             bus.subscribe(GestureDetected, dispatcher.handle)
+            bus.subscribe(GestureReleased, dispatcher.handle)
         if pointer_active:
             mover = build_pointer_mover(pointer=app_config.pointer, gate=gate)
             if mover is not None:
@@ -172,6 +180,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             gestures=app_config.gestures,
             pointer=app_config.pointer if pointer_active else None,
             catalog=app_config.gesture_catalog(),
+            menus=bindings.menus,
         )
 
         def _on_key(pressed: int) -> None:

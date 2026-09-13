@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-7) — verificación manual del usuario
+# Tests pendientes (etapas 0-8) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -26,7 +26,7 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 7): 399 passed, 2 deselected, cobertura 98.86%
+  Esperado de referencia (etapa 8): 442 passed, 2 deselected, cobertura 98.94%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
@@ -168,6 +168,23 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Script de ejemplo: mapear un gesto a `type: script` con
   `path: scripts/actions/log_gesture.py` y `pass_context: true`; comprobar que se crea
   `scripts/actions/gesture_log.txt` con el gesto.
+
+### Etapa 8 — gestos compuestos y script de video
+
+- [ ] Calibrar lateralidad: con una mano izquierda y derecha, comprobar en el overlay que
+  `Left`/`Right` coinciden con tu mano real; si están invertidas, poner
+  `gestures.swap_handedness: true`.
+- [ ] Una sola mano: todo igual que antes (p. ej. `Pointing_Up` mueve el cursor; `Victory`
+  mutea). Verificar que con 2 manos el cursor NO se mueve.
+- [ ] Gesto compuesto: con la izquierda sosteniendo `Pointing_Up`, hacer `Victory` con la
+  derecha y comprobar que NO se mutea (se consume) y que el video de Chrome vuelve al
+  inicio. Probar también soltando y repitiendo (no debe repetir sin liberar la derecha).
+- [ ] Script de video: con un video reproduciéndose en Chrome, ejecutar el menú y verificar
+  que vuelve a 0:00; con dos ventanas de Chrome, comprobar que actúa sobre la del video
+  reproduciéndose o la más reciente. Revisar `scripts/actions/video_start.log`.
+- [ ] Añadir una segunda opción a `menus.Replay.options` (p. ej. `Thumb_Up`) y verificar que
+  se puede añadir otra con solo config.
+- [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.
 
 ## Notas de registro
 

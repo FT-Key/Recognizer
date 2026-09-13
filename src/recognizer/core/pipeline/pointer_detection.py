@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 
+from recognizer.core.constants import POINTER_MAX_VISIBLE_HANDS
 from recognizer.core.domain.events import PointerMoved
 from recognizer.core.domain.gesture import GestureId, StableGesture
 from recognizer.core.domain.hand import (
@@ -47,6 +48,9 @@ class PointerDetectionProcessor(Processor):
 
     def process(self, context: FrameContext) -> FrameContext:
         """Publica PointerMoved y anota la posicion mientras el gesto siga activo."""
+        if len(context.hands) > POINTER_MAX_VISIBLE_HANDS:
+            self._smoothing.reset()
+            return replace(context, pointer=None)
         gesture = self._find_gesture(context)
         hand = (
             None

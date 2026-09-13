@@ -24,6 +24,9 @@ gestures:
   stabilization_frames: 5
   release_frames: 5
   min_gesture_confidence: 0.5
+  # Invierte la lateralidad que reporta MediaPipe. Ponlo en true si el overlay
+  # etiqueta la mano izquierda como "Right" (vista selfie) y los menus no activan.
+  swap_handedness: false
   # Gestos personalizados.
   # custom_labels: etiquetas extra que emitira un modelo MediaPipe custom (.task).
   custom_labels: []
@@ -95,3 +98,20 @@ actions:
     #   blocking: false                # true espera al script (detiene la camara)
     #   timeout_seconds: 0             # obligatorio > 0 si blocking: true
     #   pass_context: true             # variables RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP
+  # Menus compuestos: una mano sostiene el gesto modificador y la otra elige
+  # una opcion. Con consume_trigger: true, la opcion no ejecuta su accion global.
+  # Sostiene primero el modificador (izquierda) para que el gesto de la derecha
+  # se consuma por el menu; si el gesto de la derecha se confirma antes de que
+  # la izquierda sostenga el modificador, puede ejecutar tambien su accion global.
+  menus:
+    # Gesto compuesto: con la IZQUIERDA sosteniendo Pointing_Up, el gesto de la
+    # DERECHA ejecuta la opcion correspondiente de esta lista.
+    Replay:
+      hand: Left
+      modifier: Pointing_Up
+      consume_trigger: true
+      options:
+        Victory:
+          type: script
+          path: scripts/actions/video_start.ps1
+          interpreter: powershell

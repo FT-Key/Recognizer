@@ -18,7 +18,7 @@ from recognizer.core.domain.gesture import (
     GestureId,
     GestureRecognition,
 )
-from recognizer.core.domain.hand import Handedness, HandLandmarks, Point
+from recognizer.core.domain.hand import Handedness, HandLandmarks, Point, other_hand
 from recognizer.core.errors import GestureClassifierError
 from recognizer.core.ports.gesture_classifier import GestureClassifier
 
@@ -114,6 +114,7 @@ def _map_hand(
     *,
     landmarks: Sequence[_LandmarkLike],
     categories: Sequence[_CategoryLike],
+    swap_handedness: bool,
 ) -> HandLandmarks:
     if categories:
         category = categories[0]
@@ -122,6 +123,8 @@ def _map_hand(
     else:
         handedness = Handedness.UNKNOWN
         confidence = MISSING_CATEGORY_CONFIDENCE
+    if swap_handedness:
+        handedness = other_hand(handedness)
 
     points = tuple(
         Point(x=float(landmark.x), y=float(landmark.y), z=float(landmark.z))
@@ -151,12 +154,17 @@ def _map_result(
     result: _ResultLike,
     *,
     allowed_labels: frozenset[str],
+    swap_handedness: bool,
 ) -> GestureRecognition:
     hands: list[HandLandmarks] = []
     detections: list[DetectedGesture] = []
     for index, landmarks in enumerate(result.hand_landmarks):
         hand_categories = result.handedness[index] if index < len(result.handedness) else ()
-        hand = _map_hand(landmarks=landmarks, categories=hand_categories)
+        hand = _map_hand(
+            landmarks=landmarks,
+            categories=hand_categories,
+            swap_handedness=swap_handedness,
+        )
         gesture_categories = result.gestures[index] if index < len(result.gestures) else ()
         hands.append(hand)
         detections.append(
@@ -221,7 +229,11 @@ class MediaPipeTasksGestureFacade:
         except (cv2.error, RuntimeError, ValueError) as exc:
             msg = "Fallo la clasificacion de gestos en MediaPipe."
             raise GestureClassifierError(msg) from exc
-        return _map_result(result, allowed_labels=self._allowed_labels)
+        return _map_result(
+            result,
+            allowed_labels=self._allowed_labels,
+            swap_handedness=self._config.swap_handedness,
+        )
 
     def close(self) -> None:
         """Cierra el GestureRecognizer si esta abierto."""

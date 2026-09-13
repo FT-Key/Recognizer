@@ -13,5 +13,6 @@ etapa que se necesite.
 | 5 | Gestos personalizados (vocabulario abierto y reglas) | completada | [stage-5-gestos-personalizados.md](stage-5-gestos-personalizados.md) |
 | 6 | Acciones script (bloqueante/no bloqueante) | completada | [stage-6-acciones-script.md](stage-6-acciones-script.md) |
 | 7 | Abrir enlaces (playlist secuencial, ILoveYou) | completada | [stage-7-abrir-enlaces.md](stage-7-abrir-enlaces.md) |
-| 8 | Bases de escalado: identidad, políticas y plan web | pendiente | - |
-| 9 | Enrolamiento facial, roles y despliegue web | pendiente | - |
+| 8 | Gestos compuestos (menús por mano) + script de video | completada | [stage-8-gestos-compuestos.md](stage-8-gestos-compuestos.md) |
+| 9 | Bases de escalado: identidad, políticas y plan web | pendiente | - |
+| 10 | Enrolamiento facial, roles y despliegue web | pendiente | - |

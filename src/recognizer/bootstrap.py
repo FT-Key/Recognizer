@@ -1,11 +1,16 @@
 """Composition root: pipeline, camara y acciones a partir de la configuracion."""
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from recognizer.adapters.chrome_link_opener import ChromeLinkOpener
-from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, PointerOverlay
+from recognizer.adapters.overlay_opencv import (
+    GestureOverlay,
+    LandmarkOverlay,
+    MenuOverlay,
+    PointerOverlay,
+)
 from recognizer.adapters.pynput_keys import PynputKeySender
 from recognizer.adapters.pynput_mouse import PynputMouseController
 from recognizer.adapters.subprocess_command import SubprocessCommandRunner
@@ -18,6 +23,7 @@ from recognizer.core.actions.decorators import (
 )
 from recognizer.core.actions.links import OpenLinksAction
 from recognizer.core.actions.local import CommandAction, HotkeyAction, MediaKeyAction
+from recognizer.core.actions.menus import Menu
 from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
@@ -54,10 +60,28 @@ from recognizer.core.ports.script_runner import ScriptRunner
 
 @dataclass(frozen=True, slots=True)
 class ActionBindings:
-    """Mapeo de gestos a acciones y gate compartido que las habilita."""
+    """Mapeo global, menus compuestos y gate compartido que los habilita."""
 
     mapping: Mapping[GestureId, Action]
     gate: ActionGate | None
+    menus: tuple[Menu, ...] = ()
+
+
+def _wrap_action(
+    *,
+    action: Action,
+    gate: ActionGate,
+    cooldown_seconds: float,
+    logger: logging.Logger | None,
+) -> Action:
+    """Envuelve una accion con log, debounce y gate compartido."""
+    return GatedAction(
+        DebouncedAction(
+            LoggedAction(action, logger=logger),
+            cooldown_seconds=cooldown_seconds,
+        ),
+        gate=gate,
+    )
 
 
 def build_pipeline(
@@ -67,6 +91,7 @@ def build_pipeline(
     gestures: GestureConfig,
     pointer: PointerConfig | None = None,
     catalog: GestureCatalog | None = None,
+    menus: Sequence[Menu] | None = None,
 ) -> Pipeline:
     """Construye el pipeline de deteccion, estabilizacion, puntero y overlay."""
     builder = PipelineBuilder()
@@ -115,6 +140,8 @@ def build_pipeline(
             )
         builder.add(LandmarkOverlay())
         builder.add(GestureOverlay())
+        if menus:
+            builder.add(MenuOverlay(menus))
         if pointer is not None and pointer.enabled:
             builder.add(PointerOverlay())
     return builder.build()
@@ -146,13 +173,13 @@ def build_action_bindings(
     gate: ActionGate | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionBindings:
-    """Construye el mapeo de acciones decoradas y el gate compartido.
+    """Construye el mapeo y los menus de acciones decoradas y el gate compartido.
 
     El catalogo traduce las etiquetas configuradas a ``GestureId``. Sin mapeos
-    no se instancian adapters reales de teclado ni subprocess. Si se recibe un
-    gate, se reutiliza para que CLI comparta un unico interruptor.
+    ni menus no se instancian adapters reales de teclado ni subprocess. Si se
+    recibe un gate, se reutiliza para que CLI comparta un unico interruptor.
     """
-    if not actions.mappings:
+    if not actions.mappings and not actions.menus:
         return ActionBindings(mapping={}, gate=gate)
 
     sender = key_sender or PynputKeySender()
@@ -160,8 +187,8 @@ def build_action_bindings(
     script = script_runner or SubprocessScriptRunner()
     opener = link_opener or ChromeLinkOpener()
     shared_gate = gate if gate is not None else ActionGate()
-    mapping: dict[GestureId, Action] = {}
-    for label, spec in actions.mappings.items():
+
+    def decorated(spec: ActionConfig) -> Action:
         action = _build_action(
             spec=spec,
             key_sender=sender,
@@ -169,14 +196,32 @@ def build_action_bindings(
             script_runner=script,
             link_opener=opener,
         )
-        mapping[catalog.require(label)] = GatedAction(
-            DebouncedAction(
-                LoggedAction(action, logger=logger),
-                cooldown_seconds=actions.cooldown_seconds,
-            ),
+        return _wrap_action(
+            action=action,
             gate=shared_gate,
+            cooldown_seconds=actions.cooldown_seconds,
+            logger=logger,
         )
-    return ActionBindings(mapping=mapping, gate=shared_gate)
+
+    mapping: dict[GestureId, Action] = {}
+    for label, spec in actions.mappings.items():
+        mapping[catalog.require(label)] = decorated(spec)
+
+    menus: list[Menu] = []
+    for name, menu_config in actions.menus.items():
+        options: dict[GestureId, Action] = {}
+        for label, spec in menu_config.options.items():
+            options[catalog.require(label)] = decorated(spec)
+        menus.append(
+            Menu(
+                name=name,
+                hand=menu_config.hand,
+                modifier=catalog.require(menu_config.modifier),
+                consume_trigger=menu_config.consume_trigger,
+                options=options,
+            )
+        )
+    return ActionBindings(mapping=mapping, gate=shared_gate, menus=tuple(menus))
 
 
 def build_pointer_mover(

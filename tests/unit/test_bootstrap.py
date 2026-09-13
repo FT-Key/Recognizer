@@ -8,7 +8,12 @@ import pytest
 from numpy.typing import NDArray
 
 from recognizer import bootstrap
-from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, PointerOverlay
+from recognizer.adapters.overlay_opencv import (
+    GestureOverlay,
+    LandmarkOverlay,
+    MenuOverlay,
+    PointerOverlay,
+)
 from recognizer.bootstrap import (
     build_action_bindings,
     build_pipeline,
@@ -17,6 +22,7 @@ from recognizer.bootstrap import (
 )
 from recognizer.core.actions.decorators import ActionGate, GatedAction
 from recognizer.core.actions.links import OpenLinksAction
+from recognizer.core.actions.menus import Menu
 from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
@@ -40,6 +46,7 @@ from recognizer.core.domain.events import (
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
     GESTURE_ILOVE_YOU,
+    GESTURE_POINTING_UP,
     GESTURE_THUMB_UP,
     GESTURE_VICTORY,
     DetectedGesture,
@@ -236,6 +243,7 @@ def test_build_action_bindings_without_mappings_is_empty() -> None:
 
     assert bindings.mapping == {}
     assert bindings.gate is None
+    assert bindings.menus == ()
 
 
 def test_build_action_bindings_routes_each_action_type() -> None:
@@ -642,3 +650,101 @@ def test_build_action_bindings_resolves_custom_catalog_labels() -> None:
     bindings.mapping[GestureId("Custom_Wave")].execute(_context())
 
     assert sender.hotkeys == [("ctrl", "m")]
+
+
+class _NoopAction:
+    """Doble de Action que no ejecuta ningun efecto."""
+
+    def execute(self, context: ActionContext) -> None:
+        del context
+
+
+def _menus_config() -> ActionsConfig:
+    return ActionsConfig.model_validate(
+        {
+            "menus": {
+                "Replay": {
+                    "hand": "Left",
+                    "modifier": "Pointing_Up",
+                    "consume_trigger": True,
+                    "options": {"Victory": {"type": "hotkey", "keys": ["ctrl", "0"]}},
+                }
+            }
+        }
+    )
+
+
+def _menu() -> Menu:
+    return Menu(
+        name="Replay",
+        hand=Handedness.LEFT,
+        modifier=GESTURE_POINTING_UP,
+        consume_trigger=True,
+        options={GESTURE_VICTORY: _NoopAction()},
+    )
+
+
+def test_build_action_bindings_builds_menus_with_decorated_options() -> None:
+    sender = RecordingKeySender()
+    bindings = build_action_bindings(
+        actions=_menus_config(),
+        catalog=_catalog(),
+        key_sender=sender,
+        command_runner=RecordingCommandRunner(),
+    )
+
+    assert bindings.mapping == {}
+    assert bindings.gate is not None
+    assert len(bindings.menus) == 1
+    menu = bindings.menus[0]
+    assert menu.name == "Replay"
+    assert menu.hand is Handedness.LEFT
+    assert menu.modifier == GESTURE_POINTING_UP
+    assert menu.consume_trigger is True
+    option = menu.options[GESTURE_VICTORY]
+    assert isinstance(option, GatedAction)
+
+    option.execute(_context())
+
+    assert sender.hotkeys == [("ctrl", "0")]
+
+
+def test_build_pipeline_with_menus_appends_menu_overlay() -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        menus=(_menu(),),
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types == [
+        GestureDetectionProcessor,
+        GestureStabilizerProcessor,
+        LandmarkOverlay,
+        GestureOverlay,
+        MenuOverlay,
+    ]
+
+
+def test_build_pipeline_with_pointer_places_menu_overlay_before_pointer_overlay() -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        pointer=PointerConfig(),
+        menus=(_menu(),),
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types == [
+        GestureDetectionProcessor,
+        GestureStabilizerProcessor,
+        PointerDetectionProcessor,
+        LandmarkOverlay,
+        GestureOverlay,
+        MenuOverlay,
+        PointerOverlay,
+    ]

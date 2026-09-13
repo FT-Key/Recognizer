@@ -6,7 +6,7 @@ roles/permisos y despliegue web futuro.
 
 ## Estado del proyecto
 
-Etapa 7 (abrir enlaces) completada. Estado vivo en
+Etapa 8 (gestos compuestos) completada. Estado vivo en
 [`docs/STATE.md`](docs/STATE.md) e historial en [`docs/history/index.md`](docs/history/index.md).
 
 ## Requisitos
@@ -110,6 +110,29 @@ actions:
 Por defecto `ILoveYou` está mapeado a esta acción. El índice de la playlist vive en memoria
 (se reinicia al arrancar la app). El adaptador actual solo integra Chrome.
 
+## Gestos compuestos (menús)
+
+Con **una mano** todo funciona como siempre. Con **dos manos** puedes usar una como
+modificador de menú: la izquierda sostiene un gesto (p. ej. `Pointing_Up`) y el gesto de la
+derecha elige una opción de esa lista. Mientras el menú está activo el puntero se desactiva.
+
+```yaml
+actions:
+  menus:
+    Replay:
+      hand: Left
+      modifier: Pointing_Up
+      consume_trigger: true        # la opción no ejecuta además su acción global
+      options:
+        Victory: {type: script, path: scripts/actions/video_start.ps1, interpreter: powershell}
+        # añade más gestos -> comandos; también puedes crear más menús
+```
+
+- Puedes definir **varios menús** (con distintos gestos modificadores) y varias opciones.
+- `scripts/actions/video_start.ps1` devuelve al inicio (tecla `0`) el video en reproducción
+  de Chrome (detecta la sesión de media, enfoca la ventana y pulsa `0`).
+- Si MediaPipe invierte izquierda/derecha en tu cámara, pon `gestures.swap_handedness: true`.
+
 ## Gate de calidad
 
 ```powershell
@@ -144,8 +167,9 @@ docs/                     arquitectura, workflow, estado e historial
 | 5 | Gestos personalizados (vocabulario abierto + reglas) | completada |
 | 6 | Acciones script (bloqueante/no bloqueante) | completada |
 | 7 | Abrir enlaces (playlist secuencial) | completada |
-| 8 | Identidad/roles y plan web |
-| 9 | Enrolamiento facial y despliegue web |
+| 8 | Gestos compuestos (menús por mano) + script de video | completada |
+| 9 | Identidad/roles y plan web |
+| 10 | Enrolamiento facial y despliegue web |
 
 ## Documentación
 

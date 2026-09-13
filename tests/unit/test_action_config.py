@@ -7,14 +7,18 @@ from pydantic import ValidationError
 
 from recognizer.core.config import (
     ActionsConfig,
+    AppConfig,
     CommandActionConfig,
+    GestureConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
+    MenuConfig,
     OpenLinksActionConfig,
     ScriptActionConfig,
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
+from recognizer.core.domain.hand import Handedness
 from recognizer.settings import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +30,104 @@ def test_actions_config_defaults() -> None:
 
     assert config.cooldown_seconds == DEFAULT_ACTION_COOLDOWN_SECONDS
     assert config.mappings == {}
+    assert config.menus == {}
+
+
+def test_gesture_swap_handedness_defaults_false() -> None:
+    assert GestureConfig().swap_handedness is False
+    assert GestureConfig(swap_handedness=True).swap_handedness is True
+
+
+def test_menu_config_parses_valid_options() -> None:
+    menu = MenuConfig.model_validate(
+        {
+            "hand": "Left",
+            "modifier": "Pointing_Up",
+            "consume_trigger": False,
+            "options": {"Victory": {"type": "hotkey", "keys": ["ctrl", "m"]}},
+        }
+    )
+
+    assert menu.hand is Handedness.LEFT
+    assert menu.modifier == "Pointing_Up"
+    assert menu.consume_trigger is False
+    assert isinstance(menu.options["Victory"], HotkeyActionConfig)
+
+
+@pytest.mark.parametrize(
+    "menu",
+    [
+        {"hand": "Left", "modifier": "Pointing_Up"},
+        {"hand": "Left", "modifier": "Pointing_Up", "options": {}},
+        {
+            "hand": "Left",
+            "modifier": "",
+            "options": {"Victory": {"type": "hotkey", "keys": ["ctrl"]}},
+        },
+        {
+            "hand": "Sideways",
+            "modifier": "Pointing_Up",
+            "options": {"Victory": {"type": "hotkey", "keys": ["ctrl"]}},
+        },
+    ],
+)
+def test_invalid_menu_config_is_rejected(menu: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        MenuConfig.model_validate(menu)
+
+
+def test_actions_config_accepts_menus() -> None:
+    config = ActionsConfig.model_validate(
+        {
+            "menus": {
+                "Replay": {
+                    "hand": "Left",
+                    "modifier": "Pointing_Up",
+                    "options": {"Victory": {"type": "hotkey", "keys": ["ctrl"]}},
+                }
+            }
+        }
+    )
+
+    assert set(config.menus) == {"Replay"}
+
+
+def test_app_config_accepts_menu_with_known_gestures() -> None:
+    config = AppConfig.model_validate(
+        {
+            "actions": {
+                "menus": {
+                    "Replay": {
+                        "hand": "Left",
+                        "modifier": "Pointing_Up",
+                        "options": {"Victory": {"type": "hotkey", "keys": ["ctrl", "m"]}},
+                    }
+                }
+            }
+        }
+    )
+
+    assert "Replay" in config.actions.menus
+
+
+@pytest.mark.parametrize(
+    "menu",
+    [
+        {
+            "hand": "Left",
+            "modifier": "NoExiste",
+            "options": {"Victory": {"type": "hotkey", "keys": ["ctrl"]}},
+        },
+        {
+            "hand": "Left",
+            "modifier": "Pointing_Up",
+            "options": {"NoExiste": {"type": "hotkey", "keys": ["ctrl"]}},
+        },
+    ],
+)
+def test_app_config_rejects_unknown_menu_gestures(menu: dict[str, object]) -> None:
+    with pytest.raises(ValidationError, match="Gesto desconocido"):
+        AppConfig.model_validate({"actions": {"menus": {"Replay": menu}}})
 
 
 def test_media_key_mapping_parses() -> None:
@@ -235,3 +337,15 @@ def test_repo_config_loads_expected_mappings() -> None:
     assert mappings["ILoveYou"] == OpenLinksActionConfig(
         urls=("https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s",)
     )
+
+
+def test_repo_config_loads_replay_menu() -> None:
+    app_config = load_config(CONFIG_PATH)
+    menu = app_config.actions.menus["Replay"]
+
+    assert menu.hand is Handedness.LEFT
+    assert menu.modifier == "Pointing_Up"
+    assert menu.consume_trigger is True
+    assert set(menu.options) == {"Victory"}
+    assert isinstance(menu.options["Victory"], ScriptActionConfig)
+    assert app_config.gestures.swap_handedness is False

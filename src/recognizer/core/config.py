@@ -40,6 +40,7 @@ from recognizer.core.domain.gesture import (
     GestureCatalog,
     RulesPriority,
 )
+from recognizer.core.domain.hand import Handedness
 from recognizer.core.domain.pointer import SmoothingKind
 from recognizer.core.errors import ConfigError
 
@@ -149,6 +150,7 @@ class GestureConfig(BaseModel):
     stabilization_frames: int = Field(default=DEFAULT_STABILIZATION_FRAMES, ge=1)
     release_frames: int = Field(default=DEFAULT_RELEASE_FRAMES, ge=1)
     min_gesture_confidence: float = Field(default=DEFAULT_MIN_GESTURE_CONFIDENCE, ge=0, le=1)
+    swap_handedness: bool = False
     custom_labels: tuple[str, ...] = ()
     rules: dict[str, GestureRuleConfig] = Field(default_factory=dict)
     rules_priority: RulesPriority = RulesPriority.RULES_FIRST
@@ -237,6 +239,17 @@ ActionConfig = Annotated[
 ]
 
 
+class MenuConfig(BaseModel):
+    """Menu compuesto: una mano sostiene el modificador y la otra elige."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    hand: Handedness
+    modifier: str = Field(min_length=1)
+    consume_trigger: bool = True
+    options: dict[str, ActionConfig] = Field(min_length=1)
+
+
 class ActionsConfig(BaseModel):
     """Acciones locales y su mapeo por gesto confirmado."""
 
@@ -244,6 +257,7 @@ class ActionsConfig(BaseModel):
 
     cooldown_seconds: float = Field(default=DEFAULT_ACTION_COOLDOWN_SECONDS, ge=0)
     mappings: dict[str, ActionConfig] = Field(default_factory=dict)
+    menus: dict[str, MenuConfig] = Field(default_factory=dict)
 
     @field_validator("mappings")
     @classmethod
@@ -323,6 +337,10 @@ class AppConfig(BaseModel):
             catalog = self.gesture_catalog()
             for label in self.actions.mappings:
                 catalog.require(label)
+            for menu in self.actions.menus.values():
+                catalog.require(menu.modifier)
+                for label in menu.options:
+                    catalog.require(label)
             catalog.require(self.pointer.activation_gesture)
         except ConfigError as exc:
             raise ValueError(str(exc)) from exc

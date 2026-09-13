@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 7 (abrir enlaces / playlist secuencial) completada y mergeada en
-  `dev`; siguiente: etapa 8 (bases de escalado: identidad, políticas y plan web)
-- **Rama:** `dev` (etapa 7 mergeada con `--no-ff`)
+- **Fase actual:** etapa 8 (gestos compuestos / menús por mano) completada y mergeada en
+  `dev`; siguiente: etapa 9 (bases de escalado: identidad, políticas y plan web)
+- **Rama:** `dev` (etapa 8 mergeada con `--no-ff`)
 - **Actualizado:** 2026-09-13
 
 ## Hecho
@@ -42,18 +42,25 @@
   playlist secuencial rotatoria; `ILoveYou` mapeado a un enlace de YouTube. Ejemplo de
   script de usuario en `scripts/actions/log_gesture.py`. Gate verde: pytest 399 tests,
   98.86%, mypy 97, check-arch 3/3, smoke 17.1 FPS.
+- Etapa 8 (gestos compuestos): menús por mano (`actions.menus`) con `HandGestureTracker` y
+  resolución en el dispatcher (consume trigger, anti-repetición), puntero desactivado con
+  2 manos, `gestures.swap_handedness`, `MenuOverlay` y script `scripts/actions/video_start.ps1`
+  (vuelve el video de Chrome al inicio). Gate verde: pytest 442 tests, 98.94%, mypy 99,
+  check-arch 3/3, smoke 13.3 FPS.
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7) y etapa 6 (1e5f36e).
+  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7), etapa 6 (1e5f36e)
+  y etapa 7 (656478a).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 
-## Siguiente (etapa 8 — bases de escalado)
+## Siguiente (etapa 9 — bases de escalado)
 - Identidad, políticas de permisos por gesto y plan de despliegue web.
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-7 (gestos, acciones reales, puntero, reglas de
-  landmarks, scripts, enlaces y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el
-  usuario cuando pueda.
+- Verificaciones manuales de etapas 0-8 (gestos, acciones reales, puntero, reglas de
+  landmarks, scripts, enlaces, menús compuestos y FPS) consolidadas en
+  `docs/PENDING-TESTS.md`; las ejecuta el usuario cuando pueda.
+- Calibrar `gestures.swap_handedness` con la cámara real (izquierda/derecha).
 - Pendiente decidir la nueva funcionalidad de los gestos `Pointing_Up` y `Victory`.
 - Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
 - `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.
