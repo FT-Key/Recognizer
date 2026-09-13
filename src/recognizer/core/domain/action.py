@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GestureId
 from recognizer.core.domain.hand import Handedness
 
 
@@ -23,7 +23,7 @@ class MediaKey(StrEnum):
 class ActionContext:
     """Datos del gesto confirmado que dispara una accion."""
 
-    gesture: GestureName
+    gesture: GestureId
     confidence: float
     handedness: Handedness
     timestamp: float

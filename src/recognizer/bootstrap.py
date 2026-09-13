@@ -27,12 +27,13 @@ from recognizer.core.config import (
     PointerConfig,
 )
 from recognizer.core.domain.action import Action
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GestureCatalog, GestureId
 from recognizer.core.domain.pointer import PointerCalibration
 from recognizer.core.errors import ActionError, RecognizerError
 from recognizer.core.pipeline.builder import Pipeline, PipelineBuilder
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
+from recognizer.core.pipeline.landmark_rules import LandmarkRule, LandmarkRuleProcessor
 from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
 from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.pointer.smoothing import create_smoothing
@@ -47,7 +48,7 @@ from recognizer.core.ports.mouse_controller import MouseController
 class ActionBindings:
     """Mapeo de gestos a acciones y gate compartido que las habilita."""
 
-    mapping: Mapping[GestureName, Action]
+    mapping: Mapping[GestureId, Action]
     gate: ActionGate | None
 
 
@@ -57,11 +58,30 @@ def build_pipeline(
     bus: EventBus,
     gestures: GestureConfig,
     pointer: PointerConfig | None = None,
+    catalog: GestureCatalog | None = None,
 ) -> Pipeline:
     """Construye el pipeline de deteccion, estabilizacion, puntero y overlay."""
     builder = PipelineBuilder()
     if classifier is not None:
+        gesture_catalog = catalog or GestureCatalog.from_labels(
+            custom_labels=gestures.custom_labels,
+            rule_names=tuple(gestures.rules),
+        )
         builder.add(GestureDetectionProcessor(classifier=classifier, bus=bus))
+        if gestures.rules:
+            builder.add(
+                LandmarkRuleProcessor(
+                    rules=tuple(
+                        LandmarkRule(
+                            gesture=gesture_catalog.require(name),
+                            config=rule_config,
+                        )
+                        for name, rule_config in gestures.rules.items()
+                    ),
+                    thresholds=gestures.rule_thresholds,
+                    priority=gestures.rules_priority,
+                )
+            )
         builder.add(
             GestureStabilizerProcessor(
                 bus=bus,
@@ -82,7 +102,7 @@ def build_pipeline(
                         mirror_x=pointer.mirror_x,
                     ),
                     smoothing=create_smoothing(kind=pointer.smoothing, alpha=pointer.alpha),
-                    activation_gesture=pointer.activation_gesture,
+                    activation_gesture=gesture_catalog.require(pointer.activation_gesture),
                 )
             )
         builder.add(LandmarkOverlay())
@@ -110,6 +130,7 @@ def resolve_camera_config(*, app_config: AppConfig, device_override: int | None)
 def build_action_bindings(
     *,
     actions: ActionsConfig,
+    catalog: GestureCatalog,
     key_sender: KeySender | None = None,
     command_runner: CommandRunner | None = None,
     gate: ActionGate | None = None,
@@ -117,8 +138,9 @@ def build_action_bindings(
 ) -> ActionBindings:
     """Construye el mapeo de acciones decoradas y el gate compartido.
 
-    Sin mapeos no se instancian adapters reales de teclado ni subprocess.
-    Si se recibe un gate, se reutiliza para que CLI comparta un unico interruptor.
+    El catalogo traduce las etiquetas configuradas a ``GestureId``. Sin mapeos
+    no se instancian adapters reales de teclado ni subprocess. Si se recibe un
+    gate, se reutiliza para que CLI comparta un unico interruptor.
     """
     if not actions.mappings:
         return ActionBindings(mapping={}, gate=gate)
@@ -126,10 +148,10 @@ def build_action_bindings(
     sender = key_sender or PynputKeySender()
     runner = command_runner or SubprocessCommandRunner()
     shared_gate = gate if gate is not None else ActionGate()
-    mapping: dict[GestureName, Action] = {}
-    for gesture, spec in actions.mappings.items():
+    mapping: dict[GestureId, Action] = {}
+    for label, spec in actions.mappings.items():
         action = _build_action(spec=spec, key_sender=sender, command_runner=runner)
-        mapping[gesture] = GatedAction(
+        mapping[catalog.require(label)] = GatedAction(
             DebouncedAction(
                 LoggedAction(action, logger=logger),
                 cooldown_seconds=actions.cooldown_seconds,

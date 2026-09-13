@@ -24,6 +24,25 @@ gestures:
   stabilization_frames: 5
   release_frames: 5
   min_gesture_confidence: 0.5
+  # Gestos personalizados.
+  # custom_labels: etiquetas extra que emitira un modelo MediaPipe custom (.task).
+  custom_labels: []
+  # rules_priority: rules_first (default) | model_first. Usa model_first si una regla
+  # coincide con el gesto del puntero (Pointing_Up) para no desactivarlo.
+  rules_priority: rules_first
+  rule_thresholds:
+    straight_angle_deg: 160.0
+    direction_tolerance_deg: 30.0
+  # Reglas de ejemplo (descomenta `rules:` y mapea acciones en `actions.mappings`):
+  # rules:
+  #   L_Sign:
+  #     extended: [thumb, index]
+  #     folded: [middle, ring, pinky]
+  #     angle: {a: thumb, b: index, min_deg: 50, max_deg: 110}
+  #   One_Finger_Up:
+  #     extended: [index]
+  #     folded: [thumb, middle, ring, pinky]
+  #     direction: {finger: index, value: up}
 
 # Puntero virtual: mueve el cursor del sistema con la punta del indice mientras
 # el gesto de activacion esta confirmado. La zona activa (0..1) se proyecta

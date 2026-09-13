@@ -13,7 +13,6 @@ from recognizer.core.config import (
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
 from recognizer.core.domain.action import MediaKey
-from recognizer.core.domain.gesture import GestureName
 from recognizer.settings import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -32,7 +31,7 @@ def test_media_key_mapping_parses() -> None:
         {"mappings": {"Thumb_Up": {"type": "media_key", "key": "volume_up"}}}
     )
 
-    action = config.mappings[GestureName.THUMB_UP]
+    action = config.mappings["Thumb_Up"]
     assert isinstance(action, MediaKeyActionConfig)
     assert action.key is MediaKey.VOLUME_UP
 
@@ -42,7 +41,7 @@ def test_hotkey_mapping_parses() -> None:
         {"mappings": {"Victory": {"type": "hotkey", "keys": ["ctrl", "shift", "m"]}}}
     )
 
-    action = config.mappings[GestureName.VICTORY]
+    action = config.mappings["Victory"]
     assert isinstance(action, HotkeyActionConfig)
     assert action.keys == ("ctrl", "shift", "m")
 
@@ -52,7 +51,7 @@ def test_command_mapping_parses() -> None:
         {"mappings": {"ILoveYou": {"type": "command", "argv": ["notepad.exe", "notas.txt"]}}}
     )
 
-    action = config.mappings[GestureName.I_LOVE_YOU]
+    action = config.mappings["ILoveYou"]
     assert isinstance(action, CommandActionConfig)
     assert action.argv == ("notepad.exe", "notas.txt")
 
@@ -116,14 +115,14 @@ def test_repo_config_loads_expected_mappings() -> None:
     mappings = app_config.actions.mappings
 
     assert set(mappings) == {
-        GestureName.THUMB_UP,
-        GestureName.THUMB_DOWN,
-        GestureName.CLOSED_FIST,
-        GestureName.OPEN_PALM,
-        GestureName.VICTORY,
+        "Thumb_Up",
+        "Thumb_Down",
+        "Closed_Fist",
+        "Open_Palm",
+        "Victory",
     }
-    assert mappings[GestureName.THUMB_UP] == MediaKeyActionConfig(key=MediaKey.VOLUME_UP)
-    assert mappings[GestureName.THUMB_DOWN] == MediaKeyActionConfig(key=MediaKey.VOLUME_DOWN)
-    assert mappings[GestureName.CLOSED_FIST] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
-    assert mappings[GestureName.OPEN_PALM] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
-    assert mappings[GestureName.VICTORY] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))
+    assert mappings["Thumb_Up"] == MediaKeyActionConfig(key=MediaKey.VOLUME_UP)
+    assert mappings["Thumb_Down"] == MediaKeyActionConfig(key=MediaKey.VOLUME_DOWN)
+    assert mappings["Closed_Fist"] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
+    assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
+    assert mappings["Victory"] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))

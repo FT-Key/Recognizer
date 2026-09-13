@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GestureId
 from recognizer.core.domain.hand import Handedness, HandLandmarks
 
 
@@ -24,7 +24,7 @@ class HandsDetected(DomainEvent):
 class GestureDetected(DomainEvent):
     """Gesto confirmado por el estabilizador para una mano."""
 
-    gesture: GestureName
+    gesture: GestureId
     confidence: float
     handedness: Handedness
 
@@ -33,7 +33,7 @@ class GestureDetected(DomainEvent):
 class GestureReleased(DomainEvent):
     """Gesto confirmado que dejo de observarse en una mano."""
 
-    gesture: GestureName
+    gesture: GestureId
     handedness: Handedness
 
 

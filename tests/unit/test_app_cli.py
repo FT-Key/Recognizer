@@ -24,7 +24,11 @@ from recognizer.core.domain.events import (
     PointerMoved,
 )
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import (
+    GESTURE_OPEN_PALM,
+    GESTURE_VICTORY,
+    GestureId,
+)
 from recognizer.core.domain.hand import Handedness, HandLandmarks, Point
 from recognizer.core.pipeline.builder import Pipeline
 from recognizer.core.pipeline.context import FrameContext
@@ -111,7 +115,7 @@ def test_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.3,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         )
@@ -119,7 +123,7 @@ def test_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.4,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         )
@@ -127,7 +131,7 @@ def test_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.5,
-            gesture=GestureName.OPEN_PALM,
+            gesture=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.LEFT,
         )
@@ -135,7 +139,7 @@ def test_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureReleased(
             timestamp=0.6,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             handedness=Handedness.RIGHT,
         )
     )
@@ -146,7 +150,7 @@ def test_stats_handle_updates_counters() -> None:
     assert stats.detected_events == 3
     assert stats.released_events == 1
     assert stats.pointer_events == 1
-    assert stats.confirmed == {GestureName.VICTORY: 2, GestureName.OPEN_PALM: 1}
+    assert stats.confirmed == {GESTURE_VICTORY: 2, GESTURE_OPEN_PALM: 1}
 
 
 def test_actions_state_without_gate_is_inactive() -> None:
@@ -166,7 +170,7 @@ def test_format_confirmed_without_gestures() -> None:
 
 
 def test_format_confirmed_lists_counts() -> None:
-    confirmed: Counter[GestureName] = Counter({GestureName.VICTORY: 2, GestureName.OPEN_PALM: 1})
+    confirmed: Counter[GestureId] = Counter({GESTURE_VICTORY: 2, GESTURE_OPEN_PALM: 1})
 
     assert app._format_confirmed(confirmed) == "Victory=2, Open_Palm=1"
 
@@ -229,8 +233,9 @@ def _patch_main_dependencies(
         bus: object,
         gestures: object,
         pointer: object = None,
+        catalog: object = None,
     ) -> Pipeline:
-        del classifier, gestures
+        del classifier, gestures, catalog
         captured["bus"] = bus
         captured["pipeline_pointer"] = pointer
         return Pipeline(processors=())
@@ -333,9 +338,7 @@ def test_main_no_actions_with_pointer_uses_pointer_hud_and_toggle_key(
     moves: list[object] = []
     app_config = AppConfig(
         pointer=PointerConfig(enabled=True),
-        actions=ActionsConfig(
-            mappings={GestureName.VICTORY: MediaKeyActionConfig(key=MediaKey.VOLUME_UP)}
-        ),
+        actions=ActionsConfig(mappings={"Victory": MediaKeyActionConfig(key=MediaKey.VOLUME_UP)}),
     )
     _patch_main_dependencies(monkeypatch, captured=captured, moves=moves, app_config=app_config)
 

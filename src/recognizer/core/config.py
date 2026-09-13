@@ -22,12 +22,24 @@ from recognizer.core.constants import (
     DEFAULT_POINTER_MIRROR_X,
     DEFAULT_POINTER_SMOOTHING_ALPHA,
     DEFAULT_RELEASE_FRAMES,
+    DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
+    DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
+    MAX_ANGLE_DEG,
+    MIN_ANGLE_DEG,
 )
 from recognizer.core.domain.action import MediaKey
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import (
+    GESTURE_NONE,
+    GESTURE_POINTING_UP,
+    Direction8,
+    Finger,
+    GestureCatalog,
+    RulesPriority,
+)
 from recognizer.core.domain.pointer import SmoothingKind
+from recognizer.core.errors import ConfigError
 
 
 class CameraConfig(BaseModel):
@@ -53,6 +65,75 @@ class HandsConfig(BaseModel):
     min_tracking_confidence: float = Field(default=DEFAULT_MIN_TRACKING_CONFIDENCE, ge=0, le=1)
 
 
+class RuleThresholdsConfig(BaseModel):
+    """Umbrales compartidos por el motor de reglas de gestos."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    straight_angle_deg: float = Field(
+        default=DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
+        ge=MIN_ANGLE_DEG,
+        le=MAX_ANGLE_DEG,
+    )
+    direction_tolerance_deg: float = Field(
+        default=DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
+        ge=MIN_ANGLE_DEG,
+        le=MAX_ANGLE_DEG,
+    )
+
+
+class DirectionConditionConfig(BaseModel):
+    """Condicion de regla: un dedo apunta en una direccion de ocho sentidos."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    finger: Finger
+    value: Direction8
+
+
+class AngleConditionConfig(BaseModel):
+    """Condicion de regla: el angulo entre dos dedos cae en un rango."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    a: Finger
+    b: Finger
+    min_deg: float
+    max_deg: float
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> Self:
+        if not MIN_ANGLE_DEG <= self.min_deg < self.max_deg <= MAX_ANGLE_DEG:
+            msg = "El angulo requiere 0 <= min_deg < max_deg <= 180."
+            raise ValueError(msg)
+        return self
+
+
+class GestureRuleConfig(BaseModel):
+    """Regla declarativa que describe un gesto personalizado."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    extended: tuple[Finger, ...] = ()
+    folded: tuple[Finger, ...] = ()
+    direction: DirectionConditionConfig | None = None
+    angle: AngleConditionConfig | None = None
+
+    @model_validator(mode="after")
+    def _validate_fingers(self) -> Self:
+        if set(self.extended) & set(self.folded):
+            msg = "Un dedo no puede estar extendido y doblado a la vez."
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_conditions(self) -> Self:
+        if not self.extended and not self.folded and self.direction is None and self.angle is None:
+            msg = "Una regla requiere al menos una condicion (extended, folded, direction o angle)."
+            raise ValueError(msg)
+        return self
+
+
 class GestureConfig(BaseModel):
     """Parametros del clasificador de gestos y su estabilizador."""
 
@@ -66,6 +147,10 @@ class GestureConfig(BaseModel):
     stabilization_frames: int = Field(default=DEFAULT_STABILIZATION_FRAMES, ge=1)
     release_frames: int = Field(default=DEFAULT_RELEASE_FRAMES, ge=1)
     min_gesture_confidence: float = Field(default=DEFAULT_MIN_GESTURE_CONFIDENCE, ge=0, le=1)
+    custom_labels: tuple[str, ...] = ()
+    rules: dict[str, GestureRuleConfig] = Field(default_factory=dict)
+    rules_priority: RulesPriority = RulesPriority.RULES_FIRST
+    rule_thresholds: RuleThresholdsConfig = Field(default_factory=RuleThresholdsConfig)
 
 
 class MediaKeyActionConfig(BaseModel):
@@ -107,15 +192,15 @@ class ActionsConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     cooldown_seconds: float = Field(default=DEFAULT_ACTION_COOLDOWN_SECONDS, ge=0)
-    mappings: dict[GestureName, ActionConfig] = Field(default_factory=dict)
+    mappings: dict[str, ActionConfig] = Field(default_factory=dict)
 
     @field_validator("mappings")
     @classmethod
     def _reject_none_gesture(
         cls,
-        mappings: dict[GestureName, ActionConfig],
-    ) -> dict[GestureName, ActionConfig]:
-        if GestureName.NONE in mappings:
+        mappings: dict[str, ActionConfig],
+    ) -> dict[str, ActionConfig]:
+        if GESTURE_NONE.value in mappings:
             msg = "El gesto None no puede mapearse a una accion."
             raise ValueError(msg)
         return mappings
@@ -148,7 +233,7 @@ class PointerConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     enabled: bool = DEFAULT_POINTER_ENABLED
-    activation_gesture: GestureName = GestureName.POINTING_UP
+    activation_gesture: str = GESTURE_POINTING_UP.value
     mirror_x: bool = DEFAULT_POINTER_MIRROR_X
     smoothing: SmoothingKind = SmoothingKind.EMA
     alpha: float = Field(default=DEFAULT_POINTER_SMOOTHING_ALPHA, gt=0, le=1)
@@ -156,8 +241,8 @@ class PointerConfig(BaseModel):
 
     @field_validator("activation_gesture")
     @classmethod
-    def _reject_none_gesture(cls, gesture: GestureName) -> GestureName:
-        if gesture is GestureName.NONE:
+    def _reject_none_gesture(cls, gesture: str) -> str:
+        if gesture == GESTURE_NONE.value:
             msg = "El gesto None no puede activar el puntero."
             raise ValueError(msg)
         return gesture
@@ -173,3 +258,21 @@ class AppConfig(BaseModel):
     gestures: GestureConfig = Field(default_factory=GestureConfig)
     pointer: PointerConfig = Field(default_factory=PointerConfig)
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
+
+    def gesture_catalog(self) -> GestureCatalog:
+        """Reconstruye el catalogo de gestos declarado por la configuracion."""
+        return GestureCatalog.from_labels(
+            custom_labels=self.gestures.custom_labels,
+            rule_names=tuple(self.gestures.rules),
+        )
+
+    @model_validator(mode="after")
+    def _validate_gesture_references(self) -> Self:
+        try:
+            catalog = self.gesture_catalog()
+            for label in self.actions.mappings:
+                catalog.require(label)
+            catalog.require(self.pointer.activation_gesture)
+        except ConfigError as exc:
+            raise ValueError(str(exc)) from exc
+        return self

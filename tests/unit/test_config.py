@@ -31,7 +31,7 @@ from recognizer.core.constants import (
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
 )
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_NONE, GESTURE_POINTING_UP
 from recognizer.core.domain.pointer import SmoothingKind
 
 
@@ -150,7 +150,7 @@ def test_active_zone_defaults() -> None:
 def test_pointer_defaults() -> None:
     pointer = PointerConfig()
     assert pointer.enabled == DEFAULT_POINTER_ENABLED
-    assert pointer.activation_gesture is GestureName.POINTING_UP
+    assert pointer.activation_gesture == GESTURE_POINTING_UP.value
     assert pointer.mirror_x == DEFAULT_POINTER_MIRROR_X
     assert pointer.smoothing is SmoothingKind.EMA
     assert pointer.alpha == DEFAULT_POINTER_SMOOTHING_ALPHA
@@ -210,7 +210,7 @@ def test_pointer_rejects_missing_activation_gesture() -> None:
 
 def test_pointer_rejects_none_gesture() -> None:
     with pytest.raises(ValidationError, match="None no puede activar el puntero"):
-        PointerConfig.model_validate({"activation_gesture": GestureName.NONE})
+        PointerConfig.model_validate({"activation_gesture": GESTURE_NONE.value})
 
 
 def test_pointer_rejects_extra_fields() -> None:

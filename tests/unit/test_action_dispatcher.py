@@ -13,7 +13,12 @@ from recognizer.core.domain.events import (
     GestureReleased,
     HandsDetected,
 )
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import (
+    GESTURE_NONE,
+    GESTURE_OPEN_PALM,
+    GESTURE_VICTORY,
+    GestureId,
+)
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.errors import ActionError
 
@@ -41,7 +46,7 @@ class FailingAction:
 
 
 def _detected(
-    gesture: GestureName = GestureName.VICTORY,
+    gesture: GestureId = GESTURE_VICTORY,
     *,
     confidence: float = GESTURE_CONFIDENCE,
 ) -> GestureDetected:
@@ -55,13 +60,13 @@ def _detected(
 
 def test_mapped_gesture_executes_with_context() -> None:
     action = RecordingAction()
-    dispatcher = GestureActionDispatcher(actions={GestureName.VICTORY: action})
+    dispatcher = GestureActionDispatcher(actions={GESTURE_VICTORY: action})
 
     dispatcher.handle(_detected())
 
     assert action.contexts == [
         ActionContext(
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
             timestamp=TIMESTAMP,
@@ -70,26 +75,26 @@ def test_mapped_gesture_executes_with_context() -> None:
 
 
 def test_unmapped_gesture_does_not_raise_with_default_fallback() -> None:
-    dispatcher = GestureActionDispatcher(actions={GestureName.VICTORY: RecordingAction()})
+    dispatcher = GestureActionDispatcher(actions={GESTURE_VICTORY: RecordingAction()})
 
-    dispatcher.handle(_detected(GestureName.OPEN_PALM))
+    dispatcher.handle(_detected(GESTURE_OPEN_PALM))
 
 
 def test_unmapped_gesture_uses_injected_fallback() -> None:
     fallback = RecordingAction()
     dispatcher = GestureActionDispatcher(actions={}, fallback=fallback)
 
-    dispatcher.handle(_detected(GestureName.OPEN_PALM))
+    dispatcher.handle(_detected(GESTURE_OPEN_PALM))
 
     assert len(fallback.contexts) == 1
-    assert fallback.contexts[0].gesture is GestureName.OPEN_PALM
+    assert fallback.contexts[0].gesture is GESTURE_OPEN_PALM
 
 
 def test_none_gesture_is_ignored() -> None:
     fallback = RecordingAction()
     dispatcher = GestureActionDispatcher(actions={}, fallback=fallback)
 
-    dispatcher.handle(_detected(GestureName.NONE))
+    dispatcher.handle(_detected(GESTURE_NONE))
 
     assert fallback.contexts == []
 
@@ -99,7 +104,7 @@ def test_none_gesture_is_ignored() -> None:
     [
         GestureReleased(
             timestamp=TIMESTAMP,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             handedness=Handedness.RIGHT,
         ),
         HandsDetected(timestamp=TIMESTAMP, hands=()),
@@ -117,7 +122,7 @@ def test_other_events_are_ignored(event: DomainEvent) -> None:
 def test_action_error_is_logged_as_warning_and_not_propagated(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    dispatcher = GestureActionDispatcher(actions={GestureName.VICTORY: FailingAction()})
+    dispatcher = GestureActionDispatcher(actions={GESTURE_VICTORY: FailingAction()})
 
     with caplog.at_level(logging.WARNING, logger=ACTION_LOGGER_NAME):
         dispatcher.handle(_detected())
@@ -126,4 +131,4 @@ def test_action_error_is_logged_as_warning_and_not_propagated(
     record = caplog.records[0]
     assert record.levelno == logging.WARNING
     assert record.name == ACTION_LOGGER_NAME
-    assert GestureName.VICTORY.value in record.getMessage()
+    assert GESTURE_VICTORY.value in record.getMessage()

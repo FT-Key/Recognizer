@@ -8,7 +8,7 @@ from pynput.keyboard import Key
 
 from recognizer.adapters.pynput_keys import PynputKeySender
 from recognizer.core.domain.action import MediaKey
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_VICTORY
 from recognizer.core.errors import ActionError
 
 EXPECTED_MEDIA_KEYS: tuple[tuple[MediaKey, Key], ...] = (
@@ -108,7 +108,7 @@ def test_press_media_rejects_unknown_key() -> None:
     controller = RecordingKeyController()
     sender = PynputKeySender(controller=controller)
     # cast documentado: simula una clave corrupta de otro enum StrEnum.
-    unknown = cast(MediaKey, GestureName.VICTORY)
+    unknown = cast(MediaKey, GESTURE_VICTORY)
 
     with pytest.raises(ActionError, match="desconocida"):
         sender.press_media(unknown)

@@ -17,8 +17,9 @@ from recognizer.core.domain.events import (
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
+    GESTURE_OPEN_PALM,
+    GESTURE_VICTORY,
     DetectedGesture,
-    GestureName,
     GestureRecognition,
     StableGesture,
 )
@@ -87,7 +88,7 @@ def _hand() -> HandLandmarks:
 
 def _recognition() -> GestureRecognition:
     detection = DetectedGesture(
-        name=GestureName.VICTORY,
+        name=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
     )
@@ -125,7 +126,7 @@ def test_gesture_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.3,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=STATS_HIGH_CONFIDENCE,
             handedness=Handedness.RIGHT,
         )
@@ -133,7 +134,7 @@ def test_gesture_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.4,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=STATS_HIGH_CONFIDENCE,
             handedness=Handedness.RIGHT,
         )
@@ -141,7 +142,7 @@ def test_gesture_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureDetected(
             timestamp=0.5,
-            gesture=GestureName.OPEN_PALM,
+            gesture=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.LEFT,
         )
@@ -149,7 +150,7 @@ def test_gesture_stats_handle_updates_counters() -> None:
     stats.handle(
         GestureReleased(
             timestamp=0.6,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             handedness=Handedness.RIGHT,
         )
     )
@@ -158,7 +159,7 @@ def test_gesture_stats_handle_updates_counters() -> None:
     assert stats.max_hands == TWO_HANDS
     assert stats.detected_events == 3
     assert stats.released_events == 1
-    assert stats.confirmed == {GestureName.VICTORY: 2, GestureName.OPEN_PALM: 1}
+    assert stats.confirmed == {GESTURE_VICTORY: 2, GESTURE_OPEN_PALM: 1}
 
 
 def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
@@ -179,7 +180,7 @@ def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
     assert context.detections == recognition.detections
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -189,7 +190,7 @@ def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
         HandsDetected(timestamp=FRAME_TIMESTAMP, hands=recognition.hands),
         GestureDetected(
             timestamp=FRAME_TIMESTAMP,
-            gesture=GestureName.VICTORY,
+            gesture=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),

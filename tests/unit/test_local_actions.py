@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from recognizer.core.actions.local import CommandAction, HotkeyAction, MediaKeyAction
 from recognizer.core.actions.noop import NoOpAction
 from recognizer.core.domain.action import ActionContext, MediaKey
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_VICTORY
 from recognizer.core.domain.hand import Handedness
 
 GESTURE_CONFIDENCE = 0.9
@@ -38,7 +38,7 @@ class RecordingCommandRunner:
 
 def _context() -> ActionContext:
     return ActionContext(
-        gesture=GestureName.VICTORY,
+        gesture=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
         timestamp=TIMESTAMP,

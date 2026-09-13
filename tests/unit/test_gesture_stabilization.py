@@ -7,7 +7,14 @@ from numpy.typing import NDArray
 
 from recognizer.core.domain.events import DomainEvent, GestureDetected, GestureReleased
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import DetectedGesture, GestureName, StableGesture
+from recognizer.core.domain.gesture import (
+    GESTURE_NONE,
+    GESTURE_OPEN_PALM,
+    GESTURE_VICTORY,
+    DetectedGesture,
+    GestureId,
+    StableGesture,
+)
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
@@ -35,7 +42,7 @@ class RecordingBus:
 
 
 def _detection(
-    name: GestureName = GestureName.VICTORY,
+    name: GestureId = GESTURE_VICTORY,
     *,
     confidence: float = GESTURE_CONFIDENCE,
     handedness: Handedness = Handedness.RIGHT,
@@ -67,7 +74,7 @@ def _processor(
 
 def _confirmed(
     timestamp: float,
-    gesture: GestureName = GestureName.VICTORY,
+    gesture: GestureId = GESTURE_VICTORY,
     *,
     confidence: float = GESTURE_CONFIDENCE,
     handedness: Handedness = Handedness.RIGHT,
@@ -82,7 +89,7 @@ def _confirmed(
 
 def _released(
     timestamp: float,
-    gesture: GestureName = GestureName.VICTORY,
+    gesture: GestureId = GESTURE_VICTORY,
     *,
     handedness: Handedness = Handedness.RIGHT,
 ) -> GestureReleased:
@@ -102,7 +109,7 @@ def test_confirm_after_n_consecutive_frames() -> None:
     assert bus.events == [_confirmed(0.3)]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -121,7 +128,7 @@ def test_confirmed_gesture_is_not_republished() -> None:
     assert bus.events == [_confirmed(0.3)]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=0.8,
             handedness=Handedness.RIGHT,
         ),
@@ -134,20 +141,20 @@ def test_change_publishes_release_then_detection_in_order() -> None:
     for timestamp in (0.1, 0.2, 0.3):
         processor.process(_context(timestamp, (_detection(),)))
 
-    processor.process(_context(0.4, (_detection(GestureName.OPEN_PALM),)))
-    processor.process(_context(0.5, (_detection(GestureName.OPEN_PALM),)))
+    processor.process(_context(0.4, (_detection(GESTURE_OPEN_PALM),)))
+    processor.process(_context(0.5, (_detection(GESTURE_OPEN_PALM),)))
     assert bus.events == [_confirmed(0.3)]
 
-    context = processor.process(_context(0.6, (_detection(GestureName.OPEN_PALM),)))
+    context = processor.process(_context(0.6, (_detection(GESTURE_OPEN_PALM),)))
 
     assert bus.events == [
         _confirmed(0.3),
         _released(0.6),
-        _confirmed(0.6, GestureName.OPEN_PALM),
+        _confirmed(0.6, GESTURE_OPEN_PALM),
     ]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.OPEN_PALM,
+            name=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -191,7 +198,7 @@ def test_ignored_detections_do_not_confirm_and_count_as_absence() -> None:
     bus = RecordingBus()
     processor = _processor(bus)
     ignored = (
-        _detection(GestureName.NONE),
+        _detection(GESTURE_NONE),
         _detection(confidence=LOW_CONFIDENCE),
         _detection(handedness=Handedness.UNKNOWN),
     )
@@ -221,7 +228,7 @@ def test_single_stabilization_frame_confirms_immediately() -> None:
     assert bus.events == [_confirmed(0.1)]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -231,8 +238,8 @@ def test_single_stabilization_frame_confirms_immediately() -> None:
 def test_two_hands_stabilize_independently() -> None:
     bus = RecordingBus()
     processor = _processor(bus)
-    left_victory = _detection(GestureName.VICTORY, handedness=Handedness.LEFT)
-    right_open_palm = _detection(GestureName.OPEN_PALM, handedness=Handedness.RIGHT)
+    left_victory = _detection(GESTURE_VICTORY, handedness=Handedness.LEFT)
+    right_open_palm = _detection(GESTURE_OPEN_PALM, handedness=Handedness.RIGHT)
 
     processor.process(_context(0.1, (left_victory, right_open_palm)))
     processor.process(_context(0.2, (left_victory, right_open_palm)))
@@ -241,17 +248,17 @@ def test_two_hands_stabilize_independently() -> None:
     context = processor.process(_context(0.3, (left_victory, right_open_palm)))
 
     assert bus.events == [
-        _confirmed(0.3, GestureName.VICTORY, handedness=Handedness.LEFT),
-        _confirmed(0.3, GestureName.OPEN_PALM, handedness=Handedness.RIGHT),
+        _confirmed(0.3, GESTURE_VICTORY, handedness=Handedness.LEFT),
+        _confirmed(0.3, GESTURE_OPEN_PALM, handedness=Handedness.RIGHT),
     ]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.LEFT,
         ),
         StableGesture(
-            name=GestureName.OPEN_PALM,
+            name=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -260,10 +267,10 @@ def test_two_hands_stabilize_independently() -> None:
     processor.process(_context(0.4, (right_open_palm,)))
     context = processor.process(_context(0.5, (right_open_palm,)))
 
-    assert bus.events[-1] == _released(0.5, GestureName.VICTORY, handedness=Handedness.LEFT)
+    assert bus.events[-1] == _released(0.5, GESTURE_VICTORY, handedness=Handedness.LEFT)
     assert context.gestures == (
         StableGesture(
-            name=GestureName.OPEN_PALM,
+            name=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -277,24 +284,24 @@ def test_release_before_stabilization_keeps_candidate_counting() -> None:
         processor.process(_context(timestamp, (_detection(),)))
     assert bus.events == [_confirmed(0.3)]
 
-    processor.process(_context(0.4, (_detection(GestureName.OPEN_PALM),)))
+    processor.process(_context(0.4, (_detection(GESTURE_OPEN_PALM),)))
     assert bus.events == [_confirmed(0.3)]
 
-    context = processor.process(_context(0.5, (_detection(GestureName.OPEN_PALM),)))
+    context = processor.process(_context(0.5, (_detection(GESTURE_OPEN_PALM),)))
 
     assert bus.events == [_confirmed(0.3), _released(0.5)]
     assert context.gestures == ()
 
-    context = processor.process(_context(0.6, (_detection(GestureName.OPEN_PALM),)))
+    context = processor.process(_context(0.6, (_detection(GESTURE_OPEN_PALM),)))
 
     assert bus.events == [
         _confirmed(0.3),
         _released(0.5),
-        _confirmed(0.6, GestureName.OPEN_PALM),
+        _confirmed(0.6, GESTURE_OPEN_PALM),
     ]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.OPEN_PALM,
+            name=GESTURE_OPEN_PALM,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -308,18 +315,18 @@ def test_reverted_candidate_restarts_without_events() -> None:
     processor.process(_context(0.2, (_detection(),)))
     assert bus.events == [_confirmed(0.2)]
 
-    processor.process(_context(0.3, (_detection(GestureName.OPEN_PALM),)))
+    processor.process(_context(0.3, (_detection(GESTURE_OPEN_PALM),)))
     processor.process(_context(0.4, (_detection(),)))
 
     assert bus.events == [_confirmed(0.2)]
 
-    processor.process(_context(0.5, (_detection(GestureName.OPEN_PALM),)))
-    processor.process(_context(0.6, (_detection(GestureName.OPEN_PALM),)))
+    processor.process(_context(0.5, (_detection(GESTURE_OPEN_PALM),)))
+    processor.process(_context(0.6, (_detection(GESTURE_OPEN_PALM),)))
 
     assert bus.events == [
         _confirmed(0.2),
         _released(0.6),
-        _confirmed(0.6, GestureName.OPEN_PALM),
+        _confirmed(0.6, GESTURE_OPEN_PALM),
     ]
 
 
@@ -331,8 +338,8 @@ def test_highest_confidence_same_gesture_wins() -> None:
         _context(
             0.1,
             (
-                _detection(GestureName.VICTORY, confidence=0.6),
-                _detection(GestureName.VICTORY, confidence=GESTURE_CONFIDENCE),
+                _detection(GESTURE_VICTORY, confidence=0.6),
+                _detection(GESTURE_VICTORY, confidence=GESTURE_CONFIDENCE),
             ),
         )
     )
@@ -340,7 +347,7 @@ def test_highest_confidence_same_gesture_wins() -> None:
     assert bus.events == [_confirmed(0.1, confidence=GESTURE_CONFIDENCE)]
     assert context.gestures == (
         StableGesture(
-            name=GestureName.VICTORY,
+            name=GESTURE_VICTORY,
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
@@ -355,10 +362,10 @@ def test_highest_confidence_gesture_wins_regardless_of_order() -> None:
         _context(
             0.1,
             (
-                _detection(GestureName.VICTORY, confidence=0.6),
-                _detection(GestureName.OPEN_PALM, confidence=GESTURE_CONFIDENCE),
+                _detection(GESTURE_VICTORY, confidence=0.6),
+                _detection(GESTURE_OPEN_PALM, confidence=GESTURE_CONFIDENCE),
             ),
         )
     )
 
-    assert bus.events == [_confirmed(0.1, GestureName.OPEN_PALM)]
+    assert bus.events == [_confirmed(0.1, GESTURE_OPEN_PALM)]

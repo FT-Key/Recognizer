@@ -3,7 +3,7 @@
 from dataclasses import replace
 
 from recognizer.core.domain.events import PointerMoved
-from recognizer.core.domain.gesture import GestureName, StableGesture
+from recognizer.core.domain.gesture import GestureId, StableGesture
 from recognizer.core.domain.hand import (
     HAND_LANDMARK_COUNT,
     INDEX_FINGER_TIP_LANDMARK_INDEX,
@@ -38,7 +38,7 @@ class PointerDetectionProcessor(Processor):
         bus: EventBus,
         calibration: PointerCalibration,
         smoothing: PointerSmoothing,
-        activation_gesture: GestureName,
+        activation_gesture: GestureId,
     ) -> None:
         self._bus = bus
         self._calibration = calibration
@@ -65,6 +65,6 @@ class PointerDetectionProcessor(Processor):
 
     def _find_gesture(self, context: FrameContext) -> StableGesture | None:
         for gesture in context.gestures:
-            if gesture.name is self._activation_gesture:
+            if gesture.name == self._activation_gesture:
                 return gesture
         return None
