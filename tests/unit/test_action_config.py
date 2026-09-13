@@ -10,9 +10,10 @@ from recognizer.core.config import (
     CommandActionConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
+    ScriptActionConfig,
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
-from recognizer.core.domain.action import MediaKey
+from recognizer.core.domain.action import MediaKey, ScriptInterpreter
 from recognizer.settings import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -54,6 +55,64 @@ def test_command_mapping_parses() -> None:
     action = config.mappings["ILoveYou"]
     assert isinstance(action, CommandActionConfig)
     assert action.argv == ("notepad.exe", "notas.txt")
+
+
+def test_script_mapping_parses_with_defaults() -> None:
+    config = ActionsConfig.model_validate(
+        {"mappings": {"Victory": {"type": "script", "path": "scripts/celebrate.py"}}}
+    )
+
+    action = config.mappings["Victory"]
+    assert isinstance(action, ScriptActionConfig)
+    assert action.path == "scripts/celebrate.py"
+    assert action.args == ()
+    assert action.interpreter is ScriptInterpreter.AUTO
+    assert action.working_dir is None
+    assert action.blocking is False
+    assert action.timeout_seconds == 0.0
+    assert action.pass_context is False
+
+
+def test_script_mapping_parses_with_optionals() -> None:
+    config = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "Victory": {
+                    "type": "script",
+                    "path": "scripts/celebrate.ps1",
+                    "args": ["--loud"],
+                    "interpreter": "powershell",
+                    "working_dir": "scripts",
+                    "blocking": True,
+                    "timeout_seconds": 2.5,
+                    "pass_context": True,
+                }
+            }
+        }
+    )
+
+    action = config.mappings["Victory"]
+    assert isinstance(action, ScriptActionConfig)
+    assert action.args == ("--loud",)
+    assert action.interpreter is ScriptInterpreter.POWERSHELL
+    assert action.working_dir == "scripts"
+    assert action.blocking is True
+    assert action.timeout_seconds == 2.5
+    assert action.pass_context is True
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"type": "script"},
+        {"type": "script", "path": "script.py", "timeout_seconds": -0.1},
+        {"type": "script", "path": "script.py", "interpreter": "ruby"},
+        {"type": "script", "path": "script.py", "blocking": True},
+    ],
+)
+def test_invalid_script_mapping_is_rejected(mapping: object) -> None:
+    with pytest.raises(ValidationError):
+        ActionsConfig.model_validate({"mappings": {"Victory": mapping}})
 
 
 def test_unknown_action_type_is_rejected() -> None:

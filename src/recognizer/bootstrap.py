@@ -8,6 +8,7 @@ from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, 
 from recognizer.adapters.pynput_keys import PynputKeySender
 from recognizer.adapters.pynput_mouse import PynputMouseController
 from recognizer.adapters.subprocess_command import SubprocessCommandRunner
+from recognizer.adapters.subprocess_script import SubprocessScriptRunner
 from recognizer.core.actions.decorators import (
     ActionGate,
     DebouncedAction,
@@ -15,6 +16,7 @@ from recognizer.core.actions.decorators import (
     LoggedAction,
 )
 from recognizer.core.actions.local import CommandAction, HotkeyAction, MediaKeyAction
+from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
@@ -25,8 +27,9 @@ from recognizer.core.config import (
     HotkeyActionConfig,
     MediaKeyActionConfig,
     PointerConfig,
+    ScriptActionConfig,
 )
-from recognizer.core.domain.action import Action
+from recognizer.core.domain.action import Action, ScriptRequest
 from recognizer.core.domain.gesture import GestureCatalog, GestureId
 from recognizer.core.domain.pointer import PointerCalibration
 from recognizer.core.errors import ActionError, RecognizerError
@@ -42,6 +45,7 @@ from recognizer.core.ports.event_bus import EventBus
 from recognizer.core.ports.gesture_classifier import GestureClassifier
 from recognizer.core.ports.key_sender import KeySender
 from recognizer.core.ports.mouse_controller import MouseController
+from recognizer.core.ports.script_runner import ScriptRunner
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,6 +137,7 @@ def build_action_bindings(
     catalog: GestureCatalog,
     key_sender: KeySender | None = None,
     command_runner: CommandRunner | None = None,
+    script_runner: ScriptRunner | None = None,
     gate: ActionGate | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionBindings:
@@ -147,10 +152,16 @@ def build_action_bindings(
 
     sender = key_sender or PynputKeySender()
     runner = command_runner or SubprocessCommandRunner()
+    script = script_runner or SubprocessScriptRunner()
     shared_gate = gate if gate is not None else ActionGate()
     mapping: dict[GestureId, Action] = {}
     for label, spec in actions.mappings.items():
-        action = _build_action(spec=spec, key_sender=sender, command_runner=runner)
+        action = _build_action(
+            spec=spec,
+            key_sender=sender,
+            command_runner=runner,
+            script_runner=script,
+        )
         mapping[catalog.require(label)] = GatedAction(
             DebouncedAction(
                 LoggedAction(action, logger=logger),
@@ -183,6 +194,7 @@ def _build_action(
     spec: ActionConfig,
     key_sender: KeySender,
     command_runner: CommandRunner,
+    script_runner: ScriptRunner,
 ) -> Action:
     match spec:
         case MediaKeyActionConfig(key=key):
@@ -191,5 +203,19 @@ def _build_action(
             return HotkeyAction(keys=keys, sender=key_sender)
         case CommandActionConfig(argv=argv):
             return CommandAction(argv=argv, runner=command_runner)
+        case ScriptActionConfig():
+            return ScriptAction(
+                request=ScriptRequest(
+                    path=spec.path,
+                    args=spec.args,
+                    interpreter=spec.interpreter,
+                    working_dir=spec.working_dir,
+                    blocking=spec.blocking,
+                    timeout_seconds=spec.timeout_seconds,
+                    env=None,
+                ),
+                runner=script_runner,
+                pass_context=spec.pass_context,
+            )
     msg = f"Accion no soportada: {type(spec).__name__}"
     raise ActionError(msg)

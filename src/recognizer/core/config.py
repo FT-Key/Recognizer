@@ -29,7 +29,7 @@ from recognizer.core.constants import (
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
 )
-from recognizer.core.domain.action import MediaKey
+from recognizer.core.domain.action import MediaKey, ScriptInterpreter
 from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     GESTURE_POINTING_UP,
@@ -180,8 +180,33 @@ class CommandActionConfig(BaseModel):
     argv: tuple[str, ...] = Field(min_length=1)
 
 
+class ScriptActionConfig(BaseModel):
+    """Accion que ejecuta un script local."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["script"] = "script"
+    path: str = Field(min_length=1)
+    args: tuple[str, ...] = ()
+    interpreter: ScriptInterpreter = ScriptInterpreter.AUTO
+    working_dir: str | None = None
+    blocking: bool = False
+    timeout_seconds: float = Field(default=0.0, ge=0)
+    pass_context: bool = False
+
+    @model_validator(mode="after")
+    def _require_timeout_when_blocking(self) -> Self:
+        if self.blocking and self.timeout_seconds <= 0:
+            msg = (
+                "Una accion script bloqueante requiere timeout_seconds > 0 "
+                "para no detener la camara de forma indefinida."
+            )
+            raise ValueError(msg)
+        return self
+
+
 ActionConfig = Annotated[
-    MediaKeyActionConfig | HotkeyActionConfig | CommandActionConfig,
+    MediaKeyActionConfig | HotkeyActionConfig | CommandActionConfig | ScriptActionConfig,
     Field(discriminator="type"),
 ]
 

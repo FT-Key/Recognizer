@@ -72,6 +72,15 @@ en `core/pipeline/landmark_rules.py` (core puro, sin infraestructura) y
 custom (Model Maker) solo requiere cambiar `gestures.model_path` y declarar
 `custom_labels`; el adaptador filtra las etiquetas por el catálogo.
 
+## Acciones locales y scripts (etapa 6)
+
+Las acciones locales son `media_key`, `hotkey`, `command` y `script`. Los scripts se
+ejecutan a través del puerto `ScriptRunner` (`core`) implementado por
+`SubprocessScriptRunner` (`adapters`), que resuelve el intérprete por extensión
+(`.py/.ps1/.bat/.cmd/.sh`) y soporta modo bloqueante (con `timeout_seconds > 0`) y no
+bloqueante (`shell=False`, `argv` desde config). El contexto del gesto se pasa de forma
+opt-in por variables de entorno `RECOGNIZER_*`.
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·
