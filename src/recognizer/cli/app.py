@@ -19,7 +19,12 @@ import cv2
 
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.adapters.mediapipe_gesture_classifier import MediaPipeGestureClassifier
-from recognizer.bootstrap import build_action_bindings, build_pipeline, resolve_camera_config
+from recognizer.bootstrap import (
+    build_action_bindings,
+    build_pipeline,
+    build_pointer_mover,
+    resolve_camera_config,
+)
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.actions.decorators import ActionGate
 from recognizer.core.actions.dispatcher import GestureActionDispatcher
@@ -29,6 +34,7 @@ from recognizer.core.domain.events import (
     GestureDetected,
     GestureReleased,
     HandsDetected,
+    PointerMoved,
 )
 from recognizer.core.domain.gesture import GestureName
 from recognizer.core.errors import RecognizerError
@@ -48,18 +54,21 @@ HUD_SCALE = 0.8
 HUD_THICKNESS = 2
 HUD_ENABLED_TEXT = "Acciones: ON"
 HUD_DISABLED_TEXT = "Acciones: OFF"
+HUD_POINTER_ENABLED_TEXT = "Puntero: ON"
+HUD_POINTER_DISABLED_TEXT = "Puntero: OFF"
 HUD_ENABLED_COLOR_BGR = (0, 200, 0)
 HUD_DISABLED_COLOR_BGR = (0, 0, 255)
 
 
 class _Stats:
-    """Cuenta eventos de manos y gestos confirmados publicados al bus."""
+    """Cuenta eventos de manos, gestos confirmados y puntero publicados al bus."""
 
     def __init__(self) -> None:
         self.hands_events = 0
         self.max_hands = 0
         self.detected_events = 0
         self.released_events = 0
+        self.pointer_events = 0
         self.confirmed: Counter[GestureName] = Counter()
 
     def handle(self, event: DomainEvent) -> None:
@@ -73,6 +82,8 @@ class _Stats:
                 self.confirmed[gesture] += 1
             case GestureReleased():
                 self.released_events += 1
+            case PointerMoved():
+                self.pointer_events += 1
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -94,6 +105,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="No ejecuta acciones locales aunque haya mapeos.",
     )
+    parser.add_argument(
+        "--no-pointer",
+        action="store_true",
+        help="No mueve el puntero aunque este habilitado en config.",
+    )
     return parser
 
 
@@ -107,6 +123,10 @@ def _actions_state(gate: ActionGate | None) -> str:
     if gate is None:
         return "inactivas"
     return "activadas" if gate.enabled else "desactivadas"
+
+
+def _pointer_state(enabled: bool) -> str:
+    return "activado" if enabled else "desactivado"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -126,16 +146,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         bus.subscribe(HandsDetected, stats.handle)
         bus.subscribe(GestureDetected, stats.handle)
         bus.subscribe(GestureReleased, stats.handle)
+        bus.subscribe(PointerMoved, stats.handle)
 
-        gate: ActionGate | None = None
-        if not args.no_actions and app_config.actions.mappings:
-            bindings = build_action_bindings(actions=app_config.actions)
+        actions_active = not args.no_actions and bool(app_config.actions.mappings)
+        pointer_active = app_config.pointer.enabled and not args.no_pointer
+        gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
+
+        if actions_active:
+            bindings = build_action_bindings(actions=app_config.actions, gate=gate)
             dispatcher = GestureActionDispatcher(actions=bindings.mapping)
             bus.subscribe(GestureDetected, dispatcher.handle)
-            gate = bindings.gate
+        if pointer_active:
+            mover = build_pointer_mover(pointer=app_config.pointer, gate=gate)
+            if mover is not None:
+                bus.subscribe(PointerMoved, mover.handle)
 
         classifier = MediaPipeGestureClassifier(app_config.gestures)
-        pipeline = build_pipeline(classifier=classifier, bus=bus, gestures=app_config.gestures)
+        pipeline = build_pipeline(
+            classifier=classifier,
+            bus=bus,
+            gestures=app_config.gestures,
+            pointer=app_config.pointer if pointer_active else None,
+        )
 
         def _on_key(pressed: int) -> None:
             if pressed == TOGGLE_KEY and gate is not None:
@@ -148,9 +180,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             if gate is None:
                 return
             enabled = gate.enabled
+            if actions_active:
+                text = HUD_ENABLED_TEXT if enabled else HUD_DISABLED_TEXT
+            else:
+                text = HUD_POINTER_ENABLED_TEXT if enabled else HUD_POINTER_DISABLED_TEXT
             cv2.putText(
                 context.frame.data,
-                HUD_ENABLED_TEXT if enabled else HUD_DISABLED_TEXT,
+                text,
                 HUD_POSITION,
                 HUD_FONT,
                 HUD_SCALE,
@@ -191,7 +227,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     LOGGER.info(
         "App OK: %d fotogramas, %.1f FPS medio, maximo de manos: %d, gestos confirmados: %s "
-        "(HandsDetected: %d, GestureDetected: %d, GestureReleased: %d). Acciones: %s.",
+        "(HandsDetected: %d, GestureDetected: %d, GestureReleased: %d, PointerMoved: %d). "
+        "Acciones: %s. Puntero: %s.",
         frames,
         fps,
         stats.max_hands,
@@ -199,7 +236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stats.hands_events,
         stats.detected_events,
         stats.released_events,
-        _actions_state(gate),
+        stats.pointer_events,
+        _actions_state(gate) if actions_active else "inactivas",
+        _pointer_state(pointer_active and gate is not None and gate.enabled),
     )
     return 0
 

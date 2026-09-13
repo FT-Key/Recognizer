@@ -35,3 +35,11 @@ class GestureReleased(DomainEvent):
 
     gesture: GestureName
     handedness: Handedness
+
+
+@dataclass(frozen=True, slots=True)
+class PointerMoved(DomainEvent):
+    """Posicion normalizada del puntero publicada mientras esta activo."""
+
+    x: float
+    y: float

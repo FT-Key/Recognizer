@@ -12,6 +12,7 @@ from recognizer.core.domain.hand import (
     Handedness,
     HandLandmarks,
 )
+from recognizer.core.domain.pointer import PointerPosition
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.processor import Processor
 
@@ -27,6 +28,10 @@ TEXT_THICKNESS = 1
 TEXT_OFFSET_PIXELS = 8
 GESTURE_COLOR_BGR = (0, 165, 255)
 GESTURE_TEXT_OFFSET_PIXELS = 24
+POINTER_COLOR_BGR = (255, 0, 255)
+POINTER_RADIUS_PIXELS = 12
+POINTER_THICKNESS = 2
+POINTER_TEXT_OFFSET_PIXELS = 24
 
 
 def _draw_hand(*, data: NDArray[np.uint8], hand: HandLandmarks) -> None:
@@ -106,4 +111,51 @@ class GestureOverlay(Processor):
             hand = _find_hand(hands=context.hands, handedness=gesture.handedness)
             if hand is not None and len(hand.points) > WRIST_LANDMARK_INDEX:
                 _draw_gesture(data=context.frame.data, hand=hand, gesture=gesture)
+        return context
+
+
+def _draw_pointer(*, data: NDArray[np.uint8], position: PointerPosition) -> None:
+    height, width = data.shape[:2]
+    center_x = round(position.x * (width - 1))
+    center_y = round(position.y * (height - 1))
+    cv2.circle(
+        data,
+        (center_x, center_y),
+        POINTER_RADIUS_PIXELS,
+        POINTER_COLOR_BGR,
+        POINTER_THICKNESS,
+    )
+    cv2.line(
+        data,
+        (center_x - POINTER_RADIUS_PIXELS, center_y),
+        (center_x + POINTER_RADIUS_PIXELS, center_y),
+        POINTER_COLOR_BGR,
+        POINTER_THICKNESS,
+    )
+    cv2.line(
+        data,
+        (center_x, center_y - POINTER_RADIUS_PIXELS),
+        (center_x, center_y + POINTER_RADIUS_PIXELS),
+        POINTER_COLOR_BGR,
+        POINTER_THICKNESS,
+    )
+    label = f"Puntero {position.x:.2f},{position.y:.2f}"
+    cv2.putText(
+        data,
+        label,
+        (center_x + POINTER_TEXT_OFFSET_PIXELS, center_y),
+        TEXT_FONT,
+        TEXT_SCALE,
+        POINTER_COLOR_BGR,
+        TEXT_THICKNESS,
+    )
+
+
+class PointerOverlay(Processor):
+    """Dibuja la cruz y las coordenadas del puntero cuando esta activo."""
+
+    def process(self, context: FrameContext) -> FrameContext:
+        """Dibuja el puntero; sin posicion no hace nada."""
+        if context.pointer is not None:
+            _draw_pointer(data=context.frame.data, position=context.pointer)
         return context

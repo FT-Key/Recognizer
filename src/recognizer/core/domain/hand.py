@@ -5,6 +5,7 @@ from enum import StrEnum
 
 HAND_LANDMARK_COUNT = 21
 WRIST_LANDMARK_INDEX = 0
+INDEX_FINGER_TIP_LANDMARK_INDEX = 8
 
 # Topologia oficial del modelo de 21 landmarks de MediaPipe.
 HAND_CONNECTIONS: tuple[tuple[int, int], ...] = (

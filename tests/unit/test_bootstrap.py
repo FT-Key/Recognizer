@@ -8,24 +8,28 @@ import pytest
 from numpy.typing import NDArray
 
 from recognizer import bootstrap
+from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, PointerOverlay
 from recognizer.bootstrap import (
     build_action_bindings,
     build_pipeline,
+    build_pointer_mover,
     resolve_camera_config,
 )
-from recognizer.core.actions.decorators import GatedAction
+from recognizer.core.actions.decorators import ActionGate, GatedAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
     AppConfig,
     CameraConfig,
     GestureConfig,
+    PointerConfig,
 )
 from recognizer.core.domain.action import ActionContext, MediaKey
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
     HandsDetected,
+    PointerMoved,
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
@@ -41,6 +45,10 @@ from recognizer.core.domain.hand import (
     Point,
 )
 from recognizer.core.errors import ActionError, RecognizerError
+from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
+from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
+from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
+from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.ports.event_bus import EventT
 from recognizer.core.ports.gesture_classifier import GestureClassifier
 
@@ -75,6 +83,16 @@ class RecordingCommandRunner:
 
     def run(self, argv: Sequence[str]) -> None:
         self.commands.append(tuple(argv))
+
+
+class RecordingMouseController:
+    """Doble de MouseController que registra los movimientos recibidos."""
+
+    def __init__(self) -> None:
+        self.moves: list[tuple[float, float]] = []
+
+    def move_to(self, *, x: float, y: float) -> None:
+        self.moves.append((x, y))
 
 
 class FakeClassifier:
@@ -303,3 +321,111 @@ def test_build_pipeline_with_classifier_detects_and_stabilizes() -> None:
             handedness=Handedness.RIGHT,
         ),
     ]
+
+
+@pytest.mark.parametrize("pointer", [None, PointerConfig(enabled=False)])
+def test_build_pipeline_omits_pointer_processors_when_inactive(
+    pointer: PointerConfig | None,
+) -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        pointer=pointer,
+    )
+
+    assert not any(
+        isinstance(processor, (PointerDetectionProcessor, PointerOverlay))
+        for processor in pipeline.processors
+    )
+
+
+def test_build_pipeline_with_pointer_appends_detector_and_overlay_last() -> None:
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=RecordingBus(),
+        gestures=GestureConfig(stabilization_frames=1),
+        pointer=PointerConfig(),
+    )
+
+    types = [type(processor) for processor in pipeline.processors]
+
+    assert types == [
+        GestureDetectionProcessor,
+        GestureStabilizerProcessor,
+        PointerDetectionProcessor,
+        LandmarkOverlay,
+        GestureOverlay,
+        PointerOverlay,
+    ]
+
+
+def test_build_pipeline_without_classifier_ignores_pointer() -> None:
+    pipeline = build_pipeline(
+        classifier=None,
+        bus=RecordingBus(),
+        gestures=GestureConfig(),
+        pointer=PointerConfig(),
+    )
+
+    assert pipeline.processors == ()
+
+
+def test_build_pipeline_pointer_detection_runs_when_gesture_is_active() -> None:
+    bus = RecordingBus()
+    pipeline = build_pipeline(
+        classifier=FakeClassifier(_recognition()),
+        bus=bus,
+        gestures=GestureConfig(
+            stabilization_frames=1,
+            min_gesture_confidence=MIN_GESTURE_CONFIDENCE,
+        ),
+        pointer=PointerConfig(activation_gesture=GestureName.VICTORY),
+    )
+
+    context = pipeline.run(_frame())
+
+    assert context.pointer is not None
+    assert context.pointer.x == pytest.approx(0.5)
+    assert context.pointer.y == pytest.approx(0.5)
+    assert len(bus.events) == 3
+    event = bus.events[-1]
+    assert isinstance(event, PointerMoved)
+    assert event.x == pytest.approx(0.5)
+    assert event.y == pytest.approx(0.5)
+
+
+def test_build_pointer_mover_returns_none_when_disabled() -> None:
+    assert build_pointer_mover(pointer=PointerConfig(enabled=False)) is None
+
+
+def test_build_pointer_mover_returns_mover_with_controller() -> None:
+    controller = RecordingMouseController()
+
+    mover = build_pointer_mover(pointer=PointerConfig(), controller=controller)
+
+    assert isinstance(mover, PointerMover)
+    mover.handle(PointerMoved(timestamp=FRAME_TIMESTAMP, x=0.25, y=0.75))
+    assert controller.moves == [(0.25, 0.75)]
+
+
+def test_build_action_bindings_without_mappings_reuses_gate() -> None:
+    gate = ActionGate()
+
+    bindings = build_action_bindings(actions=ActionsConfig(), gate=gate)
+
+    assert bindings.mapping == {}
+    assert bindings.gate is gate
+
+
+def test_build_action_bindings_with_mappings_reuses_gate() -> None:
+    gate = ActionGate()
+
+    bindings = build_action_bindings(
+        actions=_actions_config(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        gate=gate,
+    )
+
+    assert bindings.gate is gate

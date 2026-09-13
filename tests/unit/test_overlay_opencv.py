@@ -1,6 +1,7 @@
 """Tests del overlay de landmarks sobre fotogramas sinteticos."""
 
 import numpy as np
+import pytest
 from numpy.typing import NDArray
 
 from recognizer.adapters.overlay_opencv import (
@@ -8,12 +9,16 @@ from recognizer.adapters.overlay_opencv import (
     GESTURE_COLOR_BGR,
     GESTURE_TEXT_OFFSET_PIXELS,
     LANDMARK_COLOR_BGR,
+    POINTER_COLOR_BGR,
+    POINTER_TEXT_OFFSET_PIXELS,
     GestureOverlay,
     LandmarkOverlay,
+    PointerOverlay,
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import GestureName, StableGesture
 from recognizer.core.domain.hand import HAND_LANDMARK_COUNT, Handedness, HandLandmarks, Point
+from recognizer.core.domain.pointer import PointerPosition
 from recognizer.core.pipeline.context import FrameContext
 
 FRAME_HEIGHT = 480
@@ -167,3 +172,71 @@ def test_gesture_overlay_with_empty_hand_points_does_nothing() -> None:
 
     assert result is context
     assert not frame.data.any()
+
+
+POINTER_X = 0.5
+POINTER_Y = 0.5
+POINTER_PIXEL_X = int(POINTER_X * FRAME_WIDTH)
+POINTER_PIXEL_Y = int(POINTER_Y * FRAME_HEIGHT)
+EXTREME_FRAME_WIDTH = 20
+EXTREME_FRAME_HEIGHT = 10
+
+
+def _pointer(x: float = POINTER_X, y: float = POINTER_Y) -> PointerPosition:
+    return PointerPosition(x=x, y=y)
+
+
+def _extreme_frame() -> Frame:
+    data: NDArray[np.uint8] = np.zeros(
+        (EXTREME_FRAME_HEIGHT, EXTREME_FRAME_WIDTH, 3), dtype=np.uint8
+    )
+    return Frame(data=data, timestamp=0.0)
+
+
+def test_pointer_overlay_without_pointer_does_nothing() -> None:
+    frame = _frame()
+    context = FrameContext(frame=frame, pointer=None)
+
+    result = PointerOverlay().process(context)
+
+    assert result is context
+    assert not frame.data.any()
+
+
+def test_pointer_overlay_draws_cross_and_label() -> None:
+    frame = _frame()
+    context = FrameContext(frame=frame, pointer=_pointer())
+
+    result = PointerOverlay().process(context)
+
+    assert result is context
+    pointer_color = np.array(POINTER_COLOR_BGR, dtype=np.uint8)
+    mask = np.all(frame.data == pointer_color, axis=-1)
+    assert mask.any()
+    assert mask[POINTER_PIXEL_Y, POINTER_PIXEL_X]
+    label_top = max(POINTER_PIXEL_Y - POINTER_TEXT_OFFSET_PIXELS, 0)
+    label_x = POINTER_PIXEL_X + POINTER_TEXT_OFFSET_PIXELS
+    label_zone = mask[label_top : POINTER_PIXEL_Y + 1, label_x:]
+    assert label_zone.any()
+
+
+@pytest.mark.parametrize(
+    ("x", "y", "pixel_x", "pixel_y"),
+    [
+        (0.0, 0.0, 0, 0),
+        (1.0, 1.0, EXTREME_FRAME_WIDTH - 1, EXTREME_FRAME_HEIGHT - 1),
+    ],
+)
+def test_pointer_overlay_places_cross_center_at_extreme_pixels(
+    x: float,
+    y: float,
+    pixel_x: int,
+    pixel_y: int,
+) -> None:
+    frame = _extreme_frame()
+    context = FrameContext(frame=frame, pointer=_pointer(x=x, y=y))
+
+    result = PointerOverlay().process(context)
+
+    assert result is context
+    assert frame.data[pixel_y, pixel_x].tolist() == list(POINTER_COLOR_BGR)
