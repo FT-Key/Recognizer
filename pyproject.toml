@@ -1,0 +1,126 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "recognizer"
+version = "0.1.0"
+description = "Reconocimiento de rostro y gestos de manos por camara para ejecutar acciones locales (y web en el futuro)"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "FT-Key" }]
+dependencies = [
+    "mediapipe>=1.0.1",
+    "numpy>=2.5.3",
+    "opencv-python>=5.0.0.93",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "pynput>=1.8.2",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+smoke = "recognizer.cli.smoke:main"
+lint = "recognizer.cli.quality:lint"
+typecheck = "recognizer.cli.quality:typecheck"
+test = "recognizer.cli.quality:test"
+check-arch = "recognizer.cli.quality:check_arch"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/recognizer"]
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15",
+    "mypy>=2.3.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.7",
+    "types-pyyaml>=6.0.12.20260906",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "C4",
+    "SIM",
+    "RUF",
+    "ANN",
+    "S",
+    "T20",
+    "PT",
+    "RET",
+    "ARG",
+    "PTH",
+    "LOG",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "N802", "S101", "PT011"]
+"scripts/**" = ["T20"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+mypy_path = "src"
+pretty = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["cv2", "cv2.*", "mediapipe", "mediapipe.*", "pynput", "pynput.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = '-q -m "not integration" --cov=recognizer --cov-report=term-missing --cov-fail-under=80'
+markers = ["integration: requiere camara u otro hardware (excluido por defecto)"]
+
+[tool.coverage.run]
+omit = ["*/recognizer/cli/*"]
+
+[tool.coverage.report]
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@overload",
+    "\\.\\.\\.",
+]
+
+[tool.importlinter]
+root_package = "recognizer"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "core no depende de capas externas"
+type = "forbidden"
+source_modules = ["recognizer.core"]
+forbidden_modules = [
+    "recognizer.adapters",
+    "recognizer.cli",
+    "recognizer.settings",
+]
+
+[[tool.importlinter.contracts]]
+name = "core no depende de infraestructura"
+type = "forbidden"
+source_modules = ["recognizer.core"]
+forbidden_modules = ["cv2", "mediapipe", "pynput", "yaml", "fastapi"]
+
+[[tool.importlinter.contracts]]
+name = "adapters no dependen de cli ni settings"
+type = "forbidden"
+source_modules = ["recognizer.adapters"]
+forbidden_modules = ["recognizer.cli", "recognizer.settings"]
