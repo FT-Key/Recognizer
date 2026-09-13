@@ -82,9 +82,10 @@
 - 2 nits corregidos: `WRIST_LANDMARK_INDEX` y secciones del history.
 
 ## Commits
-- Los cambios de la etapa (documentación incluida) se cierran con commit en `stage/1-manos`;
-  `git-ops` ejecuta a continuación el merge `--no-ff` a `dev` y el push. Base de la rama:
-  `95e277b` (`docs(state): etapa 0 publicada en dev y hashes registrados`).
+- `5f5b910` feat(manos): HandLandmarker, EventBus tipado, pipeline y overlay.
+- `a7d888b` docs(history): cierre de la etapa 1 manos.
+- `c57e425` merge: etapa 1 - manos, EventBus, pipeline y overlay (`--no-ff` a `dev`).
+- Base de la rama: `95e277b` (`docs(state): etapa 0 publicada en dev y hashes registrados`).
 
 ## Pendientes / riesgos
 - Criterio FPS sin verificar (ver arriba).

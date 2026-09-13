@@ -17,6 +17,7 @@
 - Etapa 1 (manos): puerto `HandTracker` + `MediaPipeHandTracker` (fachada inyectable),
   `EventBus` tipado in-process + evento `HandsDetected`, `PipelineBuilder` +
   `HandDetectionProcessor`, overlay OpenCV de 21 landmarks y flag `--no-hands` en el smoke.
+- Merge `--no-ff` de `stage/1-manos` a `dev` (c57e425) y push de `dev` al remoto.
 - Gate de etapa 1 en verde: lint, mypy strict (38 archivos), pytest (75 tests, 98.01%),
   check-arch (3/3) y smoke real OK con 30 eventos `HandsDetected`; integración MediaPipe OK.
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
