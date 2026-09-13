@@ -86,7 +86,10 @@
 - Restante (no bloqueante): esta actualización de la documentación.
 
 ## Commits
-- Pendientes de registrar al cerrar; se anotan en el commit de docs.
+- `3b9be78` feat(puntero): puntero virtual con suavizado y calibracion.
+- `898c859` docs(history): cierre de la etapa 4 puntero virtual.
+- `4da3e35` merge: etapa 4 - puntero virtual (`--no-ff` a `dev`).
+- Base de la rama: `943c056` (`docs: plan de verificaciones pendientes para el cierre de la etapa 4`).
 
 ## Pendientes / riesgos
 - Verificaciones manuales (movimiento real, sentido, calibración, suavizado, gate,

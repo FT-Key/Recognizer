@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 4 (puntero virtual) completada con gate verde; pendiente de merge.
-  Siguiente: etapa 5 (bases de escalado: identidad, políticas y plan web)
-- **Rama:** `stage/4-puntero-virtual` (pendiente de merge a `dev`)
+- **Fase actual:** etapa 4 (puntero virtual) completada y publicada en `dev`; siguiente:
+  etapa 5 (bases de escalado: identidad, políticas y plan web)
+- **Rama:** `dev` (etapa 4 mergeada con `--no-ff` en `4da3e35`)
 - **Actualizado:** 2026-09-13
 
 ## Hecho
@@ -29,7 +29,7 @@
 - Gate de etapa 4 en verde: lint (109 archivos), mypy strict (83), pytest (290 tests,
   98.61%), check-arch 3/3 y smoke real OK (30 fotogramas, 4.6 FPS con CPU cargada).
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42) y etapa 3 (15e5fb9).
+  (c23da42), etapa 3 (15e5fb9) y etapa 4 (4da3e35).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 
