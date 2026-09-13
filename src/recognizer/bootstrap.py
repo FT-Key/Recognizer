@@ -4,6 +4,7 @@ import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from recognizer.adapters.chrome_link_opener import ChromeLinkOpener
 from recognizer.adapters.overlay_opencv import GestureOverlay, LandmarkOverlay, PointerOverlay
 from recognizer.adapters.pynput_keys import PynputKeySender
 from recognizer.adapters.pynput_mouse import PynputMouseController
@@ -15,6 +16,7 @@ from recognizer.core.actions.decorators import (
     GatedAction,
     LoggedAction,
 )
+from recognizer.core.actions.links import OpenLinksAction
 from recognizer.core.actions.local import CommandAction, HotkeyAction, MediaKeyAction
 from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
@@ -26,6 +28,7 @@ from recognizer.core.config import (
     GestureConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
+    OpenLinksActionConfig,
     PointerConfig,
     ScriptActionConfig,
 )
@@ -44,6 +47,7 @@ from recognizer.core.ports.command_runner import CommandRunner
 from recognizer.core.ports.event_bus import EventBus
 from recognizer.core.ports.gesture_classifier import GestureClassifier
 from recognizer.core.ports.key_sender import KeySender
+from recognizer.core.ports.link_opener import LinkOpener
 from recognizer.core.ports.mouse_controller import MouseController
 from recognizer.core.ports.script_runner import ScriptRunner
 
@@ -138,6 +142,7 @@ def build_action_bindings(
     key_sender: KeySender | None = None,
     command_runner: CommandRunner | None = None,
     script_runner: ScriptRunner | None = None,
+    link_opener: LinkOpener | None = None,
     gate: ActionGate | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionBindings:
@@ -153,6 +158,7 @@ def build_action_bindings(
     sender = key_sender or PynputKeySender()
     runner = command_runner or SubprocessCommandRunner()
     script = script_runner or SubprocessScriptRunner()
+    opener = link_opener or ChromeLinkOpener()
     shared_gate = gate if gate is not None else ActionGate()
     mapping: dict[GestureId, Action] = {}
     for label, spec in actions.mappings.items():
@@ -161,6 +167,7 @@ def build_action_bindings(
             key_sender=sender,
             command_runner=runner,
             script_runner=script,
+            link_opener=opener,
         )
         mapping[catalog.require(label)] = GatedAction(
             DebouncedAction(
@@ -195,6 +202,7 @@ def _build_action(
     key_sender: KeySender,
     command_runner: CommandRunner,
     script_runner: ScriptRunner,
+    link_opener: LinkOpener,
 ) -> Action:
     match spec:
         case MediaKeyActionConfig(key=key):
@@ -216,6 +224,11 @@ def _build_action(
                 ),
                 runner=script_runner,
                 pass_context=spec.pass_context,
+            )
+        case OpenLinksActionConfig(urls=urls, browser=browser):
+            return OpenLinksAction(
+                urls=urls,
+                opener=link_opener if browser is None else ChromeLinkOpener(executable=browser),
             )
     msg = f"Accion no soportada: {type(spec).__name__}"
     raise ActionError(msg)

@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 6 (acciones script) completada y mergeada en `dev`; siguiente:
-  etapa 7 (bases de escalado: identidad, políticas y plan web)
-- **Rama:** `dev` (etapa 6 mergeada con `--no-ff`)
+- **Fase actual:** etapa 7 (abrir enlaces / playlist secuencial) completada y mergeada en
+  `dev`; siguiente: etapa 8 (bases de escalado: identidad, políticas y plan web)
+- **Rama:** `dev` (etapa 7 mergeada con `--no-ff`)
 - **Actualizado:** 2026-09-13
 
 ## Hecho
@@ -37,17 +37,23 @@
   por formato `.py/.ps1/.bat/.cmd/.sh`, bloqueante/no bloqueante, `timeout_seconds`
   obligatorio si bloqueante, contexto `RECOGNIZER_*` opt-in) y acción `script` en
   `config.yaml`. Gate verde: pytest 378 tests, 98.81%, mypy 92, check-arch 3/3, smoke 11.5 FPS.
+- Etapa 7 (abrir enlaces): puerto `LinkOpener` + `ChromeLinkOpener` (autodetección de
+  Chrome; `chrome.exe <url>` abre pestaña o lanza el navegador) y acción `open_links` con
+  playlist secuencial rotatoria; `ILoveYou` mapeado a un enlace de YouTube. Ejemplo de
+  script de usuario en `scripts/actions/log_gesture.py`. Gate verde: pytest 399 tests,
+  98.86%, mypy 97, check-arch 3/3, smoke 17.1 FPS.
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35) y etapa 5 (a266db7).
+  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7) y etapa 6 (1e5f36e).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 
-## Siguiente (etapa 7 — bases de escalado)
+## Siguiente (etapa 8 — bases de escalado)
 - Identidad, políticas de permisos por gesto y plan de despliegue web.
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-6 (gestos, acciones reales, puntero, reglas de
-  landmarks, scripts y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el usuario
-  cuando pueda.
+- Verificaciones manuales de etapas 0-7 (gestos, acciones reales, puntero, reglas de
+  landmarks, scripts, enlaces y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el
+  usuario cuando pueda.
+- Pendiente decidir la nueva funcionalidad de los gestos `Pointing_Up` y `Victory`.
 - Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
 - `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.

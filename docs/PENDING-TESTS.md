@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-6) — verificación manual del usuario
+# Tests pendientes (etapas 0-7) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -26,7 +26,7 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 6): 378 passed, 2 deselected, cobertura 98.81%
+  Esperado de referencia (etapa 7): 399 passed, 2 deselected, cobertura 98.86%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
@@ -151,6 +151,23 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   `RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP`; comprobar los valores.
 - [ ] Errores: `path` inexistente y comando inválido → `WARNING` tipo
   `Fallo la accion para ...` y la app sigue corriendo.
+
+### Etapa 7 — abrir enlaces
+
+- [ ] Cerrar Chrome y hacer `ILoveYou`: debe lanzarse Chrome y entrar al enlace de
+  YouTube. Anotar si abre y si el vídeo empieza (el autoplay puede requerir interacción).
+- [ ] Con Chrome ya abierto, repetir `ILoveYou`: debe abrirse en una pestaña nueva de la
+  ventana existente, no en un proceso nuevo.
+- [ ] Playlist secuencial: añadir un segundo enlace en `actions.mappings.ILoveYou.urls` y
+  comprobar que el primer `ILoveYou` abre el 1.º, el siguiente el 2.º y luego vuelve al 1.º
+  (sin aleatoriedad).
+- [ ] `browser` vacío (autodetección) y con ruta explícita a `chrome.exe`; probar en un
+  equipo donde Chrome esté en una ruta no estándar.
+- [ ] Chrome ausente: sin Chrome instalado debe registrarse un `WARNING` tipo
+  `Fallo la accion para ILoveYou: No se encontro Chrome...` y la app seguir corriendo.
+- [ ] Script de ejemplo: mapear un gesto a `type: script` con
+  `path: scripts/actions/log_gesture.py` y `pass_context: true`; comprobar que se crea
+  `scripts/actions/gesture_log.txt` con el gesto.
 
 ## Notas de registro
 

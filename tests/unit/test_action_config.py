@@ -10,6 +10,7 @@ from recognizer.core.config import (
     CommandActionConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
+    OpenLinksActionConfig,
     ScriptActionConfig,
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
@@ -115,6 +116,51 @@ def test_invalid_script_mapping_is_rejected(mapping: object) -> None:
         ActionsConfig.model_validate({"mappings": {"Victory": mapping}})
 
 
+def test_open_links_mapping_parses_single_url_with_defaults() -> None:
+    config = ActionsConfig.model_validate(
+        {"mappings": {"ILoveYou": {"type": "open_links", "urls": ["https://unico.example"]}}}
+    )
+
+    action = config.mappings["ILoveYou"]
+    assert isinstance(action, OpenLinksActionConfig)
+    assert action.urls == ("https://unico.example",)
+    assert action.browser is None
+
+
+def test_open_links_mapping_parses_multiple_urls_and_browser() -> None:
+    config = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "ILoveYou": {
+                    "type": "open_links",
+                    "urls": ["http://primero.example", "https://segundo.example"],
+                    "browser": "C:\\chrome.exe",
+                }
+            }
+        }
+    )
+
+    action = config.mappings["ILoveYou"]
+    assert isinstance(action, OpenLinksActionConfig)
+    assert action.urls == ("http://primero.example", "https://segundo.example")
+    assert action.browser == "C:\\chrome.exe"
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        {"type": "open_links"},
+        {"type": "open_links", "urls": []},
+        {"type": "open_links", "urls": ["ftp://archivo.example"]},
+        {"type": "open_links", "urls": ["sin-esquema.example"]},
+        {"type": "open_links", "urls": ["https://ok.example"], "browser": 5},
+    ],
+)
+def test_invalid_open_links_mapping_is_rejected(mapping: object) -> None:
+    with pytest.raises(ValidationError):
+        ActionsConfig.model_validate({"mappings": {"ILoveYou": mapping}})
+
+
 def test_unknown_action_type_is_rejected() -> None:
     with pytest.raises(ValidationError):
         ActionsConfig.model_validate({"mappings": {"Thumb_Up": {"type": "noop"}}})
@@ -179,9 +225,13 @@ def test_repo_config_loads_expected_mappings() -> None:
         "Closed_Fist",
         "Open_Palm",
         "Victory",
+        "ILoveYou",
     }
     assert mappings["Thumb_Up"] == MediaKeyActionConfig(key=MediaKey.VOLUME_UP)
     assert mappings["Thumb_Down"] == MediaKeyActionConfig(key=MediaKey.VOLUME_DOWN)
     assert mappings["Closed_Fist"] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
     assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
     assert mappings["Victory"] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))
+    assert mappings["ILoveYou"] == OpenLinksActionConfig(
+        urls=("https://www.youtube.com/watch?v=mlabBbn_fHI",)
+    )

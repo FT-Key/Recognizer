@@ -22,3 +22,6 @@ data/
 # Secretos y archivos locales
 .env
 *.local
+
+# Salida de scripts de ejemplo del usuario
+scripts/actions/gesture_log.txt

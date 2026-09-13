@@ -1,6 +1,7 @@
 """Modelos de configuracion tipados y validados con pydantic."""
 
 from typing import Annotated, Literal, Self
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -28,6 +29,7 @@ from recognizer.core.constants import (
     DEFAULT_TARGET_FPS,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
+    URL_PREFIXES,
 )
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
 from recognizer.core.domain.gesture import (
@@ -205,8 +207,32 @@ class ScriptActionConfig(BaseModel):
         return self
 
 
+class OpenLinksActionConfig(BaseModel):
+    """Accion que abre enlaces en el navegador de forma secuencial."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["open_links"] = "open_links"
+    urls: tuple[str, ...] = Field(min_length=1)
+    browser: str | None = None
+
+    @field_validator("urls")
+    @classmethod
+    def _validate_urls(cls, urls: tuple[str, ...]) -> tuple[str, ...]:
+        for url in urls:
+            parsed = urlparse(url)
+            if not url.startswith(URL_PREFIXES) or not parsed.netloc:
+                msg = f"La URL debe ser http(s) con host valido: {url}"
+                raise ValueError(msg)
+        return urls
+
+
 ActionConfig = Annotated[
-    MediaKeyActionConfig | HotkeyActionConfig | CommandActionConfig | ScriptActionConfig,
+    MediaKeyActionConfig
+    | HotkeyActionConfig
+    | CommandActionConfig
+    | ScriptActionConfig
+    | OpenLinksActionConfig,
     Field(discriminator="type"),
 ]
 

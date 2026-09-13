@@ -16,6 +16,7 @@ from recognizer.bootstrap import (
     resolve_camera_config,
 )
 from recognizer.core.actions.decorators import ActionGate, GatedAction
+from recognizer.core.actions.links import OpenLinksAction
 from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
@@ -24,6 +25,7 @@ from recognizer.core.config import (
     CameraConfig,
     GestureConfig,
     GestureRuleConfig,
+    OpenLinksActionConfig,
     PointerConfig,
     ScriptActionConfig,
 )
@@ -113,6 +115,16 @@ class RecordingScriptRunner:
 
     def run(self, request: ScriptRequest) -> None:
         self.requests.append(request)
+
+
+class RecordingLinkOpener:
+    """Doble de LinkOpener que registra las URLs abiertas."""
+
+    def __init__(self) -> None:
+        self.urls: list[str] = []
+
+    def open(self, url: str) -> None:
+        self.urls.append(url)
 
 
 class FakeClassifier:
@@ -302,6 +314,7 @@ def test_build_action_rejects_unsupported_spec() -> None:
             key_sender=RecordingKeySender(),
             command_runner=RecordingCommandRunner(),
             script_runner=RecordingScriptRunner(),
+            link_opener=RecordingLinkOpener(),
         )
 
 
@@ -314,12 +327,60 @@ def test_build_action_builds_script_action_with_injected_runner() -> None:
         key_sender=RecordingKeySender(),
         command_runner=RecordingCommandRunner(),
         script_runner=runner,
+        link_opener=RecordingLinkOpener(),
     )
 
     assert isinstance(action, ScriptAction)
     action.execute(_context())
     assert len(runner.requests) == 1
     assert runner.requests[0].path == "scripts/celebrate.py"
+
+
+def test_build_action_builds_open_links_with_injected_opener() -> None:
+    opener = RecordingLinkOpener()
+    spec = OpenLinksActionConfig(urls=("https://a.example", "https://b.example"))
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=opener,
+    )
+
+    assert isinstance(action, OpenLinksAction)
+    action.execute(_context())
+    action.execute(_context())
+    assert opener.urls == ["https://a.example", "https://b.example"]
+
+
+def test_build_action_uses_browser_as_chrome_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[str | None] = []
+
+    class FakeChromeLinkOpener:
+        """Doble de ChromeLinkOpener que registra el ejecutable inyectado."""
+
+        def __init__(self, *, executable: str | None = None) -> None:
+            created.append(executable)
+
+        def open(self, url: str) -> None:
+            del url
+
+    monkeypatch.setattr(bootstrap, "ChromeLinkOpener", FakeChromeLinkOpener)
+    spec = OpenLinksActionConfig(urls=("https://a.example",), browser="C:\\chrome.exe")
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=RecordingLinkOpener(),
+    )
+
+    assert isinstance(action, OpenLinksAction)
+    assert created == ["C:\\chrome.exe"]
 
 
 def test_build_action_bindings_routes_script_mapping() -> None:
@@ -361,6 +422,33 @@ def test_build_action_bindings_routes_script_mapping() -> None:
     assert request.timeout_seconds == 3.0
     assert request.env is not None
     assert request.env[CONTEXT_ENV_GESTURE] == GESTURE_VICTORY.value
+
+
+def test_build_action_bindings_routes_open_links_mapping() -> None:
+    opener = RecordingLinkOpener()
+    actions = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "ILoveYou": {
+                    "type": "open_links",
+                    "urls": ["https://a.example", "https://b.example"],
+                }
+            }
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=opener,
+    )
+
+    bindings.mapping[GESTURE_ILOVE_YOU].execute(_context())
+
+    assert opener.urls == ["https://a.example"]
 
 
 def test_build_pipeline_without_classifier_is_empty() -> None:
