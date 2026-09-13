@@ -11,3 +11,7 @@ class ConfigError(RecognizerError):
 
 class CameraError(RecognizerError):
     """La camara no pudo abrirse o fallo durante la captura."""
+
+
+class HandTrackerError(RecognizerError):
+    """El detector de manos no pudo abrirse o fallo."""
