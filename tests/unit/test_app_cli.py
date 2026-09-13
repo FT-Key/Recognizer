@@ -1,25 +1,41 @@
 """Tests del CLI de la app local, sin camara real ni acciones externas."""
 
+import logging
 from collections import Counter
 from pathlib import Path
+from typing import cast
 
+import cv2
+import numpy as np
 import pytest
+from numpy.typing import NDArray
 
 from recognizer.cli import app
+from recognizer.cli.runtime import RuntimeCallbacks
 from recognizer.core.actions.decorators import ActionGate
+from recognizer.core.bus import InProcessEventBus
+from recognizer.core.config import ActionsConfig, AppConfig, MediaKeyActionConfig, PointerConfig
+from recognizer.core.domain.action import MediaKey
 from recognizer.core.domain.events import (
+    DomainEvent,
     GestureDetected,
     GestureReleased,
     HandsDetected,
+    PointerMoved,
 )
+from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import GestureName
 from recognizer.core.domain.hand import Handedness, HandLandmarks, Point
+from recognizer.core.pipeline.builder import Pipeline
+from recognizer.core.pipeline.context import FrameContext
 
 EXPECTED_FAILURE_CODE = 1
 GESTURE_CONFIDENCE = 0.8
 HAND_CONFIDENCE = 0.9
 TWO_HANDS = 2
 DEFAULT_CONFIG = Path("config.yaml")
+HUD_FRAME_WIDTH = 20
+HUD_FRAME_HEIGHT = 10
 
 
 def _hand() -> HandLandmarks:
@@ -38,6 +54,7 @@ def test_parser_defaults() -> None:
     assert args.frames == 0
     assert args.no_window is False
     assert args.no_actions is False
+    assert args.no_pointer is False
 
 
 def test_parser_reads_all_flags() -> None:
@@ -51,6 +68,7 @@ def test_parser_reads_all_flags() -> None:
             "10",
             "--no-window",
             "--no-actions",
+            "--no-pointer",
         ]
     )
 
@@ -59,6 +77,7 @@ def test_parser_reads_all_flags() -> None:
     assert args.frames == 10
     assert args.no_window is True
     assert args.no_actions is True
+    assert args.no_pointer is True
 
 
 def test_no_window_without_frames_fails_before_side_effects(
@@ -120,11 +139,13 @@ def test_stats_handle_updates_counters() -> None:
             handedness=Handedness.RIGHT,
         )
     )
+    stats.handle(PointerMoved(timestamp=0.7, x=0.25, y=0.75))
 
     assert stats.hands_events == 2
     assert stats.max_hands == TWO_HANDS
     assert stats.detected_events == 3
     assert stats.released_events == 1
+    assert stats.pointer_events == 1
     assert stats.confirmed == {GestureName.VICTORY: 2, GestureName.OPEN_PALM: 1}
 
 
@@ -148,3 +169,213 @@ def test_format_confirmed_lists_counts() -> None:
     confirmed: Counter[GestureName] = Counter({GestureName.VICTORY: 2, GestureName.OPEN_PALM: 1})
 
     assert app._format_confirmed(confirmed) == "Victory=2, Open_Palm=1"
+
+
+def test_pointer_state_reflects_flag() -> None:
+    assert app._pointer_state(True) == "activado"
+    assert app._pointer_state(False) == "desactivado"
+
+
+class FakeCamera:
+    """Doble de camara que solo satisface el protocolo de context manager."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    def __enter__(self) -> "FakeCamera":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        del args
+
+
+class FakeClassifier:
+    """Doble del clasificador que solo satisface el context manager."""
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        del args, kwargs
+
+    def __enter__(self) -> "FakeClassifier":
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        del args
+
+
+class FakeMover:
+    """Doble del mover del puntero que registra los eventos recibidos."""
+
+    def __init__(self) -> None:
+        self.events: list[DomainEvent] = []
+
+    def handle(self, event: DomainEvent) -> None:
+        self.events.append(event)
+
+
+def _patch_main_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    captured: dict[str, object],
+    moves: list[object],
+    app_config: AppConfig | None = None,
+) -> AppConfig:
+    config = (
+        app_config if app_config is not None else AppConfig(pointer=PointerConfig(enabled=True))
+    )
+
+    def fake_build_pipeline(
+        *,
+        classifier: object,
+        bus: object,
+        gestures: object,
+        pointer: object = None,
+    ) -> Pipeline:
+        del classifier, gestures
+        captured["bus"] = bus
+        captured["pipeline_pointer"] = pointer
+        return Pipeline(processors=())
+
+    def fake_build_pointer_mover(
+        *,
+        pointer: object,
+        gate: object = None,
+        controller: object = None,
+        logger: object = None,
+    ) -> FakeMover:
+        del controller, logger
+        captured["mover_gate"] = gate
+        moves.append(pointer)
+        mover = FakeMover()
+        captured["mover"] = mover
+        return mover
+
+    def fake_run_camera_loop(
+        camera: object,
+        *,
+        pipeline: object,
+        window_name: str,
+        show_window: bool,
+        max_frames: int,
+        callbacks: object = None,
+    ) -> tuple[int, float]:
+        del camera, pipeline, window_name, show_window, max_frames
+        captured["callbacks"] = callbacks
+        return (1, 30.0)
+
+    monkeypatch.setattr(app, "load_config", lambda _path: config)
+    monkeypatch.setattr(app, "OpenCVCamera", FakeCamera)
+    monkeypatch.setattr(app, "MediaPipeGestureClassifier", FakeClassifier)
+    monkeypatch.setattr(app, "build_pipeline", fake_build_pipeline)
+    monkeypatch.setattr(app, "build_pointer_mover", fake_build_pointer_mover)
+    monkeypatch.setattr(app, "run_camera_loop", fake_run_camera_loop)
+    return config
+
+
+def test_main_with_pointer_enabled_wires_mover_and_reports(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    app_config = _patch_main_dependencies(monkeypatch, captured=captured, moves=moves)
+    caplog.set_level(logging.INFO, logger=app.LOGGER.name)
+
+    result = app.main(["--no-window", "--frames", "1"])
+
+    assert result == 0
+    assert captured["pipeline_pointer"] is app_config.pointer
+    assert isinstance(captured["mover_gate"], ActionGate)
+    assert moves == [app_config.pointer]
+    assert "PointerMoved: 0" in caplog.text
+    assert "Puntero: activado" in caplog.text
+
+
+def test_main_with_no_pointer_flag_disables_pointer(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves)
+    caplog.set_level(logging.INFO, logger=app.LOGGER.name)
+
+    result = app.main(["--no-window", "--frames", "1", "--no-pointer"])
+
+    assert result == 0
+    assert captured["pipeline_pointer"] is None
+    assert moves == []
+    assert "Puntero: desactivado" in caplog.text
+
+
+def test_pointer_moved_on_real_bus_reaches_subscribed_mover(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves)
+
+    result = app.main(["--no-window", "--frames", "1"])
+
+    assert result == 0
+    bus = cast(InProcessEventBus, captured["bus"])
+    mover = cast(FakeMover, captured["mover"])
+    event = PointerMoved(timestamp=1.0, x=0.25, y=0.75)
+
+    bus.publish(event)
+
+    assert mover.events == [event]
+
+
+def test_main_no_actions_with_pointer_uses_pointer_hud_and_toggle_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    app_config = AppConfig(
+        pointer=PointerConfig(enabled=True),
+        actions=ActionsConfig(
+            mappings={GestureName.VICTORY: MediaKeyActionConfig(key=MediaKey.VOLUME_UP)}
+        ),
+    )
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves, app_config=app_config)
+
+    def fail_build_action_bindings(**kwargs: object) -> object:
+        del kwargs
+        msg = "build_action_bindings no debe llamarse con --no-actions."
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(app, "build_action_bindings", fail_build_action_bindings)
+    texts: list[str] = []
+
+    def fake_put_text(
+        image: NDArray[np.uint8],
+        text: str,
+        org: tuple[int, int],
+        font: int,
+        scale: float,
+        color: tuple[int, int, int],
+        thickness: int,
+    ) -> None:
+        del image, org, font, scale, color, thickness
+        texts.append(text)
+
+    monkeypatch.setattr(cv2, "putText", fake_put_text)
+
+    result = app.main(["--no-window", "--frames", "1", "--no-actions"])
+
+    assert result == 0
+    assert moves == [app_config.pointer]
+    callbacks = cast(RuntimeCallbacks, captured["callbacks"])
+    gate = cast(ActionGate, captured["mover_gate"])
+    assert callbacks.on_context is not None
+    assert callbacks.on_key is not None
+    frame_data: NDArray[np.uint8] = np.zeros((HUD_FRAME_HEIGHT, HUD_FRAME_WIDTH, 3), dtype=np.uint8)
+    context = FrameContext(frame=Frame(data=frame_data, timestamp=0.0))
+
+    callbacks.on_context(context)
+    assert gate.enabled is True
+    callbacks.on_key(app.TOGGLE_KEY)
+    callbacks.on_context(context)
+
+    assert gate.enabled is False
+    assert texts == [app.HUD_POINTER_ENABLED_TEXT, app.HUD_POINTER_DISABLED_TEXT]
