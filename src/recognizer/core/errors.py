@@ -15,3 +15,7 @@ class CameraError(RecognizerError):
 
 class HandTrackerError(RecognizerError):
     """El detector de manos no pudo abrirse o fallo."""
+
+
+class GestureClassifierError(RecognizerError):
+    """El clasificador de gestos no pudo abrirse o fallo."""

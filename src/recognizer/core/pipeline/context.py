@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from recognizer.core.domain.frame import Frame
+from recognizer.core.domain.gesture import DetectedGesture, StableGesture
 from recognizer.core.domain.hand import HandLandmarks
 
 
@@ -12,3 +13,5 @@ class FrameContext:
 
     frame: Frame
     hands: tuple[HandLandmarks, ...] = ()
+    detections: tuple[DetectedGesture, ...] = ()
+    gestures: tuple[StableGesture, ...] = ()

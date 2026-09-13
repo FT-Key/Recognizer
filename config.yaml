@@ -13,3 +13,14 @@ hands:
   min_detection_confidence: 0.5
   min_presence_confidence: 0.5
   min_tracking_confidence: 0.5
+
+# Clasificacion de gestos con MediaPipe Tasks (GestureRecognizer en modo VIDEO).
+gestures:
+  model_path: models/gesture_recognizer.task
+  max_hands: 2
+  min_detection_confidence: 0.5
+  min_presence_confidence: 0.5
+  min_tracking_confidence: 0.5
+  stabilization_frames: 5
+  release_frames: 5
+  min_gesture_confidence: 0.5
