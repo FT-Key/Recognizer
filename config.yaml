@@ -78,10 +78,13 @@ actions:
     Victory:
       type: hotkey
       keys: [ctrl, shift, m]
+    # Playlist secuencial (no aleatoria): cada ILoveYou abre el siguiente enlace.
+    ILoveYou:
+      type: open_links
+      urls:
+        - "https://www.youtube.com/watch?v=mlabBbn_fHI"
+      # browser: ""   # opcional: ruta a chrome.exe; vacio = autodetectar
     # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
-    # ILoveYou:
-    #   type: command
-    #   argv: [notepad.exe]
     # Ejemplos de acciones script (descomenta y asigna a un gesto):
     # ILoveYou:
     #   type: script

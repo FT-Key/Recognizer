@@ -81,6 +81,11 @@ ejecutan a través del puerto `ScriptRunner` (`core`) implementado por
 bloqueante (`shell=False`, `argv` desde config). El contexto del gesto se pasa de forma
 opt-in por variables de entorno `RECOGNIZER_*`.
 
+La acción `open_links` abre URLs en el navegador a través del puerto `LinkOpener`
+(implementado por `ChromeLinkOpener`), recorriendo una lista de forma secuencial; el
+adaptador autodetecta Chrome y lanza `chrome.exe <url>` (pestaña nueva o arranque del
+navegador según su estado).
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·

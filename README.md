@@ -6,7 +6,7 @@ roles/permisos y despliegue web futuro.
 
 ## Estado del proyecto
 
-Etapa 6 (acciones script) completada. Estado vivo en
+Etapa 7 (abrir enlaces) completada. Estado vivo en
 [`docs/STATE.md`](docs/STATE.md) e historial en [`docs/history/index.md`](docs/history/index.md).
 
 ## Requisitos
@@ -30,7 +30,7 @@ uv run recognizer --no-window --frames 30  # comprobación sin ventana
 
 La sección `actions` de `config.yaml` mapea gestos a teclas multimedia (`media_key`),
 atajos (`hotkey`), comandos (`command`, argv sin shell) y scripts (`script`; ejemplos
-comentados).
+comentados), además de abrir enlaces (`open_links`).
 
 La sección `pointer` de `config.yaml` configura el puntero virtual: gesto de activación
 (`activation_gesture`), `active_zone` (porción del fotograma que se proyecta a la pantalla),
@@ -90,6 +90,26 @@ actions:
 - **Contexto**: con `pass_context: true` el script recibe el gesto en variables de entorno
   `RECOGNIZER_*`. Ejecución con `shell=False` (el `argv` proviene de `config.yaml`).
 
+## Abrir enlaces (playlist)
+
+La acción `open_links` abre enlaces en Chrome de forma **secuencial** (no aleatoria): cada
+vez que se confirma el gesto se abre el siguiente de la lista y, al agotarla, vuelve al
+principio. Si Chrome ya está abierto abre una pestaña nueva; si no, lo lanza y navega.
+
+```yaml
+actions:
+  mappings:
+    ILoveYou:
+      type: open_links
+      urls:
+        - "https://www.youtube.com/watch?v=mlabBbn_fHI"
+        # añade más enlaces aquí (se abren en orden)
+      browser: ""   # opcional: ruta a chrome.exe; vacío = autodetectar
+```
+
+Por defecto `ILoveYou` está mapeado a esta acción. El índice de la playlist vive en memoria
+(se reinicia al arrancar la app). El adaptador actual solo integra Chrome.
+
 ## Gate de calidad
 
 ```powershell
@@ -123,8 +143,9 @@ docs/                     arquitectura, workflow, estado e historial
 | 4 | Puntero virtual | completada |
 | 5 | Gestos personalizados (vocabulario abierto + reglas) | completada |
 | 6 | Acciones script (bloqueante/no bloqueante) | completada |
-| 7 | Identidad/roles y plan web |
-| 8 | Enrolamiento facial y despliegue web |
+| 7 | Abrir enlaces (playlist secuencial) | completada |
+| 8 | Identidad/roles y plan web |
+| 9 | Enrolamiento facial y despliegue web |
 
 ## Documentación
 
