@@ -66,6 +66,18 @@ class Handedness(StrEnum):
     UNKNOWN = "Unknown"
 
 
+_HAND_SWAP: dict[Handedness, Handedness] = {
+    Handedness.LEFT: Handedness.RIGHT,
+    Handedness.RIGHT: Handedness.LEFT,
+    Handedness.UNKNOWN: Handedness.UNKNOWN,
+}
+
+
+def other_hand(hand: Handedness) -> Handedness:
+    """Devuelve la lateralidad contraria; ``UNKNOWN`` se conserva."""
+    return _HAND_SWAP[hand]
+
+
 @dataclass(frozen=True, slots=True)
 class Point:
     """Punto 3D normalizado respecto al fotograma."""

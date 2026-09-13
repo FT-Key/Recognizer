@@ -136,6 +136,7 @@ def _open_facade(
     recognizer: FakeRecognizer | None = None,
     *,
     custom_labels: tuple[str, ...] = (),
+    swap_handedness: bool = False,
 ) -> tuple[MediaPipeTasksGestureFacade, FakeRecognizer, object]:
     model_path = tmp_path / "gesture_recognizer.task"
     model_path.write_bytes(b"modelo falso")
@@ -153,7 +154,11 @@ def _open_facade(
     monkeypatch.setattr(classifier_module, "_create_recognizer", fake_create_recognizer)
     monkeypatch.setattr(classifier_module, "_to_mp_image", fake_to_mp_image)
     facade = MediaPipeTasksGestureFacade(
-        GestureConfig(model_path=str(model_path), custom_labels=custom_labels)
+        GestureConfig(
+            model_path=str(model_path),
+            custom_labels=custom_labels,
+            swap_handedness=swap_handedness,
+        )
     )
     facade.open()
     return facade, active_recognizer, sentinel
@@ -499,3 +504,70 @@ def test_facade_detect_maps_undeclared_label_to_none(
 
     assert recognition.detections[0].name is GESTURE_NONE
     assert recognition.detections[0].confidence == pytest.approx(0.7)
+
+
+def test_facade_swaps_left_and_right_handedness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result = FakeResult(
+        handedness=(
+            (FakeCategory(category_name="Left", score=0.9),),
+            (FakeCategory(category_name="Right", score=0.8),),
+        ),
+        hand_landmarks=(_landmarks(0.1), _landmarks(0.4)),
+        gestures=(
+            (FakeCategory(category_name="Victory", score=0.95),),
+            (FakeCategory(category_name="Open_Palm", score=0.85),),
+        ),
+    )
+    facade, _, _ = _open_facade(monkeypatch, tmp_path, result, swap_handedness=True)
+
+    recognition = facade.detect(frame_bgr=np.zeros((4, 6, 3), dtype=np.uint8), timestamp_ms=0)
+
+    assert recognition.hands[0].handedness is Handedness.RIGHT
+    assert recognition.hands[1].handedness is Handedness.LEFT
+    assert recognition.detections[0].handedness is Handedness.RIGHT
+    assert recognition.detections[1].handedness is Handedness.LEFT
+
+
+def test_facade_swap_keeps_unknown_handedness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result = FakeResult(
+        handedness=((FakeCategory(category_name="Palm", score=0.6),),),
+        hand_landmarks=(_landmarks(0.0),),
+        gestures=((FakeCategory(category_name="Victory", score=0.9),),),
+    )
+    facade, _, _ = _open_facade(monkeypatch, tmp_path, result, swap_handedness=True)
+
+    recognition = facade.detect(frame_bgr=np.zeros((4, 6, 3), dtype=np.uint8), timestamp_ms=0)
+
+    assert recognition.hands[0].handedness is Handedness.UNKNOWN
+    assert recognition.detections[0].handedness is Handedness.UNKNOWN
+
+
+def test_facade_without_swap_keeps_reported_handedness(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result = FakeResult(
+        handedness=(
+            (FakeCategory(category_name="Left", score=0.9),),
+            (FakeCategory(category_name="Right", score=0.8),),
+        ),
+        hand_landmarks=(_landmarks(0.1), _landmarks(0.4)),
+        gestures=(
+            (FakeCategory(category_name="Victory", score=0.95),),
+            (FakeCategory(category_name="Open_Palm", score=0.85),),
+        ),
+    )
+    facade, _, _ = _open_facade(monkeypatch, tmp_path, result, swap_handedness=False)
+
+    recognition = facade.detect(frame_bgr=np.zeros((4, 6, 3), dtype=np.uint8), timestamp_ms=0)
+
+    assert recognition.hands[0].handedness is Handedness.LEFT
+    assert recognition.hands[1].handedness is Handedness.RIGHT
+    assert recognition.detections[0].handedness is Handedness.LEFT
+    assert recognition.detections[1].handedness is Handedness.RIGHT

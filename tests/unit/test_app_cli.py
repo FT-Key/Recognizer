@@ -10,12 +10,20 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+from recognizer.bootstrap import ActionBindings
 from recognizer.cli import app
 from recognizer.cli.runtime import RuntimeCallbacks
 from recognizer.core.actions.decorators import ActionGate
+from recognizer.core.actions.menus import Menu
 from recognizer.core.bus import InProcessEventBus
-from recognizer.core.config import ActionsConfig, AppConfig, MediaKeyActionConfig, PointerConfig
-from recognizer.core.domain.action import MediaKey
+from recognizer.core.config import (
+    ActionsConfig,
+    AppConfig,
+    MediaKeyActionConfig,
+    MenuConfig,
+    PointerConfig,
+)
+from recognizer.core.domain.action import ActionContext, MediaKey
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -26,6 +34,7 @@ from recognizer.core.domain.events import (
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
     GESTURE_OPEN_PALM,
+    GESTURE_POINTING_UP,
     GESTURE_VICTORY,
     GestureId,
 )
@@ -234,10 +243,12 @@ def _patch_main_dependencies(
         gestures: object,
         pointer: object = None,
         catalog: object = None,
+        menus: object = None,
     ) -> Pipeline:
         del classifier, gestures, catalog
         captured["bus"] = bus
         captured["pipeline_pointer"] = pointer
+        captured["menus"] = menus
         return Pipeline(processors=())
 
     def fake_build_pointer_mover(
@@ -382,3 +393,74 @@ def test_main_no_actions_with_pointer_uses_pointer_hud_and_toggle_key(
 
     assert gate.enabled is False
     assert texts == [app.HUD_POINTER_ENABLED_TEXT, app.HUD_POINTER_DISABLED_TEXT]
+
+
+class RecordingAction:
+    """Doble de Action que registra los contextos ejecutados."""
+
+    def __init__(self) -> None:
+        self.contexts: list[ActionContext] = []
+
+    def execute(self, context: ActionContext) -> None:
+        self.contexts.append(context)
+
+
+def test_main_with_menus_only_wires_dispatcher_and_menu_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    app_config = AppConfig(
+        pointer=PointerConfig(enabled=False),
+        actions=ActionsConfig(
+            menus={
+                "Replay": MenuConfig(
+                    hand=Handedness.LEFT,
+                    modifier=GESTURE_POINTING_UP.value,
+                    options={"Victory": MediaKeyActionConfig(key=MediaKey.VOLUME_UP)},
+                )
+            }
+        ),
+    )
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves, app_config=app_config)
+
+    menu_action = RecordingAction()
+    menu = Menu(
+        name="Replay",
+        hand=Handedness.LEFT,
+        modifier=GESTURE_POINTING_UP,
+        consume_trigger=True,
+        options={GESTURE_VICTORY: menu_action},
+    )
+    bindings = ActionBindings(mapping={}, gate=ActionGate(), menus=(menu,))
+
+    def fake_build_action_bindings(**kwargs: object) -> ActionBindings:
+        del kwargs
+        return bindings
+
+    monkeypatch.setattr(app, "build_action_bindings", fake_build_action_bindings)
+
+    result = app.main(["--no-window", "--frames", "1"])
+
+    assert result == 0
+    assert captured["menus"] == (menu,)
+    bus = cast(InProcessEventBus, captured["bus"])
+    bus.publish(
+        GestureDetected(
+            timestamp=0.1,
+            gesture=GESTURE_POINTING_UP,
+            confidence=GESTURE_CONFIDENCE,
+            handedness=Handedness.LEFT,
+        )
+    )
+    bus.publish(
+        GestureDetected(
+            timestamp=0.2,
+            gesture=GESTURE_VICTORY,
+            confidence=GESTURE_CONFIDENCE,
+            handedness=Handedness.RIGHT,
+        )
+    )
+
+    assert len(menu_action.contexts) == 1
+    assert menu_action.contexts[0].gesture is GESTURE_VICTORY

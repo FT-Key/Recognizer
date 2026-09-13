@@ -301,3 +301,43 @@ def test_smoothing_is_applied_between_frames() -> None:
     assert first_event.x == pytest.approx(0.0)
     assert second_event.x == pytest.approx(SMOOTHING_ALPHA)
     assert second_event.y == pytest.approx(SMOOTHING_ALPHA)
+
+
+def test_two_hands_clear_pointer_even_with_activation_gesture_hand() -> None:
+    bus = RecordingBus()
+    spy = SpySmoothing()
+    processor = _processor(bus, smoothing=spy)
+
+    context = processor.process(
+        _context(
+            hands=(
+                _hand(tip=_point(TIP_X, TIP_Y)),
+                _hand(
+                    handedness=Handedness.LEFT,
+                    tip=_point(OTHER_X, OTHER_Y),
+                ),
+            ),
+            gestures=(_gesture(),),
+            pointer=PointerPosition(x=DEFAULT_POINT, y=DEFAULT_POINT),
+        )
+    )
+
+    assert bus.events == []
+    assert context.pointer is None
+    assert spy.resets == 1
+    assert spy.targets == []
+
+
+def test_single_hand_still_publishes_pointer() -> None:
+    bus = RecordingBus()
+    processor = _processor(bus)
+
+    context = processor.process(
+        _context(
+            hands=(_hand(tip=_point(TIP_X, TIP_Y)),),
+            gestures=(_gesture(),),
+        )
+    )
+
+    assert context.pointer is not None
+    assert _only_event(bus).x == pytest.approx(CALIBRATED_X)

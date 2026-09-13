@@ -86,6 +86,15 @@ La acción `open_links` abre URLs en el navegador a través del puerto `LinkOpen
 adaptador autodetecta Chrome y lanza `chrome.exe <url>` (pestaña nueva o arranque del
 navegador según su estado).
 
+## Gestos compuestos y menús (etapa 8)
+
+Con dos manos, una sostiene un gesto modificador y la otra elige una opción de un menú
+(`actions.menus`). La resolución vive en `core/actions/menus.py` (domain puro:
+`HandGestureTracker`, `find_menu_match`) y la aplica `GestureActionDispatcher`, que
+consume el gesto disparador (`consume_trigger`) y evita repeticiones hasta liberar la mano.
+El puntero se desactiva con más de una mano visible (`PointerDetectionProcessor`). La
+lateralidad del modelo se puede corregir con `gestures.swap_handedness`.
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·

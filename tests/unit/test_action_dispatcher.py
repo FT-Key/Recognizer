@@ -5,8 +5,9 @@ import logging
 import pytest
 
 from recognizer.core.actions.dispatcher import GestureActionDispatcher
+from recognizer.core.actions.menus import Menu
 from recognizer.core.constants import ACTION_LOGGER_NAME
-from recognizer.core.domain.action import ActionContext
+from recognizer.core.domain.action import Action, ActionContext
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -16,6 +17,7 @@ from recognizer.core.domain.events import (
 from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     GESTURE_OPEN_PALM,
+    GESTURE_POINTING_UP,
     GESTURE_VICTORY,
     GestureId,
 )
@@ -49,12 +51,30 @@ def _detected(
     gesture: GestureId = GESTURE_VICTORY,
     *,
     confidence: float = GESTURE_CONFIDENCE,
+    handedness: Handedness = Handedness.RIGHT,
 ) -> GestureDetected:
     return GestureDetected(
         timestamp=TIMESTAMP,
         gesture=gesture,
         confidence=confidence,
-        handedness=Handedness.RIGHT,
+        handedness=handedness,
+    )
+
+
+def _menu(
+    *,
+    action: Action,
+    hand: Handedness = Handedness.LEFT,
+    modifier: GestureId = GESTURE_POINTING_UP,
+    consume_trigger: bool = True,
+    trigger: GestureId = GESTURE_VICTORY,
+) -> Menu:
+    return Menu(
+        name="Replay",
+        hand=hand,
+        modifier=modifier,
+        consume_trigger=consume_trigger,
+        options={trigger: action},
     )
 
 
@@ -132,3 +152,122 @@ def test_action_error_is_logged_as_warning_and_not_propagated(
     assert record.levelno == logging.WARNING
     assert record.name == ACTION_LOGGER_NAME
     assert GESTURE_VICTORY.value in record.getMessage()
+
+
+def test_menu_executes_option_and_consumes_global_trigger() -> None:
+    menu_action = RecordingAction()
+    global_victory = RecordingAction()
+    menu = _menu(action=menu_action)
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_VICTORY: global_victory},
+        menus=[menu],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 1
+    assert menu_action.contexts[0].gesture is GESTURE_VICTORY
+    assert menu_action.contexts[0].handedness is Handedness.RIGHT
+    assert global_victory.contexts == []
+
+
+def test_menu_does_not_repeat_until_option_is_released() -> None:
+    menu_action = RecordingAction()
+    menu = _menu(action=menu_action)
+    dispatcher = GestureActionDispatcher(actions={}, menus=[menu])
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 1
+
+    dispatcher.handle(
+        GestureReleased(
+            timestamp=TIMESTAMP,
+            gesture=GESTURE_VICTORY,
+            handedness=Handedness.RIGHT,
+        )
+    )
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 2
+
+
+def test_menu_does_not_repeat_when_modifier_flickers() -> None:
+    menu_action = RecordingAction()
+    menu = _menu(action=menu_action)
+    dispatcher = GestureActionDispatcher(actions={}, menus=[menu])
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+    dispatcher.handle(
+        GestureReleased(
+            timestamp=TIMESTAMP,
+            gesture=GESTURE_POINTING_UP,
+            handedness=Handedness.LEFT,
+        )
+    )
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+
+    assert len(menu_action.contexts) == 1
+
+    dispatcher.handle(
+        GestureReleased(
+            timestamp=TIMESTAMP,
+            gesture=GESTURE_VICTORY,
+            handedness=Handedness.RIGHT,
+        )
+    )
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 2
+
+
+def test_menu_without_consume_trigger_still_runs_global_action() -> None:
+    menu_action = RecordingAction()
+    global_victory = RecordingAction()
+    menu = _menu(action=menu_action, consume_trigger=False)
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_VICTORY: global_victory},
+        menus=[menu],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 1
+    assert len(global_victory.contexts) == 1
+    assert global_victory.contexts[0].gesture is GESTURE_VICTORY
+
+
+def test_single_hand_runs_global_mapping_with_menus_configured() -> None:
+    menu_action = RecordingAction()
+    global_victory = RecordingAction()
+    menu = _menu(action=menu_action)
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_VICTORY: global_victory},
+        menus=[menu],
+    )
+
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert menu_action.contexts == []
+    assert len(global_victory.contexts) == 1
+
+
+def test_menu_option_action_error_is_logged_and_not_propagated(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    menu = _menu(action=FailingAction())
+    dispatcher = GestureActionDispatcher(actions={}, menus=[menu])
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+
+    with caplog.at_level(logging.WARNING, logger=ACTION_LOGGER_NAME):
+        dispatcher.handle(_detected(GESTURE_VICTORY))
+
+    assert len(caplog.records) == 1
+    assert caplog.records[0].levelno == logging.WARNING
