@@ -25,6 +25,7 @@
   `GestureClassifier`, `GestureDetectionProcessor` + `GestureStabilizerProcessor` (N=5/M=5),
   eventos `GestureDetected`/`GestureReleased`, `GestureOverlay` y smoke con gestos por
   defecto; gate verde: 135 tests, 97.95% cobertura, mypy strict (48 archivos), check-arch 3/3.
+- Merge `--no-ff` de `stage/2-gestos` a `dev` (c23da42) y push de `dev` al remoto.
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 

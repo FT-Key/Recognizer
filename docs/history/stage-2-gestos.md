@@ -95,7 +95,10 @@
 - Nit: el overlay usa `GESTURE_COLOR_BGR` (naming, no defecto); secciones del history (esto).
 
 ## Commits
-- Pendiente de registrar: commit de cierre en `stage/2-gestos` y merge `--no-ff` a `dev`.
+- `1844946` feat(gestos): clasificador MediaPipe, estabilizador y overlay.
+- `9eb6e45` docs(history): cierre de la etapa 2 gestos.
+- `c23da42` merge: etapa 2 - gestos, estabilizador y overlay (`--no-ff` a `dev`).
+- Base de la rama: `b0c9cde` (`docs(state): etapa 1 publicada en dev y hashes registrados`).
 
 ## Pendientes / riesgos
 - Verificación manual de `Victory`/`Open_Palm` y FPS en equipo descargado (etapas 1-2).
