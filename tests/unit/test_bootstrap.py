@@ -16,6 +16,7 @@ from recognizer.bootstrap import (
     resolve_camera_config,
 )
 from recognizer.core.actions.decorators import ActionGate, GatedAction
+from recognizer.core.actions.script import ScriptAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
@@ -24,8 +25,10 @@ from recognizer.core.config import (
     GestureConfig,
     GestureRuleConfig,
     PointerConfig,
+    ScriptActionConfig,
 )
-from recognizer.core.domain.action import ActionContext, MediaKey
+from recognizer.core.constants import CONTEXT_ENV_GESTURE
+from recognizer.core.domain.action import ActionContext, MediaKey, ScriptInterpreter, ScriptRequest
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -100,6 +103,16 @@ class RecordingMouseController:
 
     def move_to(self, *, x: float, y: float) -> None:
         self.moves.append((x, y))
+
+
+class RecordingScriptRunner:
+    """Doble de ScriptRunner que registra los requests recibidos."""
+
+    def __init__(self) -> None:
+        self.requests: list[ScriptRequest] = []
+
+    def run(self, request: ScriptRequest) -> None:
+        self.requests.append(request)
 
 
 class FakeClassifier:
@@ -288,7 +301,66 @@ def test_build_action_rejects_unsupported_spec() -> None:
             spec=unsupported,
             key_sender=RecordingKeySender(),
             command_runner=RecordingCommandRunner(),
+            script_runner=RecordingScriptRunner(),
         )
+
+
+def test_build_action_builds_script_action_with_injected_runner() -> None:
+    runner = RecordingScriptRunner()
+    spec = ScriptActionConfig(path="scripts/celebrate.py", pass_context=True)
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=runner,
+    )
+
+    assert isinstance(action, ScriptAction)
+    action.execute(_context())
+    assert len(runner.requests) == 1
+    assert runner.requests[0].path == "scripts/celebrate.py"
+
+
+def test_build_action_bindings_routes_script_mapping() -> None:
+    runner = RecordingScriptRunner()
+    actions = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "Victory": {
+                    "type": "script",
+                    "path": "scripts/celebrate.py",
+                    "args": ["--loud"],
+                    "interpreter": "python",
+                    "working_dir": "scripts",
+                    "blocking": True,
+                    "timeout_seconds": 3.0,
+                    "pass_context": True,
+                }
+            }
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=runner,
+    )
+
+    bindings.mapping[GESTURE_VICTORY].execute(_context())
+
+    assert len(runner.requests) == 1
+    request = runner.requests[0]
+    assert request.path == "scripts/celebrate.py"
+    assert request.args == ("--loud",)
+    assert request.interpreter is ScriptInterpreter.PYTHON
+    assert request.working_dir == "scripts"
+    assert request.blocking is True
+    assert request.timeout_seconds == 3.0
+    assert request.env is not None
+    assert request.env[CONTEXT_ENV_GESTURE] == GESTURE_VICTORY.value
 
 
 def test_build_pipeline_without_classifier_is_empty() -> None:

@@ -82,3 +82,13 @@ actions:
     # ILoveYou:
     #   type: command
     #   argv: [notepad.exe]
+    # Ejemplos de acciones script (descomenta y asigna a un gesto):
+    # ILoveYou:
+    #   type: script
+    #   path: scripts/mi_script.py     # .py | .ps1 | .bat/.cmd | .sh
+    #   args: ["--modo", "rapido"]
+    #   interpreter: auto              # auto|python|powershell|cmd|bash|direct
+    #   working_dir: .
+    #   blocking: false                # true espera al script (detiene la camara)
+    #   timeout_seconds: 0             # obligatorio > 0 si blocking: true
+    #   pass_context: true             # variables RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP

@@ -11,6 +11,6 @@ etapa que se necesite.
 | 3 | Acciones locales: teclado/multimedia y comandos | completada | [stage-3-acciones-locales.md](stage-3-acciones-locales.md) |
 | 4 | Puntero virtual con suavizado y calibración | completada | [stage-4-puntero-virtual.md](stage-4-puntero-virtual.md) |
 | 5 | Gestos personalizados (vocabulario abierto y reglas) | completada | [stage-5-gestos-personalizados.md](stage-5-gestos-personalizados.md) |
-| 6 | Acciones script (bloqueante/no bloqueante) | en curso | - |
+| 6 | Acciones script (bloqueante/no bloqueante) | completada | [stage-6-acciones-script.md](stage-6-acciones-script.md) |
 | 7 | Bases de escalado: identidad, políticas y plan web | pendiente | - |
 | 8 | Enrolamiento facial, roles y despliegue web | pendiente | - |

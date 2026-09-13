@@ -6,7 +6,7 @@ roles/permisos y despliegue web futuro.
 
 ## Estado del proyecto
 
-Etapa 5 (gestos personalizados) completada. Estado vivo en
+Etapa 6 (acciones script) completada. Estado vivo en
 [`docs/STATE.md`](docs/STATE.md) e historial en [`docs/history/index.md`](docs/history/index.md).
 
 ## Requisitos
@@ -29,7 +29,8 @@ uv run recognizer --no-window --frames 30  # comprobación sin ventana
 ```
 
 La sección `actions` de `config.yaml` mapea gestos a teclas multimedia (`media_key`),
-atajos (`hotkey`) y comandos (`command`, argv sin shell; el ejemplo va comentado).
+atajos (`hotkey`), comandos (`command`, argv sin shell) y scripts (`script`; ejemplos
+comentados).
 
 La sección `pointer` de `config.yaml` configura el puntero virtual: gesto de activación
 (`activation_gesture`), `active_zone` (porción del fotograma que se proyecta a la pantalla),
@@ -63,6 +64,32 @@ gestures:
 Cualquier gesto del catálogo (predefinido, custom o de regla) puede usarse como clave en
 `actions.mappings` y en `pointer.activation_gesture`.
 
+## Acciones script
+
+Un gesto puede lanzar scripts locales en 4 formatos (`.py`, `.ps1`, `.bat`/`.cmd`, `.sh`),
+resolviendo el intérprete por extensión (`interpreter: auto`) o forzándolo:
+
+```yaml
+actions:
+  mappings:
+    ILoveYou:
+      type: script
+      path: scripts/mi_script.py
+      args: ["--modo", "rapido"]
+      interpreter: auto        # auto|python|powershell|cmd|bash|direct
+      working_dir: .
+      blocking: false          # true espera al script (detiene la cámara)
+      timeout_seconds: 0       # obligatorio > 0 si blocking: true
+      pass_context: true       # variables RECOGNIZER_GESTURE/_HANDEDNESS/_CONFIDENCE/_TIMESTAMP
+```
+
+- **No bloqueante** (`blocking: false`, por defecto): lanza el script en segundo plano y
+  el bucle de cámara sigue.
+- **Bloqueante** (`blocking: true`): espera a que termine; exige `timeout_seconds > 0` para
+  no congelar la app. Si el script expira se registra un `WARNING` y la app continúa.
+- **Contexto**: con `pass_context: true` el script recibe el gesto en variables de entorno
+  `RECOGNIZER_*`. Ejecución con `shell=False` (el `argv` proviene de `config.yaml`).
+
 ## Gate de calidad
 
 ```powershell
@@ -95,7 +122,7 @@ docs/                     arquitectura, workflow, estado e historial
 | 3 | Acciones locales (teclado/multimedia, comandos) | completada |
 | 4 | Puntero virtual | completada |
 | 5 | Gestos personalizados (vocabulario abierto + reglas) | completada |
-| 6 | Acciones script (bloqueante/no bloqueante) | en curso |
+| 6 | Acciones script (bloqueante/no bloqueante) | completada |
 | 7 | Identidad/roles y plan web |
 | 8 | Enrolamiento facial y despliegue web |
 

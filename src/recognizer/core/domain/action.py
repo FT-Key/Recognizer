@@ -1,5 +1,6 @@
 """Acciones locales disparadas por gestos confirmados."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
@@ -17,6 +18,30 @@ class MediaKey(StrEnum):
     PLAY_PAUSE = "play_pause"
     NEXT_TRACK = "next_track"
     PREVIOUS_TRACK = "previous_track"
+
+
+class ScriptInterpreter(StrEnum):
+    """Interprete con el que ejecutar un script local."""
+
+    AUTO = "auto"
+    PYTHON = "python"
+    POWERSHELL = "powershell"
+    CMD = "cmd"
+    BASH = "bash"
+    DIRECT = "direct"
+
+
+@dataclass(frozen=True, slots=True)
+class ScriptRequest:
+    """Descripcion de un script local que una accion puede ejecutar."""
+
+    path: str
+    args: tuple[str, ...] = ()
+    interpreter: ScriptInterpreter = ScriptInterpreter.AUTO
+    working_dir: str | None = None
+    blocking: bool = False
+    timeout_seconds: float = 0.0
+    env: Mapping[str, str] | None = None
 
 
 @dataclass(frozen=True, slots=True)
