@@ -4,10 +4,12 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
+from recognizer.core.domain.gesture import StableGesture
 from recognizer.core.domain.hand import (
     HAND_CONNECTIONS,
     HAND_LANDMARK_COUNT,
     WRIST_LANDMARK_INDEX,
+    Handedness,
     HandLandmarks,
 )
 from recognizer.core.pipeline.context import FrameContext
@@ -23,6 +25,8 @@ TEXT_FONT = cv2.FONT_HERSHEY_SIMPLEX
 TEXT_SCALE = 0.5
 TEXT_THICKNESS = 1
 TEXT_OFFSET_PIXELS = 8
+GESTURE_COLOR_BGR = (0, 165, 255)
+GESTURE_TEXT_OFFSET_PIXELS = 24
 
 
 def _draw_hand(*, data: NDArray[np.uint8], hand: HandLandmarks) -> None:
@@ -55,4 +59,51 @@ class LandmarkOverlay(Processor):
         for hand in context.hands:
             if len(hand.points) == HAND_LANDMARK_COUNT:
                 _draw_hand(data=context.frame.data, hand=hand)
+        return context
+
+
+def _find_hand(
+    *,
+    hands: tuple[HandLandmarks, ...],
+    handedness: Handedness,
+) -> HandLandmarks | None:
+    for hand in hands:
+        if hand.handedness is handedness:
+            return hand
+    return None
+
+
+def _draw_gesture(
+    *,
+    data: NDArray[np.uint8],
+    hand: HandLandmarks,
+    gesture: StableGesture,
+) -> None:
+    height, width = data.shape[:2]
+    wrist = hand.points[WRIST_LANDMARK_INDEX]
+    position = (
+        int(wrist.x * width),
+        max(int(wrist.y * height) - GESTURE_TEXT_OFFSET_PIXELS, 0),
+    )
+    label = f"{gesture.name.value} {gesture.confidence:.2f}"
+    cv2.putText(
+        data,
+        label,
+        position,
+        TEXT_FONT,
+        TEXT_SCALE,
+        GESTURE_COLOR_BGR,
+        TEXT_THICKNESS,
+    )
+
+
+class GestureOverlay(Processor):
+    """Dibuja el gesto confirmado de cada mano encima de su muneca."""
+
+    def process(self, context: FrameContext) -> FrameContext:
+        """Dibuja los gestos confirmados; sin gestos o sin mano no hace nada."""
+        for gesture in context.gestures:
+            hand = _find_hand(hands=context.hands, handedness=gesture.handedness)
+            if hand is not None and len(hand.points) > WRIST_LANDMARK_INDEX:
+                _draw_gesture(data=context.frame.data, hand=hand, gesture=gesture)
         return context
