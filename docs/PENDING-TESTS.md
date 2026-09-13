@@ -1,10 +1,10 @@
-# Tests pendientes (etapas 0-3) — ejecutar al cierre de la etapa 4
+# Tests pendientes (etapas 0-4) — verificación manual del usuario
 
-El gate automático quedó verde en cada etapa (etapa 3: lint, mypy strict, 208 tests con
-98.57% de cobertura, check-arch 3/3 y smoke real), pero por decisión del usuario las
-etapas 1, 2 y 3 se mergearon con las verificaciones manuales/físicas pendientes. Este
-documento es la lista de cierre: se ejecuta al cerrar la etapa 4, marcando cada ítem y
-anotando la evidencia real (fecha, equipo, FPS, gestos y acciones observadas).
+El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
+con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
+manuales/físicas de las etapas 0-4 las ejecuta el usuario cuando pueda. Este documento es
+la lista de cierre: marcar cada ítem y anotar la evidencia real (fecha, equipo, FPS, gestos
+y efectos observados).
 
 ## Preparación
 
@@ -26,13 +26,13 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 3): 208 passed, 2 deselected, cobertura 98.57%
+  Esperado de referencia (etapa 4): 290 passed, 2 deselected, cobertura 98.61%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
   `tests/integration/test_mediapipe_hand_tracker_integration.py` y
   `tests/integration/test_mediapipe_gesture_classifier_integration.py`. Esperado:
-  "2 passed, 208 deselected". Nota: como `addopts` incluye `--cov-fail-under=80` y la
+  "2 passed, 290 deselected". Nota: como `addopts` incluye `--cov-fail-under=80` y la
   suite unitaria queda deseleccionada, el comando termina con cobertura ~65% y sale con
   código distinto de cero; usar `uv run pytest -m integration --no-cov` para una
   ejecución limpia (el gate de cobertura real es `uv run test`).
@@ -87,8 +87,9 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Debounce (`cooldown_seconds: 1.0`): mantener el gesto o re-confirmarlo dentro del
   segundo no repite la acción (una sola línea `Ejecutando ...` por ventana de 1 s).
   Esperar más de un segundo, soltar y repetir el gesto: la acción se ejecuta de nuevo.
-- [ ] `uv run recognizer --no-actions`: no ejecuta ninguna acción (sin HUD y sin cambios
-  de volumen), aunque los gestos se sigan detectando.
+- [ ] `uv run recognizer --no-actions`: no ejecuta ninguna acción y el HUD pasa a
+  `Puntero: ON/OFF` (el puntero sigue activo con la tecla `a`), aunque los gestos se sigan
+  detectando. Para no tener HUD ni efectos usar `--no-actions --no-pointer`.
 - [ ] Comando real: descomentar en `config.yaml` el ejemplo
   `ILoveYou -> command [notepad.exe]`, ejecutar `uv run recognizer`, hacer `ILoveYou` y
   verificar que se abre el Bloc de notas. Volver a comentarlo al terminar.
@@ -98,12 +99,35 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Cierre limpio: `ESC` o `q` cierran el bucle sin excepciones, se registra el resumen
   final `App OK: ...` y la ventana se destruye.
 
+### Etapa 4 — puntero virtual
+
+- [ ] `uv run recognizer` (con ventana) y mostrar `Pointing_Up`: el cursor sigue la punta
+  del índice con suavizado y se detiene al retirar el gesto; el resumen final debe
+  reportar `PointerMoved` > 0 y `Puntero: activado`.
+- [ ] Sentido: con `mirror_x: true` (default), mover la mano a la derecha en vista espejo
+  mueve el cursor a la derecha; probar `mirror_x: false` y confirmar la inversión.
+- [ ] Calibración: alcanzar las 4 esquinas de la pantalla desde la zona cómoda; si no se
+  llega o resulta hipersensible, ajustar `pointer.active_zone` en `config.yaml`.
+- [ ] Suavizado: comparar `smoothing: none` con `ema` y alpha 0.2/0.5/0.8; anotar el
+  elegido.
+- [ ] Gate: con la tecla `a` en OFF el puntero se detiene; con ON vuelve (el HUD muestra
+  `Acciones: OFF` o `Puntero: OFF` según lo que esté activo).
+- [ ] `uv run recognizer --no-pointer`: el puntero no se mueve, pero las acciones y los
+  gestos siguen.
+- [ ] `uv run recognizer --no-actions` (con puntero on): sin acciones, HUD
+  `Puntero: ON/OFF` y puntero activo; `uv run recognizer --no-actions --no-pointer`: sin
+  HUD ni efectos.
+- [ ] Dos manos en cámara: el cursor sigue solo la mano que apunta.
+- [ ] Cierre limpio con `ESC`/`q` y resumen final con el contador `PointerMoved`.
+- [ ] FPS: `uv run smoke --frames 120 --no-window` (no mueve el ratón) comparado con las
+  etapas previas bajo carga similar; anotar FPS medio y carga de CPU.
+
 ## Notas de registro
 
 - Marcar cada checkbox al completarlo y anotar fecha, equipo, carga de CPU y FPS en cada
   medición; adjuntar el fragmento de log relevante.
 - Si algo falla, describir el fallo con el comando exacto y el log, actualizar
-  `docs/STATE.md` (fase 4) y abrir una incidencia en GitHub si no se corrige en el acto.
+  `docs/STATE.md` (fase 5) y abrir una incidencia en GitHub si no se corrige en el acto.
 - Las mediciones de FPS solo son comparables si el equipo y la carga de CPU son
   similares; repetir la medición descartando el primer resultado si la cámara acaba de
   arrancar.
@@ -112,4 +136,4 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 
 Completar la checklist marcando cada ítem y anotar la evidencia real (FPS, gestos
 detectados y acciones observadas). Si algo falla, describir el fallo con el comando
-exacto y el log, y actualizar `docs/STATE.md` y el historial de la etapa 4.
+  exacto y el log, y actualizar `docs/STATE.md` y el historial de la etapa en curso.

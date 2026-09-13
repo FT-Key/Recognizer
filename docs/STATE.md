@@ -1,47 +1,44 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 3 (acciones locales) completada, publicada en `dev` con gate verde
-  y smoke real; siguiente: etapa 4 (puntero virtual con suavizado y calibración)
-- **Rama:** `dev` (etapa 3 mergeada)
-- **Actualizado:** 2026-09-12
+- **Fase actual:** etapa 4 (puntero virtual) completada con gate verde; pendiente de merge.
+  Siguiente: etapa 5 (bases de escalado: identidad, políticas y plan web)
+- **Rama:** `stage/4-puntero-virtual` (pendiente de merge a `dev`)
+- **Actualizado:** 2026-09-13
 
 ## Hecho
 - Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
 - uv + Python 3.12.14; dependencias runtime y dev instaladas (mediapipe 1.0.1, opencv 5,
   pydantic 2.13, pynput, pytest, ruff, mypy, import-linter).
 - Core base: `Frame`, puerto `FrameSource`, `AppConfig`/`CameraConfig`, errores del dominio.
-- Adaptador `OpenCVCamera` (inyectable, testeable), CLI `smoke` y modelos en `models/`
-  (hand_landmarker.task, gesture_recognizer.task, blaze_face_short_range.tflite).
+- Adaptador `OpenCVCamera` (inyectable, testeable), CLI `smoke` y modelos en `models/`.
 - Etapa 0 con gate verde: pytest 21 tests, 98% cobertura y smoke real a 29.3 FPS.
 - Etapa 1 (manos): puerto `HandTracker` + `MediaPipeHandTracker`, `EventBus` tipado +
   `HandsDetected`, `PipelineBuilder` + `HandDetectionProcessor` y overlay OpenCV.
-- Gate de etapa 1 en verde: lint, mypy strict (38 archivos), pytest (75 tests, 98.01%),
-  check-arch (3/3) y smoke real OK.
 - Etapa 2 (gestos): `GestureRecognizer` de MediaPipe, puerto `GestureClassifier`,
   `GestureDetectionProcessor` + `GestureStabilizerProcessor` (N=5/M=5), eventos
   `GestureDetected`/`GestureReleased` y `GestureOverlay`.
-- Gate de etapa 2 en verde: 135 tests, 97.95% cobertura, mypy strict (48 archivos),
-  check-arch 3/3.
 - Etapa 3 (acciones locales): `Action`/`MediaKey`/`ActionContext`, puertos `KeySender` y
   `CommandRunner`, acciones media key/hotkey/command/no-op con
   `Gated(Debounced(Logged(...)))`, dispatcher con fallback no-op, `ActionsConfig` en
   `config.yaml`, adaptadores pynput/subprocess y entrypoint `recognizer` con HUD (tecla `a`).
-- Gate de etapa 3 en verde: lint, mypy strict (71 archivos), pytest (208 tests, 98.57%),
-  check-arch 3/3; smoke real OK (30 fotogramas, 15.0 FPS) y app real OK con acciones.
+- Etapa 4 (puntero virtual): `PointerPosition`/`PointerCalibration` y evento
+  `PointerMoved`; `PointerDetectionProcessor` (landmark 8 con gesto estable) y
+  `PointerMover` con gate compartido; Strategy de suavizado `none`/`ema` (alpha 0.35);
+  puerto `MouseController` + `PynputMouseController`; `PointerConfig`/`ActiveZoneConfig`
+  en `config.yaml` (zona 0.2-0.8, `mirror_x`), `PointerOverlay` y flag `--no-pointer`.
+- Gate de etapa 4 en verde: lint (109 archivos), mypy strict (83), pytest (290 tests,
+  98.61%), check-arch 3/3 y smoke real OK (30 fotogramas, 4.6 FPS con CPU cargada).
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
   (c23da42) y etapa 3 (15e5fb9).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 
-## Siguiente (etapa 4 — puntero virtual)
-- Puntero virtual con suavizado y calibración a partir de landmarks.
+## Siguiente (etapa 5 — bases de escalado)
+- Identidad, políticas de permisos y plan de despliegue web.
 
 ## Bloqueos / notas
-- Verificación manual de `Victory`/`Open_Palm` pendiente (y FPS de etapas 1-2) en equipo
-  descargado.
-- Verificación manual de acciones reales pendiente: pulsar teclas multimedia/atajo y lanzar
-  un comando descomentando el ejemplo de `config.yaml`.
-- Verificaciones manuales de etapas 0-3 consolidadas en `docs/PENDING-TESTS.md`; se ejecutan
-  al cerrar la etapa 4.
+- Verificaciones manuales de etapas 0-4 (Victory/Open_Palm, acciones reales, puntero,
+  calibración y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el usuario
+  cuando pueda.
 - Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
 - `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.
