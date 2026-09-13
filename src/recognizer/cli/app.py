@@ -1,9 +1,10 @@
-"""Prueba de humo de camara, gestos y overlay.
+"""Aplicacion local: camara, gestos y acciones.
 
 Uso:
-    uv run smoke --frames 30 --no-window   # mide FPS y sale
-    uv run smoke --no-hands                # ventana en vivo sin deteccion
-    uv run smoke                           # ventana en vivo con gestos (ESC o q para salir)
+    uv run recognizer                  # ventana en vivo con acciones (ESC o q para salir)
+    uv run recognizer --no-actions     # deteccion y overlay sin ejecutar acciones
+    uv run recognizer --no-window --frames 30
+    uv run recognizer --device 1
 """
 
 import argparse
@@ -18,10 +19,11 @@ import cv2
 
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.adapters.mediapipe_gesture_classifier import MediaPipeGestureClassifier
-from recognizer.bootstrap import build_pipeline, resolve_camera_config
+from recognizer.bootstrap import build_action_bindings, build_pipeline, resolve_camera_config
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
+from recognizer.core.actions.decorators import ActionGate
+from recognizer.core.actions.dispatcher import GestureActionDispatcher
 from recognizer.core.bus import InProcessEventBus
-from recognizer.core.config import GestureConfig
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -30,19 +32,27 @@ from recognizer.core.domain.events import (
 )
 from recognizer.core.domain.gesture import GestureName
 from recognizer.core.errors import RecognizerError
-from recognizer.core.pipeline.builder import Pipeline
-from recognizer.core.ports.event_bus import EventBus
-from recognizer.core.ports.gesture_classifier import GestureClassifier
+from recognizer.core.pipeline.context import FrameContext
 from recognizer.settings import load_config
 
-LOGGER = logging.getLogger("recognizer.smoke")
+LOGGER = logging.getLogger("recognizer.app")
 
 DEFAULT_CONFIG_PATH = Path("config.yaml")
-WINDOW_NAME = "Recognizer - smoke"
+WINDOW_NAME = "Recognizer"
+TOGGLE_KEY = ord("a")
 NO_CONFIRMED_GESTURES = "ninguno"
 
+HUD_POSITION = (10, 30)
+HUD_FONT = cv2.FONT_HERSHEY_SIMPLEX
+HUD_SCALE = 0.8
+HUD_THICKNESS = 2
+HUD_ENABLED_TEXT = "Acciones: ON"
+HUD_DISABLED_TEXT = "Acciones: OFF"
+HUD_ENABLED_COLOR_BGR = (0, 200, 0)
+HUD_DISABLED_COLOR_BGR = (0, 0, 255)
 
-class _GestureStats:
+
+class _Stats:
     """Cuenta eventos de manos y gestos confirmados publicados al bus."""
 
     def __init__(self) -> None:
@@ -67,8 +77,8 @@ class _GestureStats:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="smoke",
-        description="Abre la camara, mide FPS y opcionalmente muestra la imagen.",
+        prog="recognizer",
+        description="Abre la camara, reconoce gestos y ejecuta acciones locales.",
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG_PATH)
     parser.add_argument("--device", type=int, default=None, help="Sobrescribe device_index.")
@@ -80,20 +90,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--no-window", action="store_true", help="No abre ventana (modo check).")
     parser.add_argument(
-        "--no-hands",
+        "--no-actions",
         action="store_true",
-        help="Desactiva la deteccion de manos/gestos y el overlay.",
+        help="No ejecuta acciones locales aunque haya mapeos.",
     )
     return parser
-
-
-def _build_pipeline(
-    *,
-    classifier: GestureClassifier | None,
-    bus: EventBus,
-    gestures: GestureConfig,
-) -> Pipeline:
-    return build_pipeline(classifier=classifier, bus=bus, gestures=gestures)
 
 
 def _format_confirmed(confirmed: Counter[GestureName]) -> str:
@@ -102,8 +103,14 @@ def _format_confirmed(confirmed: Counter[GestureName]) -> str:
     return ", ".join(f"{name.value}={count}" for name, count in confirmed.items())
 
 
+def _actions_state(gate: ActionGate | None) -> str:
+    if gate is None:
+        return "inactivas"
+    return "activadas" if gate.enabled else "desactivadas"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Punto de entrada del comando `smoke`."""
+    """Punto de entrada del comando `recognizer`."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     args = _build_parser().parse_args(argv)
     show_window = not args.no_window
@@ -115,14 +122,43 @@ def main(argv: Sequence[str] | None = None) -> int:
         app_config = load_config(args.config)
         camera_config = resolve_camera_config(app_config=app_config, device_override=args.device)
         bus = InProcessEventBus()
-        stats = _GestureStats()
+        stats = _Stats()
         bus.subscribe(HandsDetected, stats.handle)
         bus.subscribe(GestureDetected, stats.handle)
         bus.subscribe(GestureReleased, stats.handle)
-        classifier = None if args.no_hands else MediaPipeGestureClassifier(app_config.gestures)
-        pipeline = _build_pipeline(classifier=classifier, bus=bus, gestures=app_config.gestures)
 
-        def _log_progress(count: int, fps: float) -> None:
+        gate: ActionGate | None = None
+        if not args.no_actions and app_config.actions.mappings:
+            bindings = build_action_bindings(actions=app_config.actions)
+            dispatcher = GestureActionDispatcher(actions=bindings.mapping)
+            bus.subscribe(GestureDetected, dispatcher.handle)
+            gate = bindings.gate
+
+        classifier = MediaPipeGestureClassifier(app_config.gestures)
+        pipeline = build_pipeline(classifier=classifier, bus=bus, gestures=app_config.gestures)
+
+        def _on_key(pressed: int) -> None:
+            if pressed == TOGGLE_KEY and gate is not None:
+                if gate.toggle():
+                    LOGGER.info("Acciones activadas")
+                else:
+                    LOGGER.info("Acciones desactivadas")
+
+        def _on_context(context: FrameContext) -> None:
+            if gate is None:
+                return
+            enabled = gate.enabled
+            cv2.putText(
+                context.frame.data,
+                HUD_ENABLED_TEXT if enabled else HUD_DISABLED_TEXT,
+                HUD_POSITION,
+                HUD_FONT,
+                HUD_SCALE,
+                HUD_ENABLED_COLOR_BGR if enabled else HUD_DISABLED_COLOR_BGR,
+                HUD_THICKNESS,
+            )
+
+        def _on_progress(count: int, fps: float) -> None:
             LOGGER.info(
                 "Fotogramas: %d | FPS medio: %.1f | Manos max: %d | Gestos confirmados: %d",
                 count,
@@ -133,26 +169,29 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         with ExitStack() as stack:
             camera = stack.enter_context(OpenCVCamera(camera_config))
-            if classifier is not None:
-                stack.enter_context(classifier)
+            stack.enter_context(classifier)
             frames, fps = run_camera_loop(
                 camera,
                 pipeline=pipeline,
                 window_name=WINDOW_NAME,
                 show_window=show_window,
                 max_frames=args.frames,
-                callbacks=RuntimeCallbacks(on_progress=_log_progress),
+                callbacks=RuntimeCallbacks(
+                    on_key=_on_key,
+                    on_context=_on_context,
+                    on_progress=_on_progress,
+                ),
             )
     except RecognizerError as exc:
-        LOGGER.error("Smoke fallo: %s", exc)
+        LOGGER.error("La app fallo: %s", exc)
         return 1
     finally:
         if show_window:
             cv2.destroyAllWindows()
 
     LOGGER.info(
-        "Smoke OK: %d fotogramas, %.1f FPS medio, maximo de manos: %d, gestos confirmados: %s "
-        "(HandsDetected: %d, GestureDetected: %d, GestureReleased: %d).",
+        "App OK: %d fotogramas, %.1f FPS medio, maximo de manos: %d, gestos confirmados: %s "
+        "(HandsDetected: %d, GestureDetected: %d, GestureReleased: %d). Acciones: %s.",
         frames,
         fps,
         stats.max_hands,
@@ -160,6 +199,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         stats.hands_events,
         stats.detected_events,
         stats.released_events,
+        _actions_state(gate),
     )
     return 0
 

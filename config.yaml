@@ -24,3 +24,27 @@ gestures:
   stabilization_frames: 5
   release_frames: 5
   min_gesture_confidence: 0.5
+
+# Acciones locales disparadas por gestos confirmados.
+actions:
+  cooldown_seconds: 1.0
+  mappings:
+    Thumb_Up:
+      type: media_key
+      key: volume_up
+    Thumb_Down:
+      type: media_key
+      key: volume_down
+    Closed_Fist:
+      type: media_key
+      key: volume_mute
+    Open_Palm:
+      type: media_key
+      key: play_pause
+    Victory:
+      type: hotkey
+      keys: [ctrl, shift, m]
+    # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
+    # ILoveYou:
+    #   type: command
+    #   argv: [notepad.exe]
