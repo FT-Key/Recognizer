@@ -41,5 +41,7 @@
   descargado.
 - Verificación manual de acciones reales pendiente: pulsar teclas multimedia/atajo y lanzar
   un comando descomentando el ejemplo de `config.yaml`.
+- Verificaciones manuales de etapas 0-3 consolidadas en `docs/PENDING-TESTS.md`; se ejecutan
+  al cerrar la etapa 4.
 - Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
 - `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.
