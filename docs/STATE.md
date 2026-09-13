@@ -1,9 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 3 (acciones locales) completada con gate verde; commits de cierre
-  y merge `--no-ff` a `dev` en curso; siguiente: etapa 4 (puntero virtual con suavizado y
-  calibración)
-- **Rama:** `stage/3-acciones-locales` (cierre pendiente de merge a `dev`)
+- **Fase actual:** etapa 3 (acciones locales) completada, publicada en `dev` con gate verde
+  y smoke real; siguiente: etapa 4 (puntero virtual con suavizado y calibración)
+- **Rama:** `dev` (etapa 3 mergeada)
 - **Actualizado:** 2026-09-12
 
 ## Hecho
@@ -29,8 +28,8 @@
   `config.yaml`, adaptadores pynput/subprocess y entrypoint `recognizer` con HUD (tecla `a`).
 - Gate de etapa 3 en verde: lint, mypy strict (71 archivos), pytest (208 tests, 98.57%),
   check-arch 3/3; smoke real OK (30 fotogramas, 15.0 FPS) y app real OK con acciones.
-- Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425) y etapa 2
-  (c23da42); el merge de la etapa 3 se registra al publicar (sin hash todavía).
+- Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
+  (c23da42) y etapa 3 (15e5fb9).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 

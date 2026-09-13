@@ -1,7 +1,7 @@
 # Etapa 3 — Acciones locales: teclado/multimedia y comandos
 
 - **Rama:** stage/3-acciones-locales
-- **Estado:** completada (gate verde; commits de cierre y merge pendientes)
+- **Estado:** completada
 - **Objetivo:** disparar acciones locales (multimedia, atajos de teclado y comandos)
   al confirmarse un gesto (`GestureDetected`), con decoradores gated/debounced/logged y
   un entrypoint de app local (`recognizer`) además del `smoke`.
@@ -94,8 +94,10 @@
   pre-existente.
 
 ## Commits
-- Pendiente: commits de cierre (`feat`, `docs`) y merge `--no-ff` a `dev`; los hashes se
-  registran al publicar.
+- `491f9f1` feat(acciones): acciones locales con multimedia, atajos y comandos.
+- `40abf8e` docs(history): cierre de la etapa 3 acciones locales.
+- `15e5fb9` merge: etapa 3 - acciones locales (`--no-ff` a `dev`).
+- Base de la rama: `679b8b7` (`docs(state): etapa 2 publicada en dev y hashes registrados`).
 
 ## Pendientes / riesgos
 - Verificación manual de acciones reales: pulsar teclas multimedia/atajo y lanzar un
