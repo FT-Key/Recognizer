@@ -180,8 +180,9 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   derecha y comprobar que NO se mutea (se consume) y que el video de Chrome vuelve al
   inicio. Probar también soltando y repitiendo (no debe repetir sin liberar la derecha).
 - [ ] Script de video: con un video reproduciéndose en Chrome, ejecutar el menú y verificar
-  que vuelve a 0:00; con dos ventanas de Chrome, comprobar que actúa sobre la del video
-  reproduciéndose o la más reciente. Revisar `scripts/actions/video_start.log`.
+  que vuelve a 0:00 **y sigue reproduciéndose** (no queda en pausa). Con dos ventanas de
+  Chrome, comprobar que actúa sobre la del video reproduciéndose o la más reciente.
+  Revisar `scripts/actions/video_start.log`.
 - [ ] Añadir una segunda opción a `menus.Replay.options` (p. ej. `Thumb_Up`) y verificar que
   se puede añadir otra con solo config.
 - [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.

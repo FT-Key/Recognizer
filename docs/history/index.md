@@ -14,5 +14,6 @@ etapa que se necesite.
 | 6 | Acciones script (bloqueante/no bloqueante) | completada | [stage-6-acciones-script.md](stage-6-acciones-script.md) |
 | 7 | Abrir enlaces (playlist secuencial, ILoveYou) | completada | [stage-7-abrir-enlaces.md](stage-7-abrir-enlaces.md) |
 | 8 | Gestos compuestos (menús por mano) + script de video | completada | [stage-8-gestos-compuestos.md](stage-8-gestos-compuestos.md) |
+| 8b | Fix: el video sigue reproduciendo al volver al inicio | completada | [stage-8b-fix-video-playback.md](stage-8b-fix-video-playback.md) |
 | 9 | Bases de escalado: identidad, políticas y plan web | pendiente | - |
 | 10 | Enrolamiento facial, roles y despliegue web | pendiente | - |

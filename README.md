@@ -130,7 +130,8 @@ actions:
 
 - Puedes definir **varios menús** (con distintos gestos modificadores) y varias opciones.
 - `scripts/actions/video_start.ps1` devuelve al inicio (tecla `0`) el video en reproducción
-  de Chrome (detecta la sesión de media, enfoca la ventana y pulsa `0`).
+  de Chrome (detecta la sesión de media, enfoca la ventana, pulsa `0` y, si quedara en
+  pausa, reanuda la reproducción).
 - Si MediaPipe invierte izquierda/derecha en tu cámara, pon `gestures.swap_handedness: true`.
 
 ## Gate de calidad
