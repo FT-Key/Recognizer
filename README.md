@@ -6,7 +6,7 @@ roles/permisos y despliegue web futuro.
 
 ## Estado del proyecto
 
-Etapa 4 (puntero virtual) completada, pendiente de merge a `dev`. Estado vivo en
+Etapa 5 (gestos personalizados) completada. Estado vivo en
 [`docs/STATE.md`](docs/STATE.md) e historial en [`docs/history/index.md`](docs/history/index.md).
 
 ## Requisitos
@@ -34,6 +34,34 @@ atajos (`hotkey`) y comandos (`command`, argv sin shell; el ejemplo va comentado
 La sección `pointer` de `config.yaml` configura el puntero virtual: gesto de activación
 (`activation_gesture`), `active_zone` (porción del fotograma que se proyecta a la pantalla),
 suavizado (`smoothing`: `none`/`ema` con `alpha`) y `mirror_x` (vista espejo).
+
+## Gestos personalizados
+
+El vocabulario de gestos es abierto (`GestureId`): además de los 7 gestos predefinidos de
+MediaPipe, se pueden declarar gestos propios y mapearles acciones. Dos fuentes:
+
+- **Modelo custom:** entrena un bundle de MediaPipe (Model Maker) y apunta
+  `gestures.model_path` a tu `.task`; declara sus etiquetas en `gestures.custom_labels`
+  para que el pipeline las acepte.
+- **Reglas de landmarks (sin entrenar):** define gestos geométricos en `gestures.rules`
+  (dedos `extended`/`folded`, `direction` de un dedo y `angle` entre dos dedos). Se
+  configura `rules_priority` (`rules_first`/`model_first`) y los umbrales en
+  `rule_thresholds`.
+
+```yaml
+gestures:
+  custom_labels: []
+  rules_priority: rules_first
+  rule_thresholds: {straight_angle_deg: 160.0, direction_tolerance_deg: 30.0}
+  rules:
+    L_Sign:
+      extended: [thumb, index]
+      folded: [middle, ring, pinky]
+      angle: {a: thumb, b: index, min_deg: 50, max_deg: 110}
+```
+
+Cualquier gesto del catálogo (predefinido, custom o de regla) puede usarse como clave en
+`actions.mappings` y en `pointer.activation_gesture`.
 
 ## Gate de calidad
 
@@ -66,8 +94,10 @@ docs/                     arquitectura, workflow, estado e historial
 | 2 | Gestos predefinidos + estabilizador | completada |
 | 3 | Acciones locales (teclado/multimedia, comandos) | completada |
 | 4 | Puntero virtual | completada |
-| 5 | Identidad/roles y plan web |
-| 6 | Enrolamiento facial y despliegue web |
+| 5 | Gestos personalizados (vocabulario abierto + reglas) | completada |
+| 6 | Acciones script (bloqueante/no bloqueante) | en curso |
+| 7 | Identidad/roles y plan web |
+| 8 | Enrolamiento facial y despliegue web |
 
 ## Documentación
 

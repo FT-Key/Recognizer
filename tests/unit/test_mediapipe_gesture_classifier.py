@@ -15,7 +15,13 @@ from recognizer.adapters.mediapipe_gesture_classifier import (
 )
 from recognizer.core.config import GestureConfig
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName, GestureRecognition
+from recognizer.core.domain.gesture import (
+    GESTURE_NONE,
+    GESTURE_OPEN_PALM,
+    GESTURE_VICTORY,
+    GestureId,
+    GestureRecognition,
+)
 from recognizer.core.domain.hand import HAND_LANDMARK_COUNT, Handedness, Point
 from recognizer.core.errors import GestureClassifierError
 
@@ -128,6 +134,8 @@ def _open_facade(
     tmp_path: Path,
     result: FakeResult,
     recognizer: FakeRecognizer | None = None,
+    *,
+    custom_labels: tuple[str, ...] = (),
 ) -> tuple[MediaPipeTasksGestureFacade, FakeRecognizer, object]:
     model_path = tmp_path / "gesture_recognizer.task"
     model_path.write_bytes(b"modelo falso")
@@ -144,7 +152,9 @@ def _open_facade(
 
     monkeypatch.setattr(classifier_module, "_create_recognizer", fake_create_recognizer)
     monkeypatch.setattr(classifier_module, "_to_mp_image", fake_to_mp_image)
-    facade = MediaPipeTasksGestureFacade(GestureConfig(model_path=str(model_path)))
+    facade = MediaPipeTasksGestureFacade(
+        GestureConfig(model_path=str(model_path), custom_labels=custom_labels)
+    )
     facade.open()
     return facade, active_recognizer, sentinel
 
@@ -278,10 +288,10 @@ def test_facade_detect_maps_two_hands_gestures_and_lateralities(
     assert recognition.hands[1].points[0] == Point(x=0.4, y=0.4, z=0.0)
 
     assert len(recognition.detections) == 2
-    assert recognition.detections[0].name is GestureName.VICTORY
+    assert recognition.detections[0].name == GESTURE_VICTORY
     assert recognition.detections[0].confidence == pytest.approx(0.95)
     assert recognition.detections[0].handedness is Handedness.LEFT
-    assert recognition.detections[1].name is GestureName.OPEN_PALM
+    assert recognition.detections[1].name == GESTURE_OPEN_PALM
     assert recognition.detections[1].confidence == pytest.approx(0.85)
     assert recognition.detections[1].handedness is Handedness.RIGHT
 
@@ -305,7 +315,7 @@ def test_facade_detect_maps_unknown_gesture_label_to_none(
     assert len(recognition.hands) == 1
     assert recognition.hands[0].handedness is Handedness.LEFT
     assert len(recognition.detections) == 1
-    assert recognition.detections[0].name is GestureName.NONE
+    assert recognition.detections[0].name is GESTURE_NONE
     assert recognition.detections[0].confidence == pytest.approx(0.7)
     assert recognition.detections[0].handedness is Handedness.LEFT
 
@@ -339,7 +349,7 @@ def test_facade_detect_without_categories_uses_unknown_and_none(
     assert len(recognition.hands) == 1
     assert recognition.hands[0].handedness is Handedness.UNKNOWN
     assert recognition.hands[0].confidence == EMPTY_CONFIDENCE
-    assert recognition.detections[0].name is GestureName.NONE
+    assert recognition.detections[0].name is GESTURE_NONE
     assert recognition.detections[0].confidence == EMPTY_CONFIDENCE
     assert recognition.detections[0].handedness is Handedness.UNKNOWN
 
@@ -361,7 +371,7 @@ def test_facade_detect_hand_without_matching_category_uses_unknown(
     assert recognition.hands[0].handedness is Handedness.LEFT
     assert recognition.hands[1].handedness is Handedness.UNKNOWN
     assert recognition.hands[1].confidence == EMPTY_CONFIDENCE
-    assert recognition.detections[1].name is GestureName.NONE
+    assert recognition.detections[1].name is GESTURE_NONE
     assert recognition.detections[1].confidence == EMPTY_CONFIDENCE
 
 
@@ -444,3 +454,48 @@ def test_facade_close_without_open_is_noop(tmp_path: Path) -> None:
         GestureConfig(model_path=str(tmp_path / "gesture.task")),
     )
     facade.close()
+
+
+def test_facade_detect_maps_declared_custom_label(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result = FakeResult(
+        handedness=((FakeCategory(category_name="Left", score=0.9),),),
+        hand_landmarks=(_landmarks(0.0),),
+        gestures=((FakeCategory(category_name="Custom_Wave", score=0.7),),),
+    )
+    facade, _, _ = _open_facade(
+        monkeypatch,
+        tmp_path,
+        result,
+        custom_labels=("Custom_Wave",),
+    )
+
+    recognition = facade.detect(frame_bgr=np.zeros((4, 6, 3), dtype=np.uint8), timestamp_ms=0)
+
+    assert recognition.detections[0].name == GestureId("Custom_Wave")
+    assert recognition.detections[0].name.value == "Custom_Wave"
+    assert recognition.detections[0].confidence == pytest.approx(0.7)
+
+
+def test_facade_detect_maps_undeclared_label_to_none(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    result = FakeResult(
+        handedness=((FakeCategory(category_name="Left", score=0.9),),),
+        hand_landmarks=(_landmarks(0.0),),
+        gestures=((FakeCategory(category_name="Surprise", score=0.7),),),
+    )
+    facade, _, _ = _open_facade(
+        monkeypatch,
+        tmp_path,
+        result,
+        custom_labels=("Custom_Wave",),
+    )
+
+    recognition = facade.detect(frame_bgr=np.zeros((4, 6, 3), dtype=np.uint8), timestamp_ms=0)
+
+    assert recognition.detections[0].name is GESTURE_NONE
+    assert recognition.detections[0].confidence == pytest.approx(0.7)

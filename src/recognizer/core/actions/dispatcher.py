@@ -7,7 +7,7 @@ from recognizer.core.actions.noop import NoOpAction
 from recognizer.core.constants import ACTION_LOGGER_NAME
 from recognizer.core.domain.action import Action, ActionContext
 from recognizer.core.domain.events import DomainEvent, GestureDetected
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_NONE, GestureId
 from recognizer.core.errors import ActionError
 
 
@@ -17,7 +17,7 @@ class GestureActionDispatcher:
     def __init__(
         self,
         *,
-        actions: Mapping[GestureName, Action],
+        actions: Mapping[GestureId, Action],
         logger: logging.Logger | None = None,
         fallback: Action | None = None,
     ) -> None:
@@ -34,7 +34,7 @@ class GestureActionDispatcher:
                 handedness=handedness,
                 timestamp=timestamp,
             ):
-                if gesture is GestureName.NONE:
+                if gesture == GESTURE_NONE:
                     return
                 context = ActionContext(
                     gesture=gesture,

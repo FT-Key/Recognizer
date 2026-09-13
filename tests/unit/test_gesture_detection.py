@@ -7,7 +7,11 @@ from numpy.typing import NDArray
 
 from recognizer.core.domain.events import DomainEvent, HandsDetected
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import DetectedGesture, GestureName, GestureRecognition
+from recognizer.core.domain.gesture import (
+    GESTURE_VICTORY,
+    DetectedGesture,
+    GestureRecognition,
+)
 from recognizer.core.domain.hand import Handedness, HandLandmarks, Point
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
@@ -65,7 +69,7 @@ def _hand() -> HandLandmarks:
 def _recognition() -> GestureRecognition:
     hand = _hand()
     detection = DetectedGesture(
-        name=GestureName.VICTORY,
+        name=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
     )

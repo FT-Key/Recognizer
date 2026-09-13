@@ -16,7 +16,7 @@ from recognizer.adapters.overlay_opencv import (
     PointerOverlay,
 )
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName, StableGesture
+from recognizer.core.domain.gesture import GESTURE_VICTORY, GestureId, StableGesture
 from recognizer.core.domain.hand import HAND_LANDMARK_COUNT, Handedness, HandLandmarks, Point
 from recognizer.core.domain.pointer import PointerPosition
 from recognizer.core.pipeline.context import FrameContext
@@ -101,7 +101,7 @@ def test_no_hands_leaves_frame_untouched() -> None:
 
 def _gesture(
     *,
-    name: GestureName = GestureName.VICTORY,
+    name: GestureId = GESTURE_VICTORY,
     handedness: Handedness = Handedness.RIGHT,
 ) -> StableGesture:
     return StableGesture(name=name, confidence=GESTURE_CONFIDENCE, handedness=handedness)

@@ -5,7 +5,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from recognizer.core.domain.action import ActionContext, MediaKey
-from recognizer.core.domain.gesture import GestureName
+from recognizer.core.domain.gesture import GESTURE_NONE, GESTURE_VICTORY
 from recognizer.core.domain.hand import Handedness
 
 GESTURE_CONFIDENCE = 0.9
@@ -31,13 +31,13 @@ def test_media_key_values() -> None:
 
 def test_action_context_keeps_fields() -> None:
     context = ActionContext(
-        gesture=GestureName.VICTORY,
+        gesture=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
         timestamp=TIMESTAMP,
     )
 
-    assert context.gesture is GestureName.VICTORY
+    assert context.gesture is GESTURE_VICTORY
     assert context.confidence == GESTURE_CONFIDENCE
     assert context.handedness is Handedness.RIGHT
     assert context.timestamp == TIMESTAMP
@@ -45,10 +45,10 @@ def test_action_context_keeps_fields() -> None:
 
 def test_action_context_is_immutable() -> None:
     context = ActionContext(
-        gesture=GestureName.VICTORY,
+        gesture=GESTURE_VICTORY,
         confidence=GESTURE_CONFIDENCE,
         handedness=Handedness.RIGHT,
         timestamp=TIMESTAMP,
     )
     with pytest.raises(FrozenInstanceError):
-        context.__setattr__("gesture", GestureName.NONE)
+        context.__setattr__("gesture", GESTURE_NONE)

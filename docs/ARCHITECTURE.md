@@ -62,6 +62,16 @@ Repository para config, herencia mayor a un nivel, capas sin eje de cambio.
 - Functional core / imperative shell: la lógica no tiene efectos; los efectos viven en
   `adapters/`.
 
+## Gestos personalizados (etapa 5)
+
+El vocabulario de gestos es abierto: `GestureId` (value object) sustituye al enum cerrado
+`GestureName`; `GestureCatalog` valida contra la config las etiquetas predefinidas,
+custom (`gestures.custom_labels`) y de reglas. Las reglas geométricas de landmarks viven
+en `core/pipeline/landmark_rules.py` (core puro, sin infraestructura) y
+`LandmarkRuleProcessor` resuelve reglas vs. modelo según `rules_priority`. Un modelo
+custom (Model Maker) solo requiere cambiar `gestures.model_path` y declarar
+`custom_labels`; el adaptador filtra las etiquetas por el catálogo.
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·

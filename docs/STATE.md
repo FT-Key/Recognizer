@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 4 (puntero virtual) completada y publicada en `dev`; siguiente:
-  etapa 5 (bases de escalado: identidad, políticas y plan web)
-- **Rama:** `dev` (etapa 4 mergeada con `--no-ff` en `4da3e35`)
+- **Fase actual:** etapa 5 (gestos personalizados) completada y mergeada en `dev`; siguiente:
+  etapa 6 (acciones script, bloqueante/no bloqueante)
+- **Rama:** `dev` (etapa 5 mergeada con `--no-ff`)
 - **Actualizado:** 2026-09-13
 
 ## Hecho
@@ -28,17 +28,23 @@
   en `config.yaml` (zona 0.2-0.8, `mirror_x`), `PointerOverlay` y flag `--no-pointer`.
 - Gate de etapa 4 en verde: lint (109 archivos), mypy strict (83), pytest (290 tests,
   98.61%), check-arch 3/3 y smoke real OK (30 fotogramas, 4.6 FPS con CPU cargada).
+- Etapa 5 (gestos personalizados): vocabulario abierto (`GestureId` + `GestureCatalog`)
+  en vez del enum cerrado; reglas geométricas de landmarks en `config.yaml`
+  (`gestures.rules`, `rules_priority`, `rule_thresholds`) con `LandmarkRuleProcessor`;
+  `gestures.custom_labels` para modelos MediaPipe custom; `config.yaml` con ejemplos
+  comentados. Gate verde: pytest 342 tests, 98.72%, mypy 87, check-arch 3/3, smoke 13.7 FPS.
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
   (c23da42), etapa 3 (15e5fb9) y etapa 4 (4da3e35).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 
-## Siguiente (etapa 5 — bases de escalado)
-- Identidad, políticas de permisos y plan de despliegue web.
+## Siguiente (etapa 6 — acciones script)
+- Acción `script` (`.py`, `.ps1`, `.bat/.cmd`, `.sh`) con puerto `ScriptRunner`, modo
+  bloqueante y no bloqueante, y paso del contexto del gesto.
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-4 (Victory/Open_Palm, acciones reales, puntero,
-  calibración y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el usuario
+- Verificaciones manuales de etapas 0-5 (gestos, acciones reales, puntero, reglas de
+  landmarks y FPS) consolidadas en `docs/PENDING-TESTS.md`; las ejecuta el usuario
   cuando pueda.
 - Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
 - `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.

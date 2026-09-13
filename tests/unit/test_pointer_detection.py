@@ -8,7 +8,12 @@ from numpy.typing import NDArray
 
 from recognizer.core.domain.events import DomainEvent, PointerMoved
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.gesture import GestureName, StableGesture
+from recognizer.core.domain.gesture import (
+    GESTURE_POINTING_UP,
+    GESTURE_VICTORY,
+    GestureId,
+    StableGesture,
+)
 from recognizer.core.domain.hand import (
     HAND_LANDMARK_COUNT,
     INDEX_FINGER_TIP_LANDMARK_INDEX,
@@ -95,7 +100,7 @@ def _hand(
 
 def _gesture(
     *,
-    name: GestureName = GestureName.POINTING_UP,
+    name: GestureId = GESTURE_POINTING_UP,
     handedness: Handedness = Handedness.RIGHT,
 ) -> StableGesture:
     return StableGesture(name=name, confidence=GESTURE_CONFIDENCE, handedness=handedness)
@@ -121,7 +126,7 @@ def _processor(
     bus: RecordingBus,
     *,
     smoothing: PointerSmoothing | None = None,
-    activation_gesture: GestureName = GestureName.POINTING_UP,
+    activation_gesture: GestureId = GESTURE_POINTING_UP,
 ) -> PointerDetectionProcessor:
     return PointerDetectionProcessor(
         bus=bus,
@@ -249,12 +254,12 @@ def test_with_mismatched_handedness_resets_smoothing_and_clears_pointer() -> Non
 
 def test_configured_activation_gesture_is_used() -> None:
     bus = RecordingBus()
-    processor = _processor(bus, activation_gesture=GestureName.VICTORY)
+    processor = _processor(bus, activation_gesture=GESTURE_VICTORY)
 
     context = processor.process(
         _context(
             hands=(_hand(tip=_point(TIP_X, TIP_Y)),),
-            gestures=(_gesture(name=GestureName.VICTORY),),
+            gestures=(_gesture(name=GESTURE_VICTORY),),
         )
     )
 
