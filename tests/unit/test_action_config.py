@@ -9,6 +9,7 @@ from recognizer.core.config import (
     ActionsConfig,
     AppConfig,
     CommandActionConfig,
+    DistanceConditionConfig,
     GestureConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
@@ -18,6 +19,7 @@ from recognizer.core.config import (
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
+from recognizer.core.domain.gesture import Finger
 from recognizer.core.domain.hand import Handedness
 from recognizer.settings import load_config
 
@@ -367,6 +369,13 @@ def test_repo_config_loads_replay_menu() -> None:
 
 def test_repo_config_declares_ok_sign_rule() -> None:
     app_config = load_config(CONFIG_PATH)
+    rule = app_config.gestures.rules["OK_Sign"]
 
-    assert "OK_Sign" in app_config.gestures.rules
+    assert rule.extended == (Finger.MIDDLE, Finger.RING, Finger.PINKY)
+    assert rule.folded == (Finger.INDEX,)
+    assert rule.distance == DistanceConditionConfig(
+        a=Finger.THUMB,
+        b=Finger.INDEX,
+        max_ratio=0.35,
+    )
     assert app_config.gesture_catalog().require("OK_Sign").value == "OK_Sign"

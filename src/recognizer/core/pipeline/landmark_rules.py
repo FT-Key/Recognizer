@@ -12,6 +12,7 @@ from dataclasses import dataclass, replace
 from recognizer.core.config import (
     AngleConditionConfig,
     DirectionConditionConfig,
+    DistanceConditionConfig,
     GestureRuleConfig,
     RuleThresholdsConfig,
 )
@@ -215,6 +216,34 @@ def matches_angle(*, points: Sequence[Point], condition: AngleConditionConfig) -
     return condition.min_deg <= angle <= condition.max_deg
 
 
+def _finger_tip_index(finger: Finger) -> int:
+    """Indice del landmark de la punta de un dedo."""
+    return _DIRECTION_LANDMARKS[finger][1]
+
+
+def _hand_scale(points: Sequence[Point]) -> float:
+    """Tamano de la mano: distancia muneca -> MCP del dedo corazon (eje x,y)."""
+    wrist = points[WRIST_LANDMARK_INDEX]
+    middle_mcp = points[MIDDLE_FINGER_MCP_LANDMARK_INDEX]
+    return math.hypot(middle_mcp.x - wrist.x, middle_mcp.y - wrist.y)
+
+
+def matches_distance(*, points: Sequence[Point], condition: DistanceConditionConfig) -> bool:
+    """Comprueba que dos puntas de dedo estan mas cerca que ``max_ratio``.
+
+    La distancia se divide por el tamano de la mano para no depender de lo lejos
+    que este la mano de la camara. Una mano degenerada (escala ~0) no hace match.
+    """
+    _ensure_landmark_count(points)
+    scale = _hand_scale(points)
+    if scale < MIN_VECTOR_NORM:
+        return False
+    first = points[_finger_tip_index(condition.a)]
+    second = points[_finger_tip_index(condition.b)]
+    distance = math.hypot(first.x - second.x, first.y - second.y)
+    return distance / scale <= condition.max_ratio
+
+
 @dataclass(frozen=True, slots=True)
 class LandmarkRule:
     """Regla declarativa asociada al gesto que produce cuando hace match."""
@@ -256,6 +285,11 @@ def evaluate_rule(
         points=points,
         condition=config.direction,
         tolerance_deg=thresholds.direction_tolerance_deg,
+    ):
+        return False
+    if config.distance is not None and not matches_distance(
+        points=points,
+        condition=config.distance,
     ):
         return False
     return config.angle is None or matches_angle(points=points, condition=config.angle)

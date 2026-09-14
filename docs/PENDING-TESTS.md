@@ -201,10 +201,12 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   - `OK_Sign` → tecla `7` → video al 70%.
   Comprobar que `Victory` ya NO mutea en este contexto (se consume) y que tras el salto el
   video sigue reproduciéndose; revisar `scripts/actions/video_start.log` (muestra la tecla
-  enviada).
-- [ ] Calibrar el gesto `OK_Sign`: es una regla geométrica aproximada (medio/anular/meñique
-  extendidos, índice y pulgar doblados). Verificar en el overlay que se detecta al hacer la
-  señal OK; si no, ajustar `gestures.rules.OK_Sign` o `rule_thresholds.straight_angle_deg`.
+  enviada). Con el modificador sostenido, los gestos de la otra mano que no sean opción no
+  ejecutan su acción global (comportamiento de acorde).
+- [ ] Calibrar el gesto `OK_Sign`: es una regla de pinza (índice y pulgar se tocan) con
+  medio/anular/meñique extendidos; la distancia se normaliza por el tamaño de la mano
+  (`distance.max_ratio: 0.35`). Verificar en el overlay que se detecta al hacer la señal OK;
+  si no dispara, subir `max_ratio` (o bajarlo si hay falsos positivos).
 
 ## Notas de registro
 
