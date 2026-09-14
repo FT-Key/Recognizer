@@ -26,6 +26,7 @@ from recognizer.bootstrap import (
     build_pointer_mover,
     resolve_camera_config,
 )
+from recognizer.cli.console import log_banner, log_step
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.actions.decorators import ActionGate
 from recognizer.core.actions.dispatcher import GestureActionDispatcher
@@ -133,6 +134,7 @@ def _pointer_state(enabled: bool) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     """Punto de entrada del comando `recognizer`."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    log_banner(LOGGER)
     args = _build_parser().parse_args(argv)
     show_window = not args.no_window
 
@@ -140,8 +142,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not show_window and args.frames <= 0:
             msg = "Sin ventana no hay ESC: usa --frames > 0 junto con --no-window."
             raise RecognizerError(msg)
-        app_config = load_config(args.config)
-        camera_config = resolve_camera_config(app_config=app_config, device_override=args.device)
+        with log_step(LOGGER, "Cargando configuracion"):
+            app_config = load_config(args.config)
+            camera_config = resolve_camera_config(
+                app_config=app_config, device_override=args.device
+            )
         bus = InProcessEventBus()
         stats = _Stats()
         bus.subscribe(HandsDetected, stats.handle)
@@ -149,39 +154,40 @@ def main(argv: Sequence[str] | None = None) -> int:
         bus.subscribe(GestureReleased, stats.handle)
         bus.subscribe(PointerMoved, stats.handle)
 
-        actions_active = not args.no_actions and bool(
-            app_config.actions.mappings or app_config.actions.menus
-        )
-        pointer_active = app_config.pointer.enabled and not args.no_pointer
-        gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
-        bindings = ActionBindings(mapping={}, gate=gate)
-
-        if actions_active:
-            bindings = build_action_bindings(
-                actions=app_config.actions,
-                catalog=app_config.gesture_catalog(),
-                gate=gate,
+        with log_step(LOGGER, "Preparando gestos, acciones y puntero"):
+            actions_active = not args.no_actions and bool(
+                app_config.actions.mappings or app_config.actions.menus
             )
-            dispatcher = GestureActionDispatcher(
-                actions=bindings.mapping,
+            pointer_active = app_config.pointer.enabled and not args.no_pointer
+            gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
+            bindings = ActionBindings(mapping={}, gate=gate)
+
+            if actions_active:
+                bindings = build_action_bindings(
+                    actions=app_config.actions,
+                    catalog=app_config.gesture_catalog(),
+                    gate=gate,
+                )
+                dispatcher = GestureActionDispatcher(
+                    actions=bindings.mapping,
+                    menus=bindings.menus,
+                )
+                bus.subscribe(GestureDetected, dispatcher.handle)
+                bus.subscribe(GestureReleased, dispatcher.handle)
+            if pointer_active:
+                mover = build_pointer_mover(pointer=app_config.pointer, gate=gate)
+                if mover is not None:
+                    bus.subscribe(PointerMoved, mover.handle)
+
+            classifier = MediaPipeGestureClassifier(app_config.gestures)
+            pipeline = build_pipeline(
+                classifier=classifier,
+                bus=bus,
+                gestures=app_config.gestures,
+                pointer=app_config.pointer if pointer_active else None,
+                catalog=app_config.gesture_catalog(),
                 menus=bindings.menus,
             )
-            bus.subscribe(GestureDetected, dispatcher.handle)
-            bus.subscribe(GestureReleased, dispatcher.handle)
-        if pointer_active:
-            mover = build_pointer_mover(pointer=app_config.pointer, gate=gate)
-            if mover is not None:
-                bus.subscribe(PointerMoved, mover.handle)
-
-        classifier = MediaPipeGestureClassifier(app_config.gestures)
-        pipeline = build_pipeline(
-            classifier=classifier,
-            bus=bus,
-            gestures=app_config.gestures,
-            pointer=app_config.pointer if pointer_active else None,
-            catalog=app_config.gesture_catalog(),
-            menus=bindings.menus,
-        )
 
         def _on_key(pressed: int) -> None:
             if pressed == TOGGLE_KEY and gate is not None:
@@ -218,8 +224,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         with ExitStack() as stack:
-            camera = stack.enter_context(OpenCVCamera(camera_config))
-            stack.enter_context(classifier)
+            with log_step(LOGGER, f"Abriendo camara (device={camera_config.device_index})"):
+                camera = stack.enter_context(OpenCVCamera(camera_config))
+            with log_step(LOGGER, "Cargando modelo de gestos"):
+                stack.enter_context(classifier)
+            LOGGER.info("Listo. Pulsa ESC o q para salir.")
             frames, fps = run_camera_loop(
                 camera,
                 pipeline=pipeline,
