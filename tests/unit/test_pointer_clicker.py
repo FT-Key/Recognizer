@@ -1,4 +1,4 @@
-"""Tests del mover del puntero suscrito a PointerMoved."""
+"""Tests del clicker del puntero suscrito a PointerClicked."""
 
 import logging
 
@@ -17,79 +17,76 @@ from recognizer.core.domain.events import (
 from recognizer.core.domain.gesture import GESTURE_VICTORY
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.errors import ActionError
-from recognizer.core.pointer.mover import PointerMover
+from recognizer.core.pointer.clicker import PointerClicker
 
 EVENT_TIMESTAMP = 1.0
-POINTER_X = 0.25
-POINTER_Y = 0.75
 GESTURE_CONFIDENCE = 0.8
 
 
 class RecordingMouseController:
-    """Doble de MouseController que registra las posiciones recibidas."""
+    """Doble de MouseController que registra los clicks recibidos."""
 
     def __init__(self) -> None:
-        self.moves: list[tuple[float, float]] = []
+        self.clicks = 0
 
     def move_to(self, *, x: float, y: float) -> None:
-        self.moves.append((x, y))
+        pass
 
     def click(self) -> None:
-        pass
+        self.clicks += 1
 
 
 class FailingMouseController:
-    """Doble que siempre falla al mover con ActionError."""
+    """Doble que siempre falla al hacer click con ActionError."""
 
     def move_to(self, *, x: float, y: float) -> None:
-        del x, y
+        pass
+
+    def click(self) -> None:
         msg = "sin mouse"
         raise ActionError(msg)
 
-    def click(self) -> None:
-        pass
+
+def _event() -> PointerClicked:
+    return PointerClicked(timestamp=EVENT_TIMESTAMP)
 
 
-def _event(*, x: float = POINTER_X, y: float = POINTER_Y) -> PointerMoved:
-    return PointerMoved(timestamp=EVENT_TIMESTAMP, x=x, y=y)
-
-
-def test_pointer_moved_moves_controller_without_gate() -> None:
+def test_pointer_clicked_clicks_controller() -> None:
     controller = RecordingMouseController()
-    mover = PointerMover(controller=controller)
+    clicker = PointerClicker(controller=controller)
 
-    mover.handle(_event())
+    clicker.handle(_event())
 
-    assert controller.moves == [(POINTER_X, POINTER_Y)]
+    assert controller.clicks == 1
 
 
 def test_disabled_gate_blocks_and_reenabling_allows() -> None:
     controller = RecordingMouseController()
     gate = ActionGate()
-    mover = PointerMover(controller=controller, gate=gate)
+    clicker = PointerClicker(controller=controller, gate=gate)
 
     assert gate.toggle() is False
-    mover.handle(_event())
-    assert controller.moves == []
+    clicker.handle(_event())
+    assert controller.clicks == 0
 
     assert gate.toggle() is True
-    mover.handle(_event())
-    assert controller.moves == [(POINTER_X, POINTER_Y)]
+    clicker.handle(_event())
+    assert controller.clicks == 1
 
 
 def test_action_error_is_logged_and_not_propagated(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    mover = PointerMover(controller=FailingMouseController())
+    clicker = PointerClicker(controller=FailingMouseController())
 
     with caplog.at_level(logging.WARNING, logger=POINTER_LOGGER_NAME):
-        mover.handle(_event())
+        clicker.handle(_event())
 
     assert len(caplog.records) == 1
     record = caplog.records[0]
     assert record.levelno == logging.WARNING
     assert record.name == POINTER_LOGGER_NAME
-    assert "puntero" in record.getMessage().lower()
+    assert "click" in record.getMessage().lower()
 
 
 @pytest.mark.parametrize(
@@ -102,14 +99,14 @@ def test_action_error_is_logged_and_not_propagated(
             confidence=GESTURE_CONFIDENCE,
             handedness=Handedness.RIGHT,
         ),
-        PointerClicked(timestamp=EVENT_TIMESTAMP),
+        PointerMoved(timestamp=EVENT_TIMESTAMP, x=0.5, y=0.5),
         PointerReleased(timestamp=EVENT_TIMESTAMP),
     ],
 )
 def test_other_events_are_ignored(event: DomainEvent) -> None:
     controller = RecordingMouseController()
-    mover = PointerMover(controller=controller)
+    clicker = PointerClicker(controller=controller)
 
-    mover.handle(event)
+    clicker.handle(event)
 
-    assert controller.moves == []
+    assert controller.clicks == 0

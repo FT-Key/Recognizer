@@ -32,6 +32,7 @@ TEXT_OFFSET_PIXELS = 8
 GESTURE_COLOR_BGR = (0, 165, 255)
 GESTURE_TEXT_OFFSET_PIXELS = 24
 POINTER_COLOR_BGR = (255, 0, 255)
+POINTER_CLICK_COLOR_BGR = (0, 255, 0)
 POINTER_RADIUS_PIXELS = 12
 POINTER_THICKNESS = 2
 POINTER_TEXT_OFFSET_PIXELS = 24
@@ -122,39 +123,42 @@ class GestureOverlay(Processor):
         return context
 
 
-def _draw_pointer(*, data: NDArray[np.uint8], position: PointerPosition) -> None:
+def _draw_pointer(
+    *, data: NDArray[np.uint8], position: PointerPosition, clicking: bool = False
+) -> None:
     height, width = data.shape[:2]
     center_x = round(position.x * (width - 1))
     center_y = round(position.y * (height - 1))
+    color = POINTER_CLICK_COLOR_BGR if clicking else POINTER_COLOR_BGR
     cv2.circle(
         data,
         (center_x, center_y),
         POINTER_RADIUS_PIXELS,
-        POINTER_COLOR_BGR,
+        color,
         POINTER_THICKNESS,
     )
     cv2.line(
         data,
         (center_x - POINTER_RADIUS_PIXELS, center_y),
         (center_x + POINTER_RADIUS_PIXELS, center_y),
-        POINTER_COLOR_BGR,
+        color,
         POINTER_THICKNESS,
     )
     cv2.line(
         data,
         (center_x, center_y - POINTER_RADIUS_PIXELS),
         (center_x, center_y + POINTER_RADIUS_PIXELS),
-        POINTER_COLOR_BGR,
+        color,
         POINTER_THICKNESS,
     )
-    label = f"Puntero {position.x:.2f},{position.y:.2f}"
+    label = "Click" if clicking else f"Puntero {position.x:.2f},{position.y:.2f}"
     cv2.putText(
         data,
         label,
         (center_x + POINTER_TEXT_OFFSET_PIXELS, center_y),
         TEXT_FONT,
         TEXT_SCALE,
-        POINTER_COLOR_BGR,
+        color,
         TEXT_THICKNESS,
     )
 
@@ -165,7 +169,11 @@ class PointerOverlay(Processor):
     def process(self, context: FrameContext) -> FrameContext:
         """Dibuja el puntero; sin posicion no hace nada."""
         if context.pointer is not None:
-            _draw_pointer(data=context.frame.data, position=context.pointer)
+            _draw_pointer(
+                data=context.frame.data,
+                position=context.pointer,
+                clicking=context.clicking,
+            )
         return context
 
 

@@ -5,12 +5,15 @@ lo alimenta con los eventos confirmados de cada mano y resuelve la opcion activa
 con ``find_menu_match``.
 """
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from recognizer.core.domain.action import Action
 from recognizer.core.domain.gesture import GestureId
 from recognizer.core.domain.hand import Handedness, other_hand
+
+_diag_log = logging.getLogger("recognizer.menus_diag")
 
 __all__ = [
     "HandGestureTracker",
@@ -71,9 +74,26 @@ def find_menu_match(
     No muta el tracker: solo consulta el estado por mano.
     """
     for menu in menus:
-        if tracker.current(menu.hand) != menu.modifier:
+        modifier_hand_gesture = tracker.current(menu.hand)
+        modifier_ok = modifier_hand_gesture == menu.modifier
+        _diag_log.debug(
+            "[FIND-MATCH] menu=%s hand=%s need_modifier=%s have=%s -> %s",
+            menu.name,
+            menu.hand.value,
+            menu.modifier.value,
+            modifier_hand_gesture.value if modifier_hand_gesture else "None",
+            "MOD_OK" if modifier_ok else "MOD_FAIL",
+        )
+        if not modifier_ok:
             continue
-        trigger = tracker.current(other_hand(menu.hand))
+        other = other_hand(menu.hand)
+        trigger = tracker.current(other)
+        _diag_log.debug(
+            "[FIND-MATCH]   other_hand=%s trigger=%s options=%s",
+            other.value,
+            trigger.value if trigger else "None",
+            [o.value for o in menu.options],
+        )
         if trigger is None or trigger not in menu.options:
             continue
         return MenuMatch(menu=menu, trigger=trigger, action=menu.options[trigger])

@@ -7,6 +7,7 @@ from recognizer.core.actions.menus import (
     HandGestureTracker,
     Menu,
     MenuMatch,
+    _diag_log,
     find_menu_match,
     modifier_is_held,
     other_hand,
@@ -50,9 +51,24 @@ class GestureActionDispatcher:
                 if gesture == GESTURE_NONE:
                     return
                 self._tracker.observe(handedness, gesture)
+                tracker_state = {h: self._tracker.current(h) for h in Handedness}
+                _diag_log.debug(
+                    "[MENU-DIAG] GestureDetected: %s %s (conf=%.2f) | tracker=%s | last_match=%s",
+                    handedness.value,
+                    gesture.value,
+                    confidence,
+                    tracker_state,
+                    self._last_match,
+                )
                 found = find_menu_match(menus=self._menus, tracker=self._tracker)
                 if found is None:
-                    if modifier_is_held(menus=self._menus, tracker=self._tracker):
+                    mod_held = modifier_is_held(menus=self._menus, tracker=self._tracker)
+                    _diag_log.debug(
+                        "[MENU-DIAG] No menu match | modifier_held=%s | -> %s",
+                        mod_held,
+                        "suppress" if mod_held else "run_global",
+                    )
+                    if mod_held:
                         return
                     self._run_global(
                         gesture=gesture,
@@ -61,12 +77,19 @@ class GestureActionDispatcher:
                         timestamp=timestamp,
                     )
                     return
+                _diag_log.debug(
+                    "[MENU-DIAG] MENU MATCH: menu=%s trigger=%s action=%s",
+                    found.menu.name,
+                    found.trigger.value,
+                    type(found.action).__name__,
+                )
                 self._run_menu_match(
                     found=found,
                     confidence=confidence,
                     timestamp=timestamp,
                 )
                 if found.menu.consume_trigger:
+                    _diag_log.debug("[MENU-DIAG] consume_trigger=True -> skipping global")
                     return
                 self._run_global(
                     gesture=gesture,
@@ -75,6 +98,11 @@ class GestureActionDispatcher:
                     timestamp=timestamp,
                 )
             case GestureReleased(handedness=handedness):
+                _diag_log.debug(
+                    "[MENU-DIAG] GestureReleased: %s | tracker_before=%s",
+                    handedness.value,
+                    {h: self._tracker.current(h) for h in Handedness},
+                )
                 self._tracker.release(handedness)
                 if self._last_match is not None and self._last_match[0] == handedness:
                     self._last_match = None
@@ -91,6 +119,7 @@ class GestureActionDispatcher:
         trigger_hand = other_hand(found.menu.hand)
         key = (trigger_hand, found.menu.name, found.trigger)
         if key == self._last_match:
+            _diag_log.debug("[MENU-DIAG] anti-repetition: skip %s", key)
             return
         context = ActionContext(
             gesture=found.trigger,

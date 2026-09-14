@@ -68,6 +68,7 @@ def test_parser_defaults() -> None:
     assert args.no_window is False
     assert args.no_actions is False
     assert args.no_pointer is False
+    assert args.verbose is False
 
 
 def test_parser_reads_all_flags() -> None:
@@ -82,6 +83,7 @@ def test_parser_reads_all_flags() -> None:
             "--no-window",
             "--no-actions",
             "--no-pointer",
+            "--verbose",
         ]
     )
 
@@ -91,6 +93,7 @@ def test_parser_reads_all_flags() -> None:
     assert args.no_window is True
     assert args.no_actions is True
     assert args.no_pointer is True
+    assert args.verbose is True
 
 
 def test_no_window_without_frames_fails_before_side_effects(

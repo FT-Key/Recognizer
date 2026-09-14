@@ -9,3 +9,7 @@ class MouseController(Protocol):
     def move_to(self, *, x: float, y: float) -> None:
         """Mueve el puntero a la posicion normalizada (0..1); el adaptador recorta."""
         ...
+
+    def click(self) -> None:
+        """Realiza un click izquierdo en la posicion actual del puntero."""
+        ...

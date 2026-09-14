@@ -3,7 +3,7 @@
 from collections.abc import Callable
 from typing import Protocol, cast
 
-from pynput.mouse import Controller
+from pynput.mouse import Button, Controller
 
 from recognizer.core.errors import ActionError
 from recognizer.core.ports.mouse_controller import MouseController
@@ -25,6 +25,10 @@ class PositionController(Protocol):
     @position.setter
     def position(self, value: tuple[int, int]) -> None:
         """Mueve el puntero a la posicion indicada."""
+        ...
+
+    def click(self, button: Button) -> None:
+        """Realiza un click con el boton indicado."""
         ...
 
 
@@ -81,6 +85,18 @@ class PynputMouseController(MouseController):
             )
         except (OSError, ValueError, RuntimeError) as exc:
             msg = "No se pudo mover el puntero."
+            raise ActionError(msg) from exc
+
+    def click(self) -> None:
+        """Realiza un click izquierdo en la posicion actual del puntero.
+
+        Raises:
+            ActionError: si no se pudo realizar el click.
+        """
+        try:
+            self._controller.click(Button.left)
+        except (OSError, ValueError) as exc:
+            msg = "No se pudo realizar el click."
             raise ActionError(msg) from exc
 
     def _resolve_screen_size(self) -> tuple[int, int]:

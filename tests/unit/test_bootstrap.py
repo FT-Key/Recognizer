@@ -66,6 +66,7 @@ from recognizer.core.errors import ActionError, RecognizerError
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
 from recognizer.core.pipeline.landmark_rules import LandmarkRuleProcessor
+from recognizer.core.pipeline.pointer_click_detection import PointerClickDetectionProcessor
 from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
 from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.ports.event_bus import EventT
@@ -112,6 +113,9 @@ class RecordingMouseController:
 
     def move_to(self, *, x: float, y: float) -> None:
         self.moves.append((x, y))
+
+    def click(self) -> None:
+        pass
 
 
 class RecordingScriptRunner:
@@ -537,7 +541,10 @@ def test_build_pipeline_omits_pointer_processors_when_inactive(
     )
 
     assert not any(
-        isinstance(processor, (PointerDetectionProcessor, PointerOverlay))
+        isinstance(
+            processor,
+            (PointerDetectionProcessor, PointerClickDetectionProcessor, PointerOverlay),
+        )
         for processor in pipeline.processors
     )
 
@@ -556,6 +563,7 @@ def test_build_pipeline_with_pointer_appends_detector_and_overlay_last() -> None
         GestureDetectionProcessor,
         GestureStabilizerProcessor,
         PointerDetectionProcessor,
+        PointerClickDetectionProcessor,
         LandmarkOverlay,
         GestureOverlay,
         PointerOverlay,
@@ -743,6 +751,7 @@ def test_build_pipeline_with_pointer_places_menu_overlay_before_pointer_overlay(
         GestureDetectionProcessor,
         GestureStabilizerProcessor,
         PointerDetectionProcessor,
+        PointerClickDetectionProcessor,
         LandmarkOverlay,
         GestureOverlay,
         MenuOverlay,

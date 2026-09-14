@@ -43,3 +43,13 @@ class PointerMoved(DomainEvent):
 
     x: float
     y: float
+
+
+@dataclass(frozen=True, slots=True)
+class PointerClicked(DomainEvent):
+    """Pinch detectado: pulgar e indice juntos mientras el puntero esta activo."""
+
+
+@dataclass(frozen=True, slots=True)
+class PointerReleased(DomainEvent):
+    """Pinch liberado: pulgar e indice se separaron."""

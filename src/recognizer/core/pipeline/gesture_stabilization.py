@@ -1,5 +1,6 @@
 """Processor que estabiliza gestos por lateralidad y publica sus cambios."""
 
+import logging
 from dataclasses import dataclass, replace
 
 from recognizer.core.domain.events import GestureDetected, GestureReleased
@@ -13,6 +14,8 @@ from recognizer.core.domain.hand import Handedness
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.processor import Processor
 from recognizer.core.ports.event_bus import EventBus
+
+_stab_log = logging.getLogger("recognizer.stabilizer_diag")
 
 TRACKED_HANDEDNESSES: tuple[Handedness, ...] = (Handedness.LEFT, Handedness.RIGHT)
 INITIAL_FRAME_COUNT = 0
@@ -114,6 +117,12 @@ class GestureStabilizerProcessor(Processor):
             else:
                 state.candidate = observation.name
                 state.candidate_frames = 1
+                _stab_log.debug(
+                    "[STAB-DIAG] %s NEW candidate=%s confirmed=%s",
+                    handedness.value,
+                    observation.name.value,
+                    state.confirmed.value if state.confirmed else "None",
+                )
             if state.candidate_frames >= self._stabilization_frames:
                 self._confirm(
                     handedness=handedness,
@@ -129,6 +138,11 @@ class GestureStabilizerProcessor(Processor):
         if state.confirmed is not None:
             state.missing_frames += 1
             if state.missing_frames >= self._release_frames:
+                _stab_log.debug(
+                    "[STAB-DIAG] RELEASE %s: %s",
+                    handedness.value,
+                    state.confirmed.value,
+                )
                 self._bus.publish(
                     GestureReleased(
                         timestamp=timestamp,
@@ -147,6 +161,13 @@ class GestureStabilizerProcessor(Processor):
         timestamp: float,
     ) -> None:
         previous = state.confirmed
+        _stab_log.debug(
+            "[STAB-DIAG] CONFIRM %s: %s (conf=%.2f) prev=%s",
+            handedness.value,
+            observation.name.value,
+            observation.confidence,
+            previous.value if previous else "None",
+        )
         if previous is not None and previous != observation.name:
             self._bus.publish(
                 GestureReleased(timestamp=timestamp, gesture=previous, handedness=handedness)

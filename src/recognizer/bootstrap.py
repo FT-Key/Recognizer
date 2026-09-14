@@ -46,7 +46,9 @@ from recognizer.core.pipeline.builder import Pipeline, PipelineBuilder
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
 from recognizer.core.pipeline.landmark_rules import LandmarkRule, LandmarkRuleProcessor
+from recognizer.core.pipeline.pointer_click_detection import PointerClickDetectionProcessor
 from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
+from recognizer.core.pointer.clicker import PointerClicker
 from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.pointer.smoothing import create_smoothing
 from recognizer.core.ports.command_runner import CommandRunner
@@ -136,6 +138,13 @@ def build_pipeline(
                     ),
                     smoothing=create_smoothing(kind=pointer.smoothing, alpha=pointer.alpha),
                     activation_gesture=gesture_catalog.require(pointer.activation_gesture),
+                )
+            )
+            builder.add(
+                PointerClickDetectionProcessor(
+                    bus=bus,
+                    activation_gesture=gesture_catalog.require(pointer.activation_gesture),
+                    thumb_open_threshold=pointer.thumb_open_threshold,
                 )
             )
         builder.add(LandmarkOverlay())
@@ -235,6 +244,23 @@ def build_pointer_mover(
     if not pointer.enabled:
         return None
     return PointerMover(
+        controller=controller or PynputMouseController(),
+        gate=gate,
+        logger=logger,
+    )
+
+
+def build_pointer_clicker(
+    *,
+    pointer: PointerConfig,
+    gate: ActionGate | None = None,
+    controller: MouseController | None = None,
+    logger: logging.Logger | None = None,
+) -> PointerClicker | None:
+    """Construye el clicker del puntero si esta habilitado; el caller lo suscribe."""
+    if not pointer.enabled:
+        return None
+    return PointerClicker(
         controller=controller or PynputMouseController(),
         gate=gate,
         logger=logger,

@@ -5,6 +5,7 @@ Uso:
     uv run recognizer --no-actions     # deteccion y overlay sin ejecutar acciones
     uv run recognizer --no-window --frames 30
     uv run recognizer --device 1
+    uv run recognizer --verbose        # log DEBUG para calibrar gestos
 """
 
 import argparse
@@ -23,6 +24,7 @@ from recognizer.bootstrap import (
     ActionBindings,
     build_action_bindings,
     build_pipeline,
+    build_pointer_clicker,
     build_pointer_mover,
     resolve_camera_config,
 )
@@ -36,6 +38,7 @@ from recognizer.core.domain.events import (
     GestureDetected,
     GestureReleased,
     HandsDetected,
+    PointerClicked,
     PointerMoved,
 )
 from recognizer.core.domain.gesture import GestureId
@@ -112,6 +115,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="No mueve el puntero aunque este habilitado en config.",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Log detallado (DEBUG) para calibrar gestos y umbrales.",
+    )
     return parser
 
 
@@ -133,9 +141,12 @@ def _pointer_state(enabled: bool) -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Punto de entrada del comando `recognizer`."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    log_banner(LOGGER)
     args = _build_parser().parse_args(argv)
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(asctime)s %(levelname)s %(message)s",
+    )
+    log_banner(LOGGER)
     show_window = not args.no_window
 
     try:
@@ -178,6 +189,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 mover = build_pointer_mover(pointer=app_config.pointer, gate=gate)
                 if mover is not None:
                     bus.subscribe(PointerMoved, mover.handle)
+                clicker = build_pointer_clicker(pointer=app_config.pointer, gate=gate)
+                if clicker is not None:
+                    bus.subscribe(PointerClicked, clicker.handle)
 
             classifier = MediaPipeGestureClassifier(app_config.gestures)
             pipeline = build_pipeline(
