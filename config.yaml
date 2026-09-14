@@ -36,7 +36,14 @@ gestures:
   rule_thresholds:
     straight_angle_deg: 160.0
     direction_tolerance_deg: 30.0
-  # Reglas de ejemplo (descomenta `rules:` y mapea acciones en `actions.mappings`):
+  # Reglas geometricas activas. OK_Sign aproxima la senal OK (indice y pulgar
+  # doblados formando un circulo, medio/anular/menique extendidos); puede
+  # requerir calibracion con la camara real.
+  rules:
+    OK_Sign:
+      extended: [middle, ring, pinky]
+      folded: [index, thumb]
+  # Mas reglas de ejemplo (anade aqui y mapea en `actions.mappings`):
   # rules:
   #   L_Sign:
   #     extended: [thumb, index]
@@ -105,13 +112,25 @@ actions:
   # la izquierda sostenga el modificador, puede ejecutar tambien su accion global.
   menus:
     # Gesto compuesto: con la IZQUIERDA sosteniendo Pointing_Up, el gesto de la
-    # DERECHA ejecuta la opcion correspondiente de esta lista.
+    # DERECHA elige la posicion del video. Las teclas 0/4/7 de YouTube saltan al
+    # 0% / 40% / 70% de la duracion.
     Replay:
       hand: Left
       modifier: Pointing_Up
       consume_trigger: true
       options:
+        Pointing_Up:
+          type: script
+          path: scripts/actions/video_start.ps1
+          interpreter: powershell
+          args: ["-Key", "0"]
         Victory:
           type: script
           path: scripts/actions/video_start.ps1
           interpreter: powershell
+          args: ["-Key", "4"]
+        OK_Sign:
+          type: script
+          path: scripts/actions/video_start.ps1
+          interpreter: powershell
+          args: ["-Key", "7"]

@@ -19,6 +19,7 @@ import cv2
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.adapters.mediapipe_gesture_classifier import MediaPipeGestureClassifier
 from recognizer.bootstrap import build_pipeline, resolve_camera_config
+from recognizer.cli.console import log_banner, log_step
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.bus import InProcessEventBus
 from recognizer.core.config import GestureConfig
@@ -105,6 +106,7 @@ def _format_confirmed(confirmed: Counter[GestureId]) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     """Punto de entrada del comando `smoke`."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    log_banner(LOGGER)
     args = _build_parser().parse_args(argv)
     show_window = not args.no_window
 
@@ -112,15 +114,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not show_window and args.frames <= 0:
             msg = "Sin ventana no hay ESC: usa --frames > 0 junto con --no-window."
             raise RecognizerError(msg)
-        app_config = load_config(args.config)
-        camera_config = resolve_camera_config(app_config=app_config, device_override=args.device)
+        with log_step(LOGGER, "Cargando configuracion"):
+            app_config = load_config(args.config)
+            camera_config = resolve_camera_config(
+                app_config=app_config, device_override=args.device
+            )
         bus = InProcessEventBus()
         stats = _GestureStats()
         bus.subscribe(HandsDetected, stats.handle)
         bus.subscribe(GestureDetected, stats.handle)
         bus.subscribe(GestureReleased, stats.handle)
-        classifier = None if args.no_hands else MediaPipeGestureClassifier(app_config.gestures)
-        pipeline = _build_pipeline(classifier=classifier, bus=bus, gestures=app_config.gestures)
+        with log_step(LOGGER, "Preparando pipeline de gestos"):
+            classifier = None if args.no_hands else MediaPipeGestureClassifier(app_config.gestures)
+            pipeline = _build_pipeline(classifier=classifier, bus=bus, gestures=app_config.gestures)
 
         def _log_progress(count: int, fps: float) -> None:
             LOGGER.info(
@@ -132,9 +138,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         with ExitStack() as stack:
-            camera = stack.enter_context(OpenCVCamera(camera_config))
+            with log_step(LOGGER, f"Abriendo camara (device={camera_config.device_index})"):
+                camera = stack.enter_context(OpenCVCamera(camera_config))
             if classifier is not None:
-                stack.enter_context(classifier)
+                with log_step(LOGGER, "Cargando modelo de gestos"):
+                    stack.enter_context(classifier)
+            LOGGER.info("Listo. Pulsa ESC o q para salir.")
             frames, fps = run_camera_loop(
                 camera,
                 pipeline=pipeline,

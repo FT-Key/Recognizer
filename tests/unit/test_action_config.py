@@ -346,6 +346,27 @@ def test_repo_config_loads_replay_menu() -> None:
     assert menu.hand is Handedness.LEFT
     assert menu.modifier == "Pointing_Up"
     assert menu.consume_trigger is True
-    assert set(menu.options) == {"Victory"}
-    assert isinstance(menu.options["Victory"], ScriptActionConfig)
+    assert set(menu.options) == {"Pointing_Up", "Victory", "OK_Sign"}
+    assert menu.options["Pointing_Up"] == ScriptActionConfig(
+        path="scripts/actions/video_start.ps1",
+        args=("-Key", "0"),
+        interpreter=ScriptInterpreter.POWERSHELL,
+    )
+    assert menu.options["Victory"] == ScriptActionConfig(
+        path="scripts/actions/video_start.ps1",
+        args=("-Key", "4"),
+        interpreter=ScriptInterpreter.POWERSHELL,
+    )
+    assert menu.options["OK_Sign"] == ScriptActionConfig(
+        path="scripts/actions/video_start.ps1",
+        args=("-Key", "7"),
+        interpreter=ScriptInterpreter.POWERSHELL,
+    )
     assert app_config.gestures.swap_handedness is False
+
+
+def test_repo_config_declares_ok_sign_rule() -> None:
+    app_config = load_config(CONFIG_PATH)
+
+    assert "OK_Sign" in app_config.gestures.rules
+    assert app_config.gesture_catalog().require("OK_Sign").value == "OK_Sign"

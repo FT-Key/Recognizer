@@ -26,7 +26,7 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - `uv run lint` — ruff check + format. Esperado: sin errores.
 - `uv run typecheck` — mypy --strict. Esperado: "Success: no issues found".
 - `uv run test` — pytest unitario con cobertura (excluye los marcados `integration`).
-  Esperado de referencia (etapa 8): 442 passed, 2 deselected, cobertura 98.94%
+  Esperado de referencia (ajustes post-etapa 8): 445 passed, 2 deselected, cobertura 98.94%
   (umbral 80%).
 - `uv run check-arch` — import-linter. Esperado: 3/3 contratos KEPT.
 - `uv run pytest -m integration` — 2 tests reales de MediaPipe sin cámara:
@@ -186,6 +186,25 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Añadir una segunda opción a `menus.Replay.options` (p. ej. `Thumb_Up`) y verificar que
   se puede añadir otra con solo config.
 - [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.
+
+### Ajustes post-etapa 8 — arranque rápido y menú Replay
+
+- [ ] Arranque rápido: `uv run smoke --frames 30 --no-window` debe abrir la cámara en
+  menos de 1 s (antes 20-30 s por las hardware transforms de MSMF). El log de arranque
+  muestra el banner `R E C O G N I Z E R` y las etapas `Cargando configuracion`,
+  `Abriendo camara (device=N)` y `Cargando modelo de gestos` con su duración en ms.
+- [ ] Si la cámara abre pero no entrega fotogramas (`0xC00D3704`), comprobar que no haya
+  otra instancia de Recognizer, Chrome o la Cámara de Windows reteniendo el dispositivo.
+- [ ] Menú Replay (izquierda sosteniendo `Pointing_Up`) con las 3 opciones de la derecha:
+  - `Pointing_Up` → tecla `0` → video al inicio (0%).
+  - `Victory` → tecla `4` → video al 40%.
+  - `OK_Sign` → tecla `7` → video al 70%.
+  Comprobar que `Victory` ya NO mutea en este contexto (se consume) y que tras el salto el
+  video sigue reproduciéndose; revisar `scripts/actions/video_start.log` (muestra la tecla
+  enviada).
+- [ ] Calibrar el gesto `OK_Sign`: es una regla geométrica aproximada (medio/anular/meñique
+  extendidos, índice y pulgar doblados). Verificar en el overlay que se detecta al hacer la
+  señal OK; si no, ajustar `gestures.rules.OK_Sign` o `rule_thresholds.straight_angle_deg`.
 
 ## Notas de registro
 

@@ -1,27 +1,34 @@
-# video_start.ps1 - Devuelve al inicio (0:00) el video que se reproduce en Chrome.
+# video_start.ps1 - Salta a una posicion del video que se reproduce en Chrome.
 #
 # Pensado como accion `script` de Recognizer; no requiere dependencias externas.
+# Leyenda de YouTube: las teclas 0-9 saltan al 0%, 10% ... 90% de la duracion,
+# por eso la tecla elegida con -Key determina la posicion (0 = inicio, 4 = 40%,
+# 7 = 70%, ...).
 # Estrategia:
 #   1. Detectar la sesion de media en reproduccion de Chrome (WinRT GSMTC).
 #   2. Elegir su ventana (por titulo o la mas reciente) y traerla al frente.
-#   3. Pulsar la tecla `0` (no se hace clic en el video: el clic lo pausaria).
+#   3. Pulsar la tecla numerica indicada (no se hace clic: el clic pausaria).
 #   4. Si tras el salto el video quedo en pausa, reanudarlo con la tecla multimedia.
 # Registrar el resultado en scripts/actions/video_start.log.
 
 [CmdletBinding()]
-param()
+param(
+    [ValidatePattern('^[0-9]$')]
+    [string] $Key = '0'
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logPath = Join-Path $scriptDir 'video_start.log'
-$keyZeroVirtualKey = 0x30
+$digitVirtualKeyBase = 0x30
 $mediaPlayPauseVirtualKey = 0xB3
 $winrtTimeoutMilliseconds = 2000
 $focusWaitMilliseconds = 350
 $resumeWaitMilliseconds = 500
 $keyEventKeyUp = 0x0002
+$keyVirtualKey = [byte] ([int] $digitVirtualKeyBase + [int] $Key)
 
 function Write-Log {
     param([string] $Message)
@@ -149,9 +156,9 @@ try {
         exit 0
     }
 
-    [NativeMethods]::keybd_event([byte] $keyZeroVirtualKey, 0, 0, [UIntPtr]::Zero)
-    [NativeMethods]::keybd_event([byte] $keyZeroVirtualKey, 0, $keyEventKeyUp, [UIntPtr]::Zero)
-    Write-Log 'Tecla 0 enviada; el video deberia volver al inicio.'
+    [NativeMethods]::keybd_event([byte] $keyVirtualKey, 0, 0, [UIntPtr]::Zero)
+    [NativeMethods]::keybd_event([byte] $keyVirtualKey, 0, $keyEventKeyUp, [UIntPtr]::Zero)
+    Write-Log "Tecla $Key enviada; el video deberia saltar a su posicion."
     Start-Sleep -Milliseconds $resumeWaitMilliseconds
 
     if ((Get-ChromePlaybackStatus) -eq 'Paused') {
