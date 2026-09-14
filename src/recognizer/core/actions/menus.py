@@ -12,7 +12,14 @@ from recognizer.core.domain.action import Action
 from recognizer.core.domain.gesture import GestureId
 from recognizer.core.domain.hand import Handedness, other_hand
 
-__all__ = ["HandGestureTracker", "Menu", "MenuMatch", "find_menu_match", "other_hand"]
+__all__ = [
+    "HandGestureTracker",
+    "Menu",
+    "MenuMatch",
+    "find_menu_match",
+    "modifier_is_held",
+    "other_hand",
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,3 +78,17 @@ def find_menu_match(
             continue
         return MenuMatch(menu=menu, trigger=trigger, action=menu.options[trigger])
     return None
+
+
+def modifier_is_held(
+    *,
+    menus: Sequence[Menu],
+    tracker: HandGestureTracker,
+) -> bool:
+    """Indica si alguna mano sostiene el modificador de algun menu.
+
+    Con un modificador sostenido el menu esta "armado": la otra mano solo puede
+    elegir una opcion, y sus gestos desconocidos no deben ejecutar su accion
+    global (se comportan como acorde, no como gestos sueltos).
+    """
+    return any(tracker.current(menu.hand) == menu.modifier for menu in menus)

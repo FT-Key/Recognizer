@@ -10,6 +10,7 @@ from numpy.typing import NDArray
 from recognizer.core.config import (
     AngleConditionConfig,
     DirectionConditionConfig,
+    DistanceConditionConfig,
     GestureRuleConfig,
     RuleThresholdsConfig,
 )
@@ -42,6 +43,7 @@ from recognizer.core.domain.hand import (
     THUMB_IP_LANDMARK_INDEX,
     THUMB_MCP_LANDMARK_INDEX,
     THUMB_TIP_LANDMARK_INDEX,
+    WRIST_LANDMARK_INDEX,
     Handedness,
     HandLandmarks,
     Point,
@@ -56,6 +58,7 @@ from recognizer.core.pipeline.landmark_rules import (
     match_rules,
     matches_angle,
     matches_direction,
+    matches_distance,
 )
 
 STRAIGHT_ANGLE_DEG = 160.0
@@ -137,6 +140,23 @@ def _place_finger(
     points[vertex] = Point(x=CENTER, y=CENTER, z=0.0)
     tip_x, tip_y = (-unit_y, unit_x) if bent else (unit_x, unit_y)
     points[tip] = Point(x=CENTER + tip_x * FINGER_LENGTH, y=CENTER + tip_y * FINGER_LENGTH, z=0.0)
+
+
+# Escala de mano fija para las pruebas de distancia: muneca (0) a MCP del dedo
+# corazon (9) separadas 0.3; las puntas del pulgar (4) e indice (8) a la
+# distancia pedida en x, de modo que el ratio es ``tips_distance / 0.3``.
+_HAND_SCALE = 0.3
+_PINCH_Y = 0.4
+
+
+def _hand_with_pinch(*, tips_distance: float) -> list[Point]:
+    """Mano sintetica con las puntas de pulgar e indice a ``tips_distance``."""
+    points = _base_points()
+    points[WRIST_LANDMARK_INDEX] = Point(x=CENTER - _HAND_SCALE, y=CENTER, z=0.0)
+    points[MIDDLE_FINGER_MCP_LANDMARK_INDEX] = Point(x=CENTER, y=CENTER, z=0.0)
+    points[THUMB_TIP_LANDMARK_INDEX] = Point(x=CENTER, y=_PINCH_Y, z=0.0)
+    points[INDEX_FINGER_TIP_LANDMARK_INDEX] = Point(x=CENTER + tips_distance, y=_PINCH_Y, z=0.0)
+    return points
 
 
 def _hand(
@@ -237,6 +257,45 @@ def test_matches_angle_within_and_out_of_range() -> None:
 
     assert matches_angle(points=points, condition=inside)
     assert not matches_angle(points=points, condition=outside)
+
+
+def test_matches_distance_detects_pinch() -> None:
+    condition = DistanceConditionConfig(a=Finger.THUMB, b=Finger.INDEX, max_ratio=0.3)
+
+    close = _hand_with_pinch(tips_distance=0.06)
+    far = _hand_with_pinch(tips_distance=0.24)
+
+    assert matches_distance(points=close, condition=condition)
+    assert not matches_distance(points=far, condition=condition)
+
+
+def test_matches_distance_rejects_degenerate_scale() -> None:
+    condition = DistanceConditionConfig(a=Finger.THUMB, b=Finger.INDEX, max_ratio=0.5)
+    collapsed = _base_points()
+
+    assert not matches_distance(points=collapsed, condition=condition)
+
+
+def test_matches_distance_rejects_wrong_point_count() -> None:
+    condition = DistanceConditionConfig(a=Finger.THUMB, b=Finger.INDEX, max_ratio=0.5)
+
+    with pytest.raises(ValueError, match="landmarks"):
+        matches_distance(points=_base_points()[:5], condition=condition)
+
+
+def test_evaluate_rule_with_distance_condition() -> None:
+    rule = _rule(
+        config=GestureRuleConfig(
+            distance=DistanceConditionConfig(a=Finger.THUMB, b=Finger.INDEX, max_ratio=0.3)
+        )
+    )
+
+    assert evaluate_rule(
+        points=_hand_with_pinch(tips_distance=0.06), rule=rule, thresholds=THRESHOLDS
+    )
+    assert not evaluate_rule(
+        points=_hand_with_pinch(tips_distance=0.24), rule=rule, thresholds=THRESHOLDS
+    )
 
 
 def test_evaluate_rule_requires_all_conditions() -> None:

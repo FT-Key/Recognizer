@@ -7,6 +7,7 @@ from recognizer.core.actions.menus import (
     Menu,
     MenuMatch,
     find_menu_match,
+    modifier_is_held,
     other_hand,
 )
 from recognizer.core.domain.action import Action, ActionContext
@@ -172,3 +173,26 @@ def test_find_menu_match_skips_menu_with_inactive_modifier() -> None:
     assert match is not None
     assert match.menu is active
     assert match.action is second_action
+
+
+def test_modifier_is_held_true_when_modifier_hand_matches() -> None:
+    menu = _menu()
+    tracker = HandGestureTracker()
+    tracker.observe(Handedness.LEFT, GESTURE_POINTING_UP)
+
+    assert modifier_is_held(menus=[menu], tracker=tracker)
+
+
+def test_modifier_is_held_false_without_modifier() -> None:
+    menu = _menu()
+    tracker = HandGestureTracker()
+    tracker.observe(Handedness.LEFT, GESTURE_OPEN_PALM)
+
+    assert not modifier_is_held(menus=[menu], tracker=tracker)
+
+
+def test_modifier_is_held_false_without_menus() -> None:
+    tracker = HandGestureTracker()
+    tracker.observe(Handedness.LEFT, GESTURE_POINTING_UP)
+
+    assert not modifier_is_held(menus=[], tracker=tracker)

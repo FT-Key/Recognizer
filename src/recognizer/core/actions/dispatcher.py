@@ -8,6 +8,7 @@ from recognizer.core.actions.menus import (
     Menu,
     MenuMatch,
     find_menu_match,
+    modifier_is_held,
     other_hand,
 )
 from recognizer.core.actions.noop import NoOpAction
@@ -51,6 +52,8 @@ class GestureActionDispatcher:
                 self._tracker.observe(handedness, gesture)
                 found = find_menu_match(menus=self._menus, tracker=self._tracker)
                 if found is None:
+                    if modifier_is_held(menus=self._menus, tracker=self._tracker):
+                        return
                     self._run_global(
                         gesture=gesture,
                         confidence=confidence,

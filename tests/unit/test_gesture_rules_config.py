@@ -7,6 +7,7 @@ from recognizer.core.config import (
     AngleConditionConfig,
     AppConfig,
     DirectionConditionConfig,
+    DistanceConditionConfig,
     GestureRuleConfig,
 )
 from recognizer.core.domain.gesture import (
@@ -74,6 +75,33 @@ def test_rule_parses_direction_and_angle_conditions() -> None:
         b=Finger.INDEX,
         min_deg=50.0,
         max_deg=110.0,
+    )
+
+
+def test_distance_condition_rejects_same_finger() -> None:
+    with pytest.raises(ValidationError, match="dos dedos distintos"):
+        DistanceConditionConfig(a=Finger.THUMB, b=Finger.THUMB, max_ratio=0.3)
+
+
+@pytest.mark.parametrize("max_ratio", [0.0, -0.1, 1.1])
+def test_distance_condition_rejects_invalid_ratio(max_ratio: float) -> None:
+    with pytest.raises(ValidationError):
+        DistanceConditionConfig(a=Finger.THUMB, b=Finger.INDEX, max_ratio=max_ratio)
+
+
+def test_rule_parses_distance_condition() -> None:
+    rule = GestureRuleConfig.model_validate(
+        {
+            "extended": ["middle"],
+            "folded": ["index"],
+            "distance": {"a": "thumb", "b": "index", "max_ratio": 0.35},
+        }
+    )
+
+    assert rule.distance == DistanceConditionConfig(
+        a=Finger.THUMB,
+        b=Finger.INDEX,
+        max_ratio=0.35,
     )
 
 

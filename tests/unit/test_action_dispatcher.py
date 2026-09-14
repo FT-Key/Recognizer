@@ -18,6 +18,7 @@ from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     GESTURE_OPEN_PALM,
     GESTURE_POINTING_UP,
+    GESTURE_THUMB_UP,
     GESTURE_VICTORY,
     GestureId,
 )
@@ -257,6 +258,41 @@ def test_single_hand_runs_global_mapping_with_menus_configured() -> None:
 
     assert menu_action.contexts == []
     assert len(global_victory.contexts) == 1
+
+
+def test_menu_modifier_suppresses_global_action_for_non_option_gesture() -> None:
+    global_thumb = RecordingAction()
+    menu = _menu(action=RecordingAction())
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_THUMB_UP: global_thumb},
+        menus=[menu],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_THUMB_UP))
+
+    assert global_thumb.contexts == []
+
+
+def test_menu_modifier_releases_global_action_after_modifier_release() -> None:
+    global_thumb = RecordingAction()
+    menu = _menu(action=RecordingAction())
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_THUMB_UP: global_thumb},
+        menus=[menu],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(
+        GestureReleased(
+            timestamp=TIMESTAMP,
+            gesture=GESTURE_POINTING_UP,
+            handedness=Handedness.LEFT,
+        )
+    )
+    dispatcher.handle(_detected(GESTURE_THUMB_UP))
+
+    assert len(global_thumb.contexts) == 1
 
 
 def test_menu_option_action_error_is_logged_and_not_propagated(

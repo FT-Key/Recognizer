@@ -36,13 +36,14 @@ gestures:
   rule_thresholds:
     straight_angle_deg: 160.0
     direction_tolerance_deg: 30.0
-  # Reglas geometricas activas. OK_Sign aproxima la senal OK (indice y pulgar
-  # doblados formando un circulo, medio/anular/menique extendidos); puede
-  # requerir calibracion con la camara real.
+  # Reglas geometricas activas. OK_Sign = senal OK: indice y pulgar se tocan
+  # (pinza) mientras medio/anular/menique estan extendidos. La distancia se
+  # normaliza por el tamano de la mano; ajusta max_ratio si no dispara.
   rules:
     OK_Sign:
       extended: [middle, ring, pinky]
-      folded: [index, thumb]
+      folded: [index]
+      distance: {a: thumb, b: index, max_ratio: 0.35}
   # Mas reglas de ejemplo (anade aqui y mapea en `actions.mappings`):
   # rules:
   #   L_Sign:

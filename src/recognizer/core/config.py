@@ -112,6 +112,28 @@ class AngleConditionConfig(BaseModel):
         return self
 
 
+class DistanceConditionConfig(BaseModel):
+    """Condicion de regla: las puntas de dos dedos estan mas cerca que un umbral.
+
+    La distancia se normaliza por el tamano de la mano (muneca -> MCP del dedo
+    corazon), de modo que ``max_ratio`` es invariante a la distancia a la camara.
+    Sirve para gestos de pinza como la senal OK (pulgar e indice).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    a: Finger
+    b: Finger
+    max_ratio: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def _validate_distinct_fingers(self) -> Self:
+        if self.a is self.b:
+            msg = "La condicion de distancia requiere dos dedos distintos."
+            raise ValueError(msg)
+        return self
+
+
 class GestureRuleConfig(BaseModel):
     """Regla declarativa que describe un gesto personalizado."""
 
@@ -121,6 +143,7 @@ class GestureRuleConfig(BaseModel):
     folded: tuple[Finger, ...] = ()
     direction: DirectionConditionConfig | None = None
     angle: AngleConditionConfig | None = None
+    distance: DistanceConditionConfig | None = None
 
     @model_validator(mode="after")
     def _validate_fingers(self) -> Self:
@@ -131,8 +154,17 @@ class GestureRuleConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_conditions(self) -> Self:
-        if not self.extended and not self.folded and self.direction is None and self.angle is None:
-            msg = "Una regla requiere al menos una condicion (extended, folded, direction o angle)."
+        if (
+            not self.extended
+            and not self.folded
+            and self.direction is None
+            and self.angle is None
+            and self.distance is None
+        ):
+            msg = (
+                "Una regla requiere al menos una condicion "
+                "(extended, folded, direction, angle o distance)."
+            )
             raise ValueError(msg)
         return self
 
