@@ -17,3 +17,4 @@ class FrameContext:
     detections: tuple[DetectedGesture, ...] = ()
     gestures: tuple[StableGesture, ...] = ()
     pointer: PointerPosition | None = None
+    clicking: bool = False

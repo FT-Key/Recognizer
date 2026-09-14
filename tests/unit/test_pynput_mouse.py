@@ -3,6 +3,7 @@
 import tkinter
 
 import pytest
+from pynput.mouse import Button
 
 from recognizer.adapters.pynput_mouse import PynputMouseController
 from recognizer.core.errors import ActionError
@@ -20,6 +21,7 @@ class RecordingPositionController:
 
     def __init__(self) -> None:
         self._position: tuple[int, int] = (-1, -1)
+        self.clicks: list[Button] = []
 
     @property
     def position(self) -> tuple[int, int]:
@@ -28,6 +30,9 @@ class RecordingPositionController:
     @position.setter
     def position(self, value: tuple[int, int]) -> None:
         self._position = value
+
+    def click(self, button: Button) -> None:
+        self.clicks.append(button)
 
 
 class FailingPositionController:
@@ -40,6 +45,11 @@ class FailingPositionController:
     @position.setter
     def position(self, value: tuple[int, int]) -> None:
         del value
+        msg = "sin mouse"
+        raise OSError(msg)
+
+    def click(self, button: Button) -> None:
+        del button
         msg = "sin mouse"
         raise OSError(msg)
 
@@ -131,6 +141,25 @@ def test_controller_error_becomes_action_error() -> None:
 
     with pytest.raises(ActionError, match="No se pudo mover el puntero"):
         mouse.move_to(x=0.5, y=0.5)
+
+
+def test_click_presses_left_button() -> None:
+    controller = RecordingPositionController()
+    mouse = _mouse(controller, ScreenSizeProvider((SCREEN_WIDTH, SCREEN_HEIGHT)))
+
+    mouse.click()
+
+    assert controller.clicks == [Button.left]
+
+
+def test_click_error_becomes_action_error() -> None:
+    mouse = _mouse(
+        FailingPositionController(),
+        ScreenSizeProvider((SCREEN_WIDTH, SCREEN_HEIGHT)),
+    )
+
+    with pytest.raises(ActionError, match="No se pudo realizar el click"):
+        mouse.click()
 
 
 def test_default_screen_size_uses_tkinter(monkeypatch: pytest.MonkeyPatch) -> None:

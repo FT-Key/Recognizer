@@ -5,6 +5,7 @@ regla (dedos extendidos/doblados, direccion y angulo entre dedos) se evaluan
 sobre los 21 puntos normalizados que ya produce el detector de manos.
 """
 
+import logging
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -48,6 +49,8 @@ from recognizer.core.domain.hand import (
 )
 from recognizer.core.pipeline.context import FrameContext
 from recognizer.core.pipeline.processor import Processor
+
+_rule_log = logging.getLogger("recognizer.rules_diag")
 
 # Coordenadas de imagen: x crece a la derecha e y crece hacia abajo. Por eso
 # "arriba" es -90 grados en la convencion de atan2(dy, dx).
@@ -332,6 +335,14 @@ class LandmarkRuleProcessor(Processor):
 
     def _detect(self, *, hand: HandLandmarks, model: DetectedGesture | None) -> DetectedGesture:
         rule = match_rules(points=hand.points, rules=self._rules, thresholds=self._thresholds)
+        if rule is not None:
+            _rule_log.debug(
+                "[RULE-DIAG] hand=%s RULE_MATCH=%s model=%s priority=%s",
+                hand.handedness.value,
+                rule.gesture.value,
+                model.name.value if model else "None",
+                self._priority.value,
+            )
         if self._priority is RulesPriority.RULES_FIRST:
             if rule is not None:
                 return self._from_rule(hand=hand, rule=rule)

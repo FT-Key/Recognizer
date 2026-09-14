@@ -58,12 +58,17 @@ gestures:
 # Puntero virtual: mueve el cursor del sistema con la punta del indice mientras
 # el gesto de activacion esta confirmado. La zona activa (0..1) se proyecta
 # sobre toda la pantalla; mirror_x corrige la vista selfie de la camara.
+# Click: con el puntero activo, abre el pulgar (V con el indice) para presionar
+# y cierralo para soltar. thumb_open_threshold compara la distancia pulgar-MCP
+# del indice contra el tamano de la mano: subelo si no dispara, bajalo si
+# dispara solo.
 pointer:
   enabled: true
   activation_gesture: Pointing_Up
   mirror_x: true
   smoothing: ema
   alpha: 0.35
+  thumb_open_threshold: 0.5
   active_zone:
     x_min: 0.2
     x_max: 0.8

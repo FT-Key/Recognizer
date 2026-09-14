@@ -122,6 +122,19 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] FPS: `uv run smoke --frames 120 --no-window` (no mueve el ratón) comparado con las
   etapas previas bajo carga similar; anotar FPS medio y carga de CPU.
 
+### Click con pulgar abierto (post-etapa 8)
+
+- [ ] `uv run recognizer --verbose`: hacer `Pointing_Up` y abrir el pulgar (V con el
+  índice); el overlay debe mostrar la cruz verde + "Click" y en la consola deben aparecer
+  líneas `[CLICK] ratio=... umbral=... presionado=True`. Cerrar el pulgar → suelta.
+- [ ] Calibración de `pointer.thumb_open_threshold` en `config.yaml`: si el click no
+  dispara, bajar el umbral (ej: 0.4); si dispara sin querer, subirlo (ej: 0.6). Anotar
+  el valor final.
+- [ ] Verificar que el índice no se mueve al abrir/cerrar el pulgar: el cursor debe
+  quedarse en el mismo lugar mientras se mantiene `Pointing_Up`.
+- [ ] Click sostenido: abrir el pulgar, mover la mano (manteniendo el gesto) y verificar
+  que el click sigue presionado (útil para drag).
+
 ### Etapa 5 — gestos personalizados (reglas de landmarks)
 
 - [ ] Reglas en config: descomentar `rules:` en `config.yaml` con `L_Sign` y

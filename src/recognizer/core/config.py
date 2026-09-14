@@ -27,6 +27,7 @@ from recognizer.core.constants import (
     DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
+    DEFAULT_THUMB_OPEN_THRESHOLD,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
     URL_PREFIXES,
@@ -335,6 +336,7 @@ class PointerConfig(BaseModel):
     smoothing: SmoothingKind = SmoothingKind.EMA
     alpha: float = Field(default=DEFAULT_POINTER_SMOOTHING_ALPHA, gt=0, le=1)
     active_zone: ActiveZoneConfig = Field(default_factory=ActiveZoneConfig)
+    thumb_open_threshold: float = Field(default=DEFAULT_THUMB_OPEN_THRESHOLD, gt=0, le=2)
 
     @field_validator("activation_gesture")
     @classmethod
