@@ -1,0 +1,40 @@
+/* Recognizer Web — Variables de tema (claro/oscuro) */
+
+:root,
+:root[data-theme='dark'] {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #14142b;
+  --bg-card: #16213e;
+  --bg-elevated: #1f2b4d;
+  --text-primary: #e6e9ef;
+  --text-secondary: #94a3b8;
+  --accent: #00e676;
+  --accent-strong: #00c853;
+  --accent-soft: rgba(0, 230, 118, 0.16);
+  --blue: #42a5f5;
+  --yellow: #ffd600;
+  --red: #ff5252;
+  --border: #2a3550;
+  --shadow: rgba(0, 0, 0, 0.4);
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+
+:root[data-theme='light'] {
+  --bg-primary: #f4f6fb;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #eef2f9;
+  --text-primary: #101828;
+  --text-secondary: #5b6b83;
+  --accent: #00a152;
+  --accent-strong: #00803f;
+  --accent-soft: rgba(0, 161, 82, 0.12);
+  --blue: #1565c0;
+  --yellow: #b58900;
+  --red: #d32f2f;
+  --border: #d7deea;
+  --shadow: rgba(16, 24, 40, 0.12);
+  --radius: 10px;
+  --radius-sm: 6px;
+}

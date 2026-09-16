@@ -23,6 +23,7 @@ from recognizer.core.constants import (
     DEFAULT_POINTER_MIRROR_X,
     DEFAULT_POINTER_SMOOTHING_ALPHA,
     DEFAULT_RELEASE_FRAMES,
+    DEFAULT_REPEAT_SECONDS,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
     DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
     DEFAULT_STABILIZATION_FRAMES,
@@ -197,6 +198,7 @@ class MediaKeyActionConfig(BaseModel):
 
     type: Literal["media_key"] = "media_key"
     key: MediaKey
+    repeat_seconds: float = Field(default=DEFAULT_REPEAT_SECONDS, ge=0)
 
 
 class HotkeyActionConfig(BaseModel):
@@ -206,6 +208,7 @@ class HotkeyActionConfig(BaseModel):
 
     type: Literal["hotkey"] = "hotkey"
     keys: tuple[str, ...] = Field(min_length=1)
+    repeat_seconds: float = Field(default=DEFAULT_REPEAT_SECONDS, ge=0)
 
 
 class CommandActionConfig(BaseModel):

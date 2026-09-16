@@ -86,6 +86,20 @@ def _wrap_action(
     )
 
 
+def _extract_repeat_intervals(
+    actions: ActionsConfig,
+    catalog: GestureCatalog,
+) -> dict[GestureId, float]:
+    """Extrae los intervalos de repeticion de las acciones que lo configuran."""
+    intervals: dict[GestureId, float] = {}
+    for label, spec in actions.mappings.items():
+        repeat = getattr(spec, "repeat_seconds", None)
+        if repeat is not None and repeat > 0:
+            gesture_id = catalog.require(label)
+            intervals[gesture_id] = repeat
+    return intervals
+
+
 def build_pipeline(
     *,
     classifier: GestureClassifier | None,
@@ -94,6 +108,7 @@ def build_pipeline(
     pointer: PointerConfig | None = None,
     catalog: GestureCatalog | None = None,
     menus: Sequence[Menu] | None = None,
+    repeat_intervals: Mapping[GestureId, float] | None = None,
 ) -> Pipeline:
     """Construye el pipeline de deteccion, estabilizacion, puntero y overlay."""
     builder = PipelineBuilder()
@@ -123,6 +138,7 @@ def build_pipeline(
                 stabilization_frames=gestures.stabilization_frames,
                 release_frames=gestures.release_frames,
                 min_gesture_confidence=gestures.min_gesture_confidence,
+                repeat_intervals=repeat_intervals,
             )
         )
         if pointer is not None and pointer.enabled:

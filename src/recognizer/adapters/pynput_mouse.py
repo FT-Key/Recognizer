@@ -48,6 +48,15 @@ def _default_screen_size() -> tuple[int, int]:
         root.destroy()
 
 
+def screen_size() -> tuple[int, int]:
+    """Devuelve el tamano de pantalla del sistema en pixeles.
+
+    Raises:
+        RuntimeError: si no se puede consultar (p. ej. falta el runtime de Tk).
+    """
+    return _default_screen_size()
+
+
 def _scale_to_pixels(*, value: float, extent: int) -> int:
     """Escala una coordenada normalizada 0..1 al rango de pixeles disponible."""
     if extent < MIN_SCREEN_EXTENT:
@@ -83,7 +92,7 @@ class PynputMouseController(MouseController):
                 _scale_to_pixels(value=x, extent=width),
                 _scale_to_pixels(value=y, extent=height),
             )
-        except (OSError, ValueError, RuntimeError) as exc:
+        except (OSError, ValueError, RuntimeError, ImportError) as exc:
             msg = "No se pudo mover el puntero."
             raise ActionError(msg) from exc
 

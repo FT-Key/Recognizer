@@ -48,6 +48,15 @@ class FailingAction:
         raise ActionError(msg)
 
 
+class CrashingAction:
+    """Doble de Action que falla con un error inesperado (no ActionError)."""
+
+    def execute(self, context: ActionContext) -> None:
+        del context
+        msg = "crash inesperado"
+        raise ModuleNotFoundError(msg)
+
+
 def _detected(
     gesture: GestureId = GESTURE_VICTORY,
     *,
@@ -153,6 +162,18 @@ def test_action_error_is_logged_as_warning_and_not_propagated(
     assert record.levelno == logging.WARNING
     assert record.name == ACTION_LOGGER_NAME
     assert GESTURE_VICTORY.value in record.getMessage()
+
+
+def test_unexpected_action_error_is_logged_and_not_propagated(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    dispatcher = GestureActionDispatcher(actions={GESTURE_VICTORY: CrashingAction()})
+
+    with caplog.at_level(logging.ERROR, logger=ACTION_LOGGER_NAME):
+        dispatcher.handle(_detected())
+
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
+    assert any("inesperado" in record.getMessage().lower() for record in caplog.records)
 
 
 def test_menu_executes_option_and_consumes_global_trigger() -> None:

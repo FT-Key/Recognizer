@@ -6,6 +6,10 @@ __pycache__/
 dist/
 build/
 
+# Web (node)
+web/node_modules/
+web/dist/
+
 # Herramientas
 .mypy_cache/
 .ruff_cache/
@@ -18,6 +22,7 @@ htmlcov/
 models/*
 !models/README.md
 data/
+dataset/
 
 # Secretos y archivos locales
 .env

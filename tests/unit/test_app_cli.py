@@ -1,9 +1,12 @@
 """Tests del CLI de la app local, sin camara real ni acciones externas."""
 
 import logging
+import sys
+import tempfile
+import threading
 from collections import Counter
 from pathlib import Path
-from typing import cast
+from typing import ClassVar, cast
 
 import cv2
 import numpy as np
@@ -69,6 +72,180 @@ def test_parser_defaults() -> None:
     assert args.no_actions is False
     assert args.no_pointer is False
     assert args.verbose is False
+    assert args.health_port == app.DEFAULT_HEALTH_PORT_SOURCE
+
+
+def test_default_health_port_is_disabled_in_source() -> None:
+    assert app._default_health_port() == app.DEFAULT_HEALTH_PORT_SOURCE
+    assert app._default_config_path() == DEFAULT_CONFIG
+    assert app._is_frozen() is False
+
+
+def test_default_log_file_is_none_in_source() -> None:
+    assert app._default_log_file() is None
+
+
+def test_log_file_flag_is_parsed(tmp_path: Path) -> None:
+    target = tmp_path / "custom.log"
+    args = app._build_parser().parse_args(["--log-file", str(target)])
+
+    assert args.log_file == target
+
+
+def test_configure_logging_writes_to_file(tmp_path: Path) -> None:
+    log_path = tmp_path / "logs" / "recognizer.log"
+    root = logging.getLogger()
+    before = list(root.handlers)
+
+    try:
+        resolved = app._configure_logging(verbose=False, log_file=log_path)
+        assert resolved == log_path
+        logging.getLogger("recognizer.test").warning("mensaje de prueba")
+        for handler in root.handlers:
+            handler.flush()
+        assert log_path.is_file()
+        assert "mensaje de prueba" in log_path.read_text(encoding="utf-8")
+    finally:
+        for handler in list(root.handlers):
+            if handler not in before:
+                root.removeHandler(handler)
+                handler.close()
+
+
+def test_configure_logging_without_file_returns_none() -> None:
+    assert app._configure_logging(verbose=False, log_file=None) is None
+
+
+def test_log_screen_size_logs_dimensions(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(app, "screen_size", lambda: (1920, 1080))
+
+    with caplog.at_level(logging.INFO, logger=app.LOGGER.name):
+        app._log_screen_size()
+
+    assert any("1920x1080" in record.getMessage() for record in caplog.records)
+
+
+def test_log_screen_size_logs_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def failing_screen_size() -> tuple[int, int]:
+        msg = "sin tk"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(app, "screen_size", failing_screen_size)
+
+    with caplog.at_level(logging.ERROR, logger=app.LOGGER.name):
+        app._log_screen_size()
+
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
+
+
+def test_install_exception_hooks_logs_unhandled(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    original_sys_hook = sys.excepthook
+    original_thread_hook = threading.excepthook
+
+    try:
+        app._install_exception_hooks(app.LOGGER)
+        with caplog.at_level(logging.CRITICAL, logger=app.LOGGER.name):
+            sys.excepthook(RuntimeError, RuntimeError("boom"), None)
+
+        assert any("no controlada" in record.getMessage().lower() for record in caplog.records)
+    finally:
+        sys.excepthook = original_sys_hook
+        threading.excepthook = original_thread_hook
+
+
+def test_resolve_log_file_falls_back_to_temp_when_unwritable(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    blocked = tmp_path / "readonly"
+    original_mkdir = Path.mkdir
+
+    def selective_mkdir(
+        self: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        if self == blocked:
+            msg = "read-only"
+            raise OSError(msg)
+        original_mkdir(self, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", selective_mkdir)
+
+    resolved = app._resolve_log_file(blocked / "recognizer.log")
+
+    assert resolved.parent == Path(tempfile.gettempdir()) / app.LOGS_DIRNAME
+
+
+def test_health_port_flag_is_parsed() -> None:
+    args = app._build_parser().parse_args(["--health-port", "9000"])
+
+    assert args.health_port == 9000
+
+
+class FakeHealthServer:
+    """Doble del servidor de salud que registra arranque y parada."""
+
+    instances: ClassVar[list["FakeHealthServer"]] = []
+
+    def __init__(self, *, port: int, app_name: str, version: str) -> None:
+        self.port_arg = port
+        self.app_name = app_name
+        self.version = version
+        self.started = False
+        self.stopped = False
+        FakeHealthServer.instances.append(self)
+
+    def start(self) -> int:
+        self.started = True
+        return self.port_arg
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+def test_main_with_health_port_starts_and_stops_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves)
+    FakeHealthServer.instances = []
+    monkeypatch.setattr(app, "HealthServer", FakeHealthServer)
+
+    result = app.main(["--no-window", "--frames", "1", "--health-port", "9100"])
+
+    assert result == 0
+    assert len(FakeHealthServer.instances) == 1
+    instance = FakeHealthServer.instances[0]
+    assert instance.port_arg == 9100
+    assert instance.app_name == app.APP_NAME
+    assert instance.started is True
+    assert instance.stopped is True
+
+
+def test_main_without_health_port_does_not_start_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    moves: list[object] = []
+    _patch_main_dependencies(monkeypatch, captured=captured, moves=moves)
+    FakeHealthServer.instances = []
+    monkeypatch.setattr(app, "HealthServer", FakeHealthServer)
+
+    result = app.main(["--no-window", "--frames", "1"])
+
+    assert result == 0
+    assert FakeHealthServer.instances == []
 
 
 def test_parser_reads_all_flags() -> None:
@@ -247,8 +424,9 @@ def _patch_main_dependencies(
         pointer: object = None,
         catalog: object = None,
         menus: object = None,
+        repeat_intervals: object = None,
     ) -> Pipeline:
-        del classifier, gestures, catalog
+        del classifier, gestures, catalog, repeat_intervals
         captured["bus"] = bus
         captured["pipeline_pointer"] = pointer
         captured["menus"] = menus

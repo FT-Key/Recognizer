@@ -1,9 +1,11 @@
 """Processor que estabiliza gestos por lateralidad y publica sus cambios."""
 
 import logging
+import time
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 
-from recognizer.core.domain.events import GestureDetected, GestureReleased
+from recognizer.core.domain.events import GestureDetected, GestureHeld, GestureReleased
 from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     DetectedGesture,
@@ -31,6 +33,7 @@ class _SideState:
     candidate: GestureId | None = None
     candidate_frames: int = INITIAL_FRAME_COUNT
     missing_frames: int = INITIAL_FRAME_COUNT
+    last_hold_time: float = 0.0
 
     def reset_pending(self) -> None:
         """Limpia el candidato y los contadores de ausencia."""
@@ -43,10 +46,15 @@ class _SideState:
         self.confirmed = None
         self.confidence = INITIAL_CONFIDENCE
         self.missing_frames = INITIAL_FRAME_COUNT
+        self.last_hold_time = 0.0
 
 
 class GestureStabilizerProcessor(Processor):
-    """Confirma gestos tras N frames estables y los libera tras M ausencias."""
+    """Confirma gestos tras N frames estables y los libera tras M ausencias.
+
+    Cuando un gesto tiene ``repeat_seconds > 0`` en la configuracion, publica
+    ``GestureHeld`` periodicamente mientras se mantenga confirmado.
+    """
 
     def __init__(
         self,
@@ -55,11 +63,15 @@ class GestureStabilizerProcessor(Processor):
         stabilization_frames: int,
         release_frames: int,
         min_gesture_confidence: float,
+        repeat_intervals: Mapping[GestureId, float] | None = None,
+        clock: Callable[[], float] | None = None,
     ) -> None:
         self._bus = bus
         self._stabilization_frames = stabilization_frames
         self._release_frames = release_frames
         self._min_gesture_confidence = min_gesture_confidence
+        self._repeat_intervals = dict(repeat_intervals) if repeat_intervals else {}
+        self._clock = clock or time.monotonic
         self._states: dict[Handedness, _SideState] = {
             handedness: _SideState() for handedness in TRACKED_HANDEDNESSES
         }
@@ -109,6 +121,13 @@ class GestureStabilizerProcessor(Processor):
         if observation is not None and state.confirmed == observation.name:
             state.confidence = observation.confidence
             state.reset_pending()
+            self._maybe_emit_held(
+                handedness=handedness,
+                gesture=state.confirmed,
+                confidence=state.confidence,
+                state=state,
+                timestamp=timestamp,
+            )
             return
 
         if observation is not None:
@@ -183,6 +202,32 @@ class GestureStabilizerProcessor(Processor):
         state.confirmed = observation.name
         state.confidence = observation.confidence
         state.reset_pending()
+        state.last_hold_time = self._clock()
+
+    def _maybe_emit_held(
+        self,
+        *,
+        handedness: Handedness,
+        gesture: GestureId,
+        confidence: float,
+        state: _SideState,
+        timestamp: float,
+    ) -> None:
+        """Emite GestureHeld si el gesto tiene intervalo de repeticion configurado."""
+        interval = self._repeat_intervals.get(gesture)
+        if interval is None or interval <= 0:
+            return
+        now = self._clock()
+        if now - state.last_hold_time >= interval:
+            state.last_hold_time = now
+            self._bus.publish(
+                GestureHeld(
+                    timestamp=timestamp,
+                    gesture=gesture,
+                    confidence=confidence,
+                    handedness=handedness,
+                )
+            )
 
     def _stable_gestures(self) -> tuple[StableGesture, ...]:
         gestures: list[StableGesture] = []

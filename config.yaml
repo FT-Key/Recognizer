@@ -82,9 +82,11 @@ actions:
     Thumb_Up:
       type: media_key
       key: volume_up
+      repeat_seconds: 0.5
     Thumb_Down:
       type: media_key
       key: volume_down
+      repeat_seconds: 0.5
     Closed_Fist:
       type: media_key
       key: volume_mute

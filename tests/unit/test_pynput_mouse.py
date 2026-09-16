@@ -5,7 +5,7 @@ import tkinter
 import pytest
 from pynput.mouse import Button
 
-from recognizer.adapters.pynput_mouse import PynputMouseController
+from recognizer.adapters.pynput_mouse import PynputMouseController, screen_size
 from recognizer.core.errors import ActionError
 
 SCREEN_WIDTH = 1920
@@ -125,6 +125,20 @@ def test_screen_size_provider_error_becomes_action_error() -> None:
         mouse.move_to(x=0.5, y=0.5)
 
 
+def test_missing_screen_module_becomes_action_error() -> None:
+    def raise_import_error() -> tuple[int, int]:
+        msg = "No module named 'tkinter'"
+        raise ModuleNotFoundError(msg)
+
+    mouse = PynputMouseController(
+        controller=RecordingPositionController(),
+        screen_size=raise_import_error,
+    )
+
+    with pytest.raises(ActionError, match="No se pudo mover el puntero"):
+        mouse.move_to(x=0.5, y=0.5)
+
+
 def test_invalid_screen_size_becomes_action_error() -> None:
     controller = RecordingPositionController()
     mouse = _mouse(controller, ScreenSizeProvider(INVALID_SIZE))
@@ -185,3 +199,24 @@ def test_default_screen_size_uses_tkinter(monkeypatch: pytest.MonkeyPatch) -> No
     mouse.move_to(x=1.0, y=1.0)
 
     assert controller.position == (SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1)
+
+
+def test_screen_size_helper_returns_default_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeRoot:
+        """Doble de la raiz de tkinter, sin abrir ninguna ventana."""
+
+        def withdraw(self) -> None:
+            pass
+
+        def destroy(self) -> None:
+            pass
+
+        def winfo_screenwidth(self) -> int:
+            return SCREEN_WIDTH
+
+        def winfo_screenheight(self) -> int:
+            return SCREEN_HEIGHT
+
+    monkeypatch.setattr(tkinter, "Tk", FakeRoot)
+
+    assert screen_size() == (SCREEN_WIDTH, SCREEN_HEIGHT)
