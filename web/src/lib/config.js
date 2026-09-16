@@ -127,8 +127,8 @@ export const CONFIG = {
    */
   desktop: {
     healthUrl: 'http://127.0.0.1:8765/health',
-    /** Descarga de la app de escritorio (releases del repo). */
-    downloadUrl: 'https://github.com/FT-Key/Recognizer/releases',
+    /** Descarga de la app de escritorio (siempre la ultima release publicada). */
+    downloadUrl: 'https://github.com/FT-Key/Recognizer/releases/latest',
     probeTimeoutMs: 1200,
     probeIntervalMs: 15000,
   },
