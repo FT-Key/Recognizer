@@ -96,6 +96,25 @@
   (tkinter operativo en el bundle) y la ejecución headless termina limpia. Tests: 504
   passed, 98.54%.
 
+## Correcciones post-deploy (app web)
+Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
+- **No se reconocía ningún gesto / no había landmarks.** Causa: MediaPipe carga su WASM
+  con `importScripts()`, prohibido en Web Workers de tipo `module` (`Module scripts don't
+  support importScripts()`), así que el worker fallaba al iniciar. Solución: shim de
+  `importScripts` (XHR síncrono + `eval`) en `src/workers/gesture.worker.js`; funciona en
+  dev y en producción. Además se muestra un banner de error en la UI y se loguea en
+  consola el error del worker.
+- **Solo funcionaba `Open_Palm`.** Causa: el estabilizador web reiniciaba el buffer cada
+  frame al ver un gesto distinto del confirmado, de modo que ningún otro gesto llegaba a
+  confirmarse ni el anterior se liberaba. Solución: reescrito `src/lib/stabilizer.js` con
+  la semántica del `GestureStabilizerProcessor` (candidato N frames, liberación M frames,
+  reemplazo con `Release`+`Detected`). Verificado con un script Node.
+- **Overlay espejado.** Causa: el video se voltea con CSS (`scaleX(-1)`) pero el canvas
+  dibujaba los landmarks en coordenadas sin espejar. Solución: `landmarks.js` invierte `x`.
+- **Textos con `\uXXXX` literales** (`Acci\u00F3n`, `C\u00E1mara`): eran escapes dentro de
+  nodos de texto JSX. Reemplazados por caracteres UTF-8 reales.
+- Extra: solo los gestos con `repeat: true` (volumen) se re-disparan al sostenerse.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

@@ -65,7 +65,9 @@
   El `.exe` escribe `logs/recognizer.log` junto al ejecutable (config, pantalla, modelo y
   crashes). Bug del puntero en el `.exe` corregido: faltaba `tkinter` en el bundle (lo usa
   `pynput_mouse` para el tamaño de pantalla) y los fallos inesperados de acción/puntero ya
-  no tumban la app. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
+  no tumban la app. Web desplegada en Vercel y corregida: shim de `importScripts` para
+  MediaPipe en Web Worker, estabilizador con transición entre gestos, overlay espejado y
+  textos con escapes `\uXXXX`. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
   `docs/WEB-PLAN.md` y `docs/DESKTOP-APP-PLAN.md`.
 
 ## Siguiente (etapa 10 — enrolamiento y despliegue)
