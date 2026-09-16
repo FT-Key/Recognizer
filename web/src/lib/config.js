@@ -17,7 +17,9 @@ export const CONFIG = {
   },
 
   gestures: {
-    /** WASM del runtime de MediaPipe (debe coincidir con la versión de npm). */
+    /** Módulo JS de MediaPipe (para el import dinámico del worker clásico). */
+    moduleUrl: `${MEDIAPIPE_CDN}/vision_bundle.mjs`,
+    /** WASM del runtime de MediaPipe. */
     wasmUrl: `${MEDIAPIPE_CDN}/wasm`,
     /** Modelo por defecto (canned gestures de Google). */
     modelUrl:
@@ -72,9 +74,9 @@ export const CONFIG = {
         emoji: '\u270A',
       },
       Victory: {
-        action: 'navigation',
-        command: 'new_tab',
-        label: 'Nueva pesta\u00F1a',
+        action: 'ui',
+        command: 'toggle_theme',
+        label: 'Cambiar tema',
         emoji: '\u270C\uFE0F',
       },
       Pointing_Up: {
@@ -82,19 +84,16 @@ export const CONFIG = {
         command: 'scroll_up',
         label: 'Scroll arriba',
         emoji: '\u261D\uFE0F',
+        repeat: true,
+        repeatIntervalMs: 400,
       },
       ILoveYou: {
         action: 'navigation',
-        command: 'open_url',
-        url: 'https://www.youtube.com/watch?v=mlabBbn_fHI',
-        label: 'Abrir enlace',
-        emoji: '\uD83E\uDD1F',
-      },
-      OK_Sign: {
-        action: 'navigation',
         command: 'scroll_down',
         label: 'Scroll abajo',
-        emoji: '\uD83D\uDC4C',
+        emoji: '\uD83E\uDD1F',
+        repeat: true,
+        repeatIntervalMs: 400,
       },
     },
   },
