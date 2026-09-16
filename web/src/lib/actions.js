@@ -68,6 +68,8 @@ export function createDispatcher({ onAction } = {}) {
     } else if (mapping.action === 'navigation') {
       dispatchNavigation(mapping.command, mapping.url);
     }
+    // Las acciones 'ui' no tienen efecto directo aqui: la app las interpreta
+    // a traves de onAction (p. ej. cambiar el tema).
 
     onAction?.(mapping, { confidence, handedness });
   }

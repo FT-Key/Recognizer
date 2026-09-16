@@ -115,6 +115,22 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   nodos de texto JSX. Reemplazados por caracteres UTF-8 reales.
 - Extra: solo los gestos con `repeat: true` (volumen) se re-disparan al sostenerse.
 
+### Latencia (segundos de retraso) y ajuste de gestos
+- **Síntoma:** el overlay seguía la mano con segundos de retraso. Medido con Playwright:
+  la inferencia tarda ~90 ms/frame (~11 fps) y el hilo principal enviaba frames a 60 fps
+  sin límite → la cola de mensajes del worker crecía sin control.
+- **Causa y arreglo:** faltaba *backpressure*. Ahora se envía **como mucho un frame en
+  vuelo** (`frameInFlight`) y no se envía nada hasta que el worker responde `ready` (si no,
+  un frame descartado durante la carga dejaba la cola bloqueada). El worker responde
+  siempre a cada frame para no romper el backpressure.
+- **Worker:** se pasa a worker **clásico** con `import()` dinámico de MediaPipe desde el CDN
+  (`gestures.moduleUrl`), eliminando el shim de `importScripts` y la dependencia npm
+  `@mediapipe/tasks-vision`. Funciona igual en dev y producción.
+- **Mapeos web ajustados:** `Pointing_Up` → scroll arriba y `ILoveYou` → scroll abajo
+  (ambos continuos al sostener); `Victory` → cambiar tema claro/oscuro; se quita `OK_Sign`
+  (no es gesto canned del modelo). Se descartan `new_tab`/`open_url` porque `window.open()`
+  sin clic del usuario lo bloquea el navegador.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

@@ -124,9 +124,11 @@ Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
 - Mismo modelo de reconocimiento (`gesture_recognizer.task`)
 
 ### Qué es distinto
-- **Pointing_Up**: Web = scroll, Desktop = puntero del mouse
+- **Pointing_Up**: Web = scroll arriba, Desktop = puntero del mouse
 - **Thumb_Up**: Web = volumen del video, Desktop = volumen del sistema
-- **Victory**: Web = nueva pestaña, Desktop = hotkey
+- **Victory**: Web = cambiar tema, Desktop = hotkey
+- **ILoveYou**: Web = scroll abajo, Desktop = abrir enlace
+- **OK_Sign**: solo existe en escritorio (regla de landmarks, no es canned)
 - Desktop tiene acciones que la web no puede hacer (mouse, teclado, apps)
 
 Ver `docs/WEB-PLAN.md` para detalles de la versión web.

@@ -31,11 +31,17 @@ export default function App() {
   const { available: desktopAvailable } = useDesktopApp();
   const camera = useCamera(videoRef);
 
-  const handleAction = useCallback((mapping) => {
-    setFeedback({ label: mapping.label, emoji: mapping.emoji });
-    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
-    feedbackTimer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS);
-  }, []);
+  const handleAction = useCallback(
+    (mapping) => {
+      if (mapping.action === 'ui' && mapping.command === 'toggle_theme') {
+        toggle();
+      }
+      setFeedback({ label: mapping.label, emoji: mapping.emoji });
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+      feedbackTimer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS);
+    },
+    [toggle],
+  );
 
   const engine = useGestureEngine({
     videoRef,

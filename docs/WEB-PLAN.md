@@ -18,18 +18,24 @@ reconocimiento de gestos pero son implementaciones independientes:
 
 | Gesto | Web (sandbox) | Desktop (SO completo) |
 |---|---|---|
-| `Pointing_Up` | Scroll arriba en la página | Mover puntero del mouse |
+| `Pointing_Up` | Scroll arriba (continuo al sostener) | Mover puntero del mouse |
 | `Thumb_Up` | Subir volumen del video embebido | Subir volumen del sistema |
 | `Thumb_Down` | Bajar volumen del video embebido | Bajar volumen del sistema |
 | `Closed_Fist` | Mute del video embebido | Mute del sistema |
 | `Open_Palm` | Play/pause del video embebido | Play/pause multimedia del sistema |
-| `Victory` | Abrir nueva pestaña | Enviar hotkey (Ctrl+Shift+M) |
-| `ILoveYou` | Abrir enlace en nueva pestaña | Abrir enlace con Chrome |
-| `OK_Sign` | Scroll abajo en la página | (personalizable) |
+| `Victory` | Cambiar tema claro/oscuro | Enviar hotkey (Ctrl+Shift+M) |
+| `ILoveYou` | Scroll abajo (continuo al sostener) | Abrir enlace con Chrome |
 
 El navegador impone un **sandbox de seguridad** que impide mover el mouse del sistema,
 enviar teclas a otras apps, controlar el volumen del sistema o abrir aplicaciones de
 escritorio. Por eso la web solo controla contenido **dentro de su propia pestaña**.
+
+Notas:
+- `window.open()` (abrir pestañas/enlaces) lo bloquea el navegador cuando no hay un
+  clic del usuario: los gestos llegan de forma asíncrona, así que en la web se usan
+  solo acciones dentro de la página.
+- `OK_Sign` no es un gesto "canned" del modelo de MediaPipe (solo existe en escritorio
+  vía reglas geométricas), por eso se quitó de la web.
 
 ## Estructura de la app web (React)
 
@@ -71,7 +77,7 @@ web/
    - El hilo principal transfiere `ImageBitmap` por frame (`requestAnimationFrame`).
 3. **Estabilización** idéntica a la app de escritorio (N=5 confirmación, M=5 liberación).
 4. **Acciones del navegador**: control de un video YouTube embebido (play/pause,
-   volumen, mute) y navegación (nueva pestaña, scroll).
+   volumen, mute), scroll en la página (continuo al sostener) y cambio de tema.
 5. **Overlay** de landmarks, lateralidad, gesto y FPS en canvas de alto DPI.
 6. **Tema claro/oscuro** con persistencia en `localStorage`.
 7. **Banner dinámico**: sondea `http://127.0.0.1:8765/health`; si la app de escritorio
@@ -134,9 +140,10 @@ npx vercel --prod    # o conectar el repo a Vercel
 1. **`importScripts` en Web Workers de módulo.** MediaPipe carga su WASM con
    `importScripts()`, que existe en un worker de tipo `module` pero lanza
    `Module scripts don't support importScripts()`. Solución: `src/workers/gesture.worker.js`
-   instala un shim que reemplaza `importScripts` por una carga síncrona (XHR + `eval`),
-   que es lo que hace internamente. Así funciona igual en `vite dev` (worker módulo) y en
-   el build de producción.
+   es un **worker clásico** (sin imports ESM estáticos) que carga MediaPipe con `import()`
+   dinámico desde el CDN (`gestures.moduleUrl`) y deja que use `importScripts()` nativo.
+   Así funciona idéntico en `vite dev` y en el build de producción, sin shims.
+   (No se usa `@mediapipe/tasks-vision` de npm para evitar que Vite lo empaquete como ESM.)
 2. **Overlay espejado.** El `<video>` se muestra espejado (selfie) con `scaleX(-1)`, pero
    los landmarks llegan en el espacio de la imagen original. Solución: `landmarks.js`
    invierte `x` (`1 - x`) al dibujar geometría; el texto se mantiene legible.

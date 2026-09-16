@@ -1,37 +1,17 @@
 /**
  * Recognizer Web — Web Worker de reconocimiento de gestos.
  *
- * Corre MediaPipe Tasks Vision fuera del hilo de UI para no bloquear el render.
- * El hilo principal transfiere ImageBitmap por cada frame nuevo; el worker
- * devuelve gestos, landmarks y lateralidad.
+ * Worker CLASICO (sin imports ESM estaticos) para que funcione identico en
+ * `vite dev` y en el build: MediaPipe se carga con import() dinamico desde el
+ * CDN y su WASM con el importScripts() nativo del worker clasico.
+ *
+ * El hilo principal transfiere ImageBitmap por cada frame nuevo (con
+ * backpressure: como mucho un frame en vuelo); el worker devuelve gestos,
+ * landmarks y lateralidad.
  */
 
-import { FilesetResolver, GestureRecognizer } from '@mediapipe/tasks-vision';
-
-/**
- * MediaPipe carga su WASM con `importScripts()`, que en un worker de modulo
- * existe pero lanza ("Module scripts don't support importScripts()"). Lo
- * sustituimos por una carga sincrona via XHR + eval, que es lo que hace
- * `importScripts` internamente, para que funcione en dev y en produccion.
- */
-function installImportScriptsShim() {
-  if (typeof self.importScripts !== 'function') return;
-
-  self.importScripts = (...urls) => {
-    for (const url of urls) {
-      const xhr = new XMLHttpRequest();
-      xhr.open('GET', url, false);
-      xhr.send(null);
-      if (xhr.status < 200 || xhr.status >= 300) {
-        throw new Error(`No se pudo cargar ${url} (${xhr.status})`);
-      }
-      (0, eval)(xhr.responseText);
-    }
-  };
-}
-
-installImportScriptsShim();
-
+let FilesetResolver = null;
+let GestureRecognizer = null;
 let recognizer = null;
 let lastTimestamp = -1;
 let activeDelegate = null;
@@ -61,7 +41,15 @@ function parseResult(result) {
   return { gestures, landmarks, handednesses };
 }
 
+async function ensureMediaPipe(moduleUrl) {
+  if (GestureRecognizer) return;
+  const mod = await import(/* @vite-ignore */ moduleUrl);
+  FilesetResolver = mod.FilesetResolver;
+  GestureRecognizer = mod.GestureRecognizer;
+}
+
 async function createRecognizer(options) {
+  await ensureMediaPipe(options.moduleUrl);
   const vision = await FilesetResolver.forVisionTasks(options.wasmUrl);
   const buildOptions = (delegate) => ({
     baseOptions: { modelAssetPath: options.modelUrl, delegate },
@@ -92,7 +80,9 @@ async function handleInit(message) {
 
 function handleFrame(message) {
   if (!recognizer) {
+    // Aun no listo: responder vacio para no bloquear el backpressure del cliente.
     message.bitmap?.close();
+    self.postMessage({ type: 'result', gestures: [], landmarks: [], handednesses: [] });
     return;
   }
   const timestamp = Math.max(message.timestamp, lastTimestamp + 1);
