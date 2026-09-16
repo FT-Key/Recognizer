@@ -131,6 +131,55 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   (no es gesto canned del modelo). Se descartan `new_tab`/`open_url` porque `window.open()`
   sin clic del usuario lo bloquea el navegador.
 
+## Rediseño de la web (design system Vintage) + playlist
+
+- **Skill de diseño:** se incorporó `.opencode/skills/vintage/` (SKILL.md + DESIGN.md,
+  autor typeui.sh, MIT) y se aplicaron sus tokens: plateado `#C0C0C0`, teal `#008080`,
+  tipografía pixel `Silkscreen` + `JetBrains Mono`, biseles skeuomórficos, textura con
+  grano y scanlines. Tokens en `src/styles/theme.css` (claro por defecto + oscuro).
+- **Dos páginas** con router por hash (`useHashRoute`, sin dependencias): **Inicio** y
+  **Sobre mí** (navbar + footer nuevos). Al salir de Inicio se apaga la cámara.
+- **Playlist de YouTube:** `lib/playlist.js` sanitiza enlaces (escritorio y móvil) y
+  guarda en `localStorage` solo `{id, title}`; `PlaylistManager` permite agregar/quitar y
+  elegir el video actual; el gesto `ILoveYou` pasa al siguiente.
+- **Gestos web ajustados:** `Closed_Fist` → scroll abajo y `ILoveYou` → siguiente video
+  (antes mute y scroll). `Victory` sigue cambiando el tema.
+- **Volumen inicial del reproductor: 50 %** (`CONFIG.video.initialVolume`).
+- **Contenido nuevo en Inicio** (hero, características, cómo funciona, FAQ, banner de
+  descarga) y página **Sobre mí** con foto (placeholder en `web/public/franco.jpg`), bio,
+  habilidades, trayectoria, proyectos y portfolio.
+
+### Ajustes de layout y navegacion
+- **Orden de la pagina:** la demo (camara + video lado a lado) va primero, con el mapa de
+  gestos debajo del video (columna derecha); despues el intro (hero mas discreto, en panel,
+  conservando todo el texto) y el resto de secciones.
+- **Router por rutas reales** (History API) en vez de hash: `/` y `/sobre-mi`, con scroll
+  al inicio al cambiar de pagina. `web/vercel.json` reescribe todo a `index.html` para que
+  recargar `/sobre-mi` no de 404.
+- **La camara persiste entre paginas:** ya no se apaga al salir de Inicio; al volver se
+  reengancha el stream al `<video>` y el worker de gestos sigue vivo (no re-inicializa).
+
+### Fix: reproductor en negro al volver a Inicio
+- **Sintoma:** tras ir a *Sobre mí* y volver, la cámara seguía activa pero el iframe de
+  YouTube quedaba en negro (aunque los gestos cambiaban de video).
+- **Causa:** YouTube reemplaza el `<div>` que le pasa React por su propio `<iframe>`; al
+  desmontar la página React eliminaba un nodo que ya no era suyo y, al volver, el
+  contenedor quedaba vacío.
+- **Arreglo:** el reproductor se monta en un `<div>` creado a mano (no gestionado por
+  React) y su ciclo de vida sigue a la ruta: `useYouTube(containerRef, videoId, enabled)`
+  crea el player al entrar a Inicio y lo destruye (`destroyPlayer()`) al salir. Al volver
+  se recrea limpio.
+
+### Ajustes de "Sobre mi"
+- **Foto:** marco cuadrado con recorte centrado en el rostro (`object-fit: cover`,
+  `object-position: center 25%`) y sombra dura estilo vintage.
+- **Etiqueta:** sticker con el nombre superpuesto a la esquina del marco, rotado, con borde
+  oscuro, fondo salmon y sombra (referencia: el label "EN RESTAURACION" del cassette en
+  `OpenDesign/src/pages/landings/VintageLanding.tsx`).
+- **Texto:** se reescribio como presentacion (no CV), se quito Python como lenguaje
+  principal, se paso a "tutor/mentor" y se sumaron MercadoPago, Oracle Cloud (VPS),
+  Cloudflare R2, GraphQL, SQL Server y Neon.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

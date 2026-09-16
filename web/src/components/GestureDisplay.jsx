@@ -1,13 +1,16 @@
 import { actionFor } from '../lib/config.js';
+import { Icon } from '../lib/icons.jsx';
 
 export function GestureDisplay({ gesture }) {
   const mapping = gesture ? actionFor(gesture.name) : null;
   const percent = gesture ? Math.round((gesture.confidence ?? 0) * 100) : 0;
-  const hint = mapping ? mapping.label : 'Muestra un gesto a la c\u00E1mara';
+  const hint = mapping ? mapping.label : 'Muestra un gesto a la cámara';
 
   return (
     <div className="gesture-display">
-      <div className="gesture-emoji">{mapping?.emoji ?? '\u2014'}</div>
+      <div className={`gesture-icon ${mapping ? '' : 'gesture-icon--idle'}`}>
+        <Icon name={mapping?.icon} size={28} />
+      </div>
       <div className="gesture-info">
         <div className="label">{gesture?.name ?? 'Sin gesto'}</div>
         <div className="confidence">

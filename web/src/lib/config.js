@@ -42,6 +42,14 @@ export const CONFIG = {
     delegate: 'GPU',
   },
 
+  video: {
+    /** Volumen inicial del reproductor (0-100). */
+    initialVolume: 50,
+    /** Video que se muestra al cargar y que se agrega si la playlist esta vacia. */
+    defaultVideoId: 'dQw4w9WgXcQ',
+    defaultVideoTitle: 'Rick Astley - Never Gonna Give You Up',
+  },
+
   actions: {
     cooldownMs: 1000,
     mappings: {
@@ -49,13 +57,13 @@ export const CONFIG = {
         action: 'youtube',
         command: 'play_pause',
         label: 'Play / Pause',
-        emoji: '\u270B',
+        icon: 'handPaper',
       },
       Thumb_Up: {
         action: 'youtube',
         command: 'volume_up',
         label: 'Subir volumen',
-        emoji: '\uD83D\uDC4D',
+        icon: 'thumbsUp',
         repeat: true,
         repeatIntervalMs: 400,
       },
@@ -63,37 +71,37 @@ export const CONFIG = {
         action: 'youtube',
         command: 'volume_down',
         label: 'Bajar volumen',
-        emoji: '\uD83D\uDC4E',
+        icon: 'thumbsDown',
         repeat: true,
         repeatIntervalMs: 400,
       },
       Closed_Fist: {
-        action: 'youtube',
-        command: 'mute',
-        label: 'Mute',
-        emoji: '\u270A',
+        action: 'navigation',
+        command: 'scroll_down',
+        label: 'Scroll abajo',
+        icon: 'fist',
+        repeat: true,
+        repeatIntervalMs: 400,
       },
       Victory: {
         action: 'ui',
         command: 'toggle_theme',
         label: 'Cambiar tema',
-        emoji: '\u270C\uFE0F',
+        icon: 'peace',
       },
       Pointing_Up: {
         action: 'navigation',
         command: 'scroll_up',
         label: 'Scroll arriba',
-        emoji: '\u261D\uFE0F',
+        icon: 'pointer',
         repeat: true,
         repeatIntervalMs: 400,
       },
       ILoveYou: {
-        action: 'navigation',
-        command: 'scroll_down',
-        label: 'Scroll abajo',
-        emoji: '\uD83E\uDD1F',
-        repeat: true,
-        repeatIntervalMs: 400,
+        action: 'playlist',
+        command: 'next',
+        label: 'Siguiente video',
+        icon: 'spock',
       },
     },
   },
@@ -119,7 +127,8 @@ export const CONFIG = {
    */
   desktop: {
     healthUrl: 'http://127.0.0.1:8765/health',
-    downloadUrl: '#descargar',
+    /** Descarga de la app de escritorio (releases del repo). */
+    downloadUrl: 'https://github.com/FT-Key/Recognizer/releases',
     probeTimeoutMs: 1200,
     probeIntervalMs: 15000,
   },
