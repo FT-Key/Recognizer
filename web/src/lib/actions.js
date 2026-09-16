@@ -11,10 +11,11 @@ export function createDispatcher({ onAction } = {}) {
   const navigator = createNavigator();
   const cooldowns = {};
 
-  function canDispatch(gestureName) {
+  function canDispatch(mapping) {
     const now = Date.now();
-    const last = cooldowns[gestureName] || 0;
-    return now - last >= CONFIG.actions.cooldownMs;
+    const last = cooldowns[mapping.label] || 0;
+    const cooldown = mapping.repeatIntervalMs ?? CONFIG.actions.cooldownMs;
+    return now - last >= cooldown;
   }
 
   function dispatchYouTube(command) {
@@ -58,9 +59,9 @@ export function createDispatcher({ onAction } = {}) {
   function dispatch(gestureName, confidence, handedness) {
     const mapping = CONFIG.actions.mappings[gestureName];
     if (!mapping) return;
-    if (!canDispatch(gestureName)) return;
+    if (!canDispatch(mapping)) return;
 
-    cooldowns[gestureName] = Date.now();
+    cooldowns[mapping.label] = Date.now();
 
     if (mapping.action === 'youtube') {
       dispatchYouTube(mapping.command);

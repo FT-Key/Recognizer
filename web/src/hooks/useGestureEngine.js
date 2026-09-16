@@ -49,9 +49,11 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
         dispatcher.dispatch(name, confidence, handedness);
       },
       onHeld: (name, confidence, handedness) => {
-        const value = { name, confidence, handedness };
-        latest.gesture = value;
-        setGesture(value);
+        // Solo los gestos con repeticion (p. ej. volumen) se re-disparan al
+        // mantenerse; el resto ya se ejecuto al confirmarse.
+        const mapping = CONFIG.actions.mappings[name];
+        if (!mapping?.repeat) return;
+        latest.gesture = { name, confidence, handedness };
         dispatcher.dispatch(name, confidence, handedness);
       },
       onRelease: () => {
@@ -68,6 +70,7 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
         return;
       }
       if (message.type === 'error') {
+        console.error('[gesture.worker]', message.message);
         setError(message.message);
         return;
       }
@@ -130,6 +133,7 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
         width,
         height,
         colors: CONFIG.ui,
+        mirror: CONFIG.ui.mirrorVideo,
       });
     };
 

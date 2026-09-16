@@ -32,8 +32,15 @@ export function syncCanvasSize(canvas, video) {
   return { ctx, width: rect.width, height: rect.height };
 }
 
-export function drawScene(ctx, { landmarks, handednesses, gesture, fps, width, height, colors }) {
+export function drawScene(
+  ctx,
+  { landmarks, handednesses, gesture, fps, width, height, colors, mirror },
+) {
   ctx.clearRect(0, 0, width, height);
+
+  // El video se muestra espejado (selfie) via CSS; los landmarks llegan en el
+  // espacio de la imagen original, asi que invertimos x para que coincidan.
+  const fx = (x) => (mirror ? 1 - x : x);
 
   landmarks.forEach((hand, index) => {
     ctx.strokeStyle = colors.connectionColor;
@@ -43,15 +50,15 @@ export function drawScene(ctx, { landmarks, handednesses, gesture, fps, width, h
       const b = hand[end];
       if (!a || !b) continue;
       ctx.beginPath();
-      ctx.moveTo(a.x * width, a.y * height);
-      ctx.lineTo(b.x * width, b.y * height);
+      ctx.moveTo(fx(a.x) * width, a.y * height);
+      ctx.lineTo(fx(b.x) * width, b.y * height);
       ctx.stroke();
     }
 
     ctx.fillStyle = colors.landmarkColor;
     for (const point of hand) {
       ctx.beginPath();
-      ctx.arc(point.x * width, point.y * height, colors.landmarkSize, 0, Math.PI * 2);
+      ctx.arc(fx(point.x) * width, point.y * height, colors.landmarkSize, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -62,7 +69,7 @@ export function drawScene(ctx, { landmarks, handednesses, gesture, fps, width, h
       ctx.fillStyle = colors.handednessColor;
       ctx.textAlign = 'left';
       ctx.textBaseline = 'top';
-      ctx.fillText(handedness, wrist.x * width + 6, wrist.y * height + 6);
+      ctx.fillText(handedness, fx(wrist.x) * width + 6, wrist.y * height + 6);
     }
   });
 

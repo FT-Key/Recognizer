@@ -62,6 +62,11 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggle}
       />
+      {engine.error && (
+        <div className="error-banner" role="alert">
+          Error del reconocimiento: {engine.error}
+        </div>
+      )}
       <main className="main">
         <CameraPanel
           videoRef={videoRef}
