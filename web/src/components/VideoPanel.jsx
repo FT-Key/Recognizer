@@ -1,7 +1,7 @@
 import * as YT from '../lib/youtube-controller.js';
 import { GestureMap } from './GestureMap.jsx';
 
-export function VideoPanel({ containerId, fps, youtubeError, currentTitle }) {
+export function VideoPanel({ containerRef, fps, youtubeError, currentTitle }) {
   return (
     <section className="panel" aria-labelledby="video-title">
       <div className="panel__title">
@@ -12,7 +12,7 @@ export function VideoPanel({ containerId, fps, youtubeError, currentTitle }) {
       </div>
       <div className="panel__body">
         <div className="youtube-container">
-          <div id={containerId} />
+          <div ref={containerRef} className="youtube-mount" />
         </div>
 
         <div className="meta-row">

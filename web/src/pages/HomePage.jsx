@@ -19,7 +19,7 @@ export function HomePage({
   onStartCamera,
   onAddVideo,
   onSelectVideo,
-  youtubeContainerId,
+  youtubeContainerRef,
 }) {
   return (
     <>
@@ -47,7 +47,7 @@ export function HomePage({
               gesture={engine.gesture}
             />
             <VideoPanel
-              containerId={youtubeContainerId}
+              containerRef={youtubeContainerRef}
               fps={engine.fps}
               youtubeError={youtube.error}
               currentTitle={playlist.current?.title}

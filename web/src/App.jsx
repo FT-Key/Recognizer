@@ -14,7 +14,6 @@ import { usePlaylist } from './hooks/usePlaylist.js';
 import { CONFIG } from './lib/config.js';
 import * as YT from './lib/youtube-controller.js';
 
-const YOUTUBE_CONTAINER_ID = 'youtube-player';
 const FEEDBACK_MS = 900;
 
 function resolveHeaderStatus(engineStatus, engineError, cameraStatus, route) {
@@ -28,6 +27,7 @@ function resolveHeaderStatus(engineStatus, engineError, cameraStatus, route) {
 export default function App() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const youtubeContainerRef = useRef(null);
   const feedbackTimer = useRef(null);
   const [feedback, setFeedback] = useState(null);
 
@@ -37,8 +37,12 @@ export default function App() {
   const camera = useCamera(videoRef);
   const playlist = usePlaylist();
 
-  const initialVideoId = useRef(playlist.current?.id ?? CONFIG.video.defaultVideoId);
-  const youtube = useYouTube(YOUTUBE_CONTAINER_ID, initialVideoId.current);
+  // El reproductor vive solo mientras estamos en Inicio; al salir se destruye.
+  const youtube = useYouTube(
+    youtubeContainerRef,
+    playlist.current?.id ?? CONFIG.video.defaultVideoId,
+    route === 'home',
+  );
 
   const handleAction = useCallback(
     (mapping) => {
@@ -145,7 +149,7 @@ export default function App() {
             onStartCamera={() => camera.start()}
             onAddVideo={handleAddVideo}
             onSelectVideo={handleSelectVideo}
-            youtubeContainerId={YOUTUBE_CONTAINER_ID}
+            youtubeContainerRef={youtubeContainerRef}
           />
         )}
       </main>

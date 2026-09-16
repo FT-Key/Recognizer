@@ -30,9 +30,9 @@ export function loadYouTubeAPI() {
   return apiPromise;
 }
 
-export function createPlayer(containerId, videoId = DEFAULT_VIDEO_ID, { volume = INITIAL_VOLUME } = {}) {
+export function createPlayer(container, videoId = DEFAULT_VIDEO_ID, { volume = INITIAL_VOLUME } = {}) {
   return new Promise((resolve) => {
-    player = new window.YT.Player(containerId, {
+    player = new window.YT.Player(container, {
       videoId,
       playerVars: { autoplay: 0, controls: 1, modestbranding: 1, rel: 0 },
       events: {
@@ -44,6 +44,19 @@ export function createPlayer(containerId, videoId = DEFAULT_VIDEO_ID, { volume =
       },
     });
   });
+}
+
+/** Destruye el reproductor y elimina su iframe; idempotente. */
+export function destroyPlayer() {
+  if (player && typeof player.destroy === 'function') {
+    player.destroy();
+  }
+  player = null;
+  ready = false;
+}
+
+export function getCurrentTime() {
+  return ready ? player.getCurrentTime() : 0;
 }
 
 export function isReady() {
