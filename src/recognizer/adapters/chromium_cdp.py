@@ -160,11 +160,13 @@ class ChromiumCdpBrowser:
         if self._client.is_available():
             return
 
+        self._ensure_default_profile()
         LOGGER.info("Lanzando Chromium en puerto %d", self._port)
         args = [
             self._detected.executable,
             f"--remote-debugging-port={self._port}",
             f"--user-data-dir={self._profile_dir}",
+            "--profile-directory=Default",
             "--no-first-run",
             "--no-default-browser-check",
             "--remote-allow-origins=*",
@@ -187,6 +189,34 @@ class ChromiumCdpBrowser:
 
         msg = "Chromium no respondio en el tiempo esperado"
         raise ActionError(msg)
+
+    def _ensure_default_profile(self) -> None:
+        """Crea la estructura minima del perfil para evitar el selector de perfiles."""
+        default_dir = self._profile_dir / "Default"
+        default_dir.mkdir(parents=True, exist_ok=True)
+        prefs_file = default_dir / "Preferences"
+        if not prefs_file.exists():
+            import json
+
+            prefs_file.write_text(
+                json.dumps({"profile": {"name": "Recognizer", "created_by_version": 1}}),
+                encoding="utf-8",
+            )
+        local_state = self._profile_dir / "Local State"
+        if not local_state.exists():
+            import json
+
+            local_state.write_text(
+                json.dumps(
+                    {
+                        "profile": {
+                            "profiles_order": ["Default"],
+                            "last_used": "Default",
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
 
     def _find_target(self, match: str) -> CdpTarget | None:
         """Busca un target cuyo URL contiene match, priorizando el que reproduce."""
