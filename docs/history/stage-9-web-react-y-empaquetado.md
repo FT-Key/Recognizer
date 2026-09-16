@@ -131,6 +131,24 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   (no es gesto canned del modelo). Se descartan `new_tab`/`open_url` porque `window.open()`
   sin clic del usuario lo bloquea el navegador.
 
+## Rediseño de la web (design system Vintage) + playlist
+
+- **Skill de diseño:** se incorporó `.opencode/skills/vintage/` (SKILL.md + DESIGN.md,
+  autor typeui.sh, MIT) y se aplicaron sus tokens: plateado `#C0C0C0`, teal `#008080`,
+  tipografía pixel `Silkscreen` + `JetBrains Mono`, biseles skeuomórficos, textura con
+  grano y scanlines. Tokens en `src/styles/theme.css` (claro por defecto + oscuro).
+- **Dos páginas** con router por hash (`useHashRoute`, sin dependencias): **Inicio** y
+  **Sobre mí** (navbar + footer nuevos). Al salir de Inicio se apaga la cámara.
+- **Playlist de YouTube:** `lib/playlist.js` sanitiza enlaces (escritorio y móvil) y
+  guarda en `localStorage` solo `{id, title}`; `PlaylistManager` permite agregar/quitar y
+  elegir el video actual; el gesto `ILoveYou` pasa al siguiente.
+- **Gestos web ajustados:** `Closed_Fist` → scroll abajo y `ILoveYou` → siguiente video
+  (antes mute y scroll). `Victory` sigue cambiando el tema.
+- **Volumen inicial del reproductor: 50 %** (`CONFIG.video.initialVolume`).
+- **Contenido nuevo en Inicio** (hero, características, cómo funciona, FAQ, banner de
+  descarga) y página **Sobre mí** con foto (placeholder en `web/public/franco.jpg`), bio,
+  habilidades, trayectoria, proyectos y portfolio.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

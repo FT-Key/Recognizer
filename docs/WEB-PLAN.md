@@ -19,12 +19,12 @@ reconocimiento de gestos pero son implementaciones independientes:
 | Gesto | Web (sandbox) | Desktop (SO completo) |
 |---|---|---|
 | `Pointing_Up` | Scroll arriba (continuo al sostener) | Mover puntero del mouse |
-| `Thumb_Up` | Subir volumen del video embebido | Subir volumen del sistema |
-| `Thumb_Down` | Bajar volumen del video embebido | Bajar volumen del sistema |
-| `Closed_Fist` | Mute del video embebido | Mute del sistema |
-| `Open_Palm` | Play/pause del video embebido | Play/pause multimedia del sistema |
+| `Thumb_Up` | Subir volumen del video | Subir volumen del sistema |
+| `Thumb_Down` | Bajar volumen del video | Bajar volumen del sistema |
+| `Closed_Fist` | Scroll abajo (continuo al sostener) | Mute del sistema |
+| `Open_Palm` | Play/pause del video | Play/pause multimedia del sistema |
 | `Victory` | Cambiar tema claro/oscuro | Enviar hotkey (Ctrl+Shift+M) |
-| `ILoveYou` | Scroll abajo (continuo al sostener) | Abrir enlace con Chrome |
+| `ILoveYou` | Siguiente video de la playlist | Abrir enlace con Chrome |
 
 El navegador impone un **sandbox de seguridad** que impide mover el mouse del sistema,
 enviar teclas a otras apps, controlar el volumen del sistema o abrir aplicaciones de
@@ -77,13 +77,42 @@ web/
    - El hilo principal transfiere `ImageBitmap` por frame (`requestAnimationFrame`).
 3. **Estabilización** idéntica a la app de escritorio (N=5 confirmación, M=5 liberación).
 4. **Acciones del navegador**: control de un video YouTube embebido (play/pause,
-   volumen, mute), scroll en la página (continuo al sostener) y cambio de tema.
+   volumen), scroll en la página (continuo al sostener), cambio de tema y salto de video
+   en la playlist del usuario.
 5. **Overlay** de landmarks, lateralidad, gesto y FPS en canvas de alto DPI.
 6. **Tema claro/oscuro** con persistencia en `localStorage`.
 7. **Banner dinámico**: sondea `http://127.0.0.1:8765/health`; si la app de escritorio
    responde, ofrece "Abrir app"; si no, "Descargar app".
 8. **Gestos personalizados**: `CONFIG.gestures.customModelUrl` permite cargar un modelo
    `.task` propio (generado con `scripts/train_gesture_model.py`).
+
+## Playlist de YouTube (localStorage)
+
+El usuario agrega sus propios videos y el gesto `ILoveYou` pasa al siguiente.
+
+- Se guarda en `localStorage` (`recognizer-playlist`) **solo el id de 11 caracteres** y un
+  titulo en texto plano; nunca la URL ni HTML crudo.
+- `lib/playlist.js` valida y normaliza: acepta enlaces de escritorio y moviles
+  (`youtube.com/watch`, `m.youtube.com`, `youtu.be`, `/shorts`, `/embed`, `/live`, `/v`,
+  `music.youtube.com`) y rechaza cualquier otro host, esquema (`javascript:`) o id
+  invalido. Al no persistir URLs no hay superficie de inyeccion.
+- El reproductor solo recibe ids ya validados (`loadVideoById`).
+- El volumen inicial del reproductor es **50 %** (`CONFIG.video.initialVolume`).
+
+## Diseno (design system Vintage)
+
+La UI sigue el skill `vintage` (`.opencode/skills/vintage/`): superficies plateadas
+`#C0C0C0`, acento teal `#008080`, tipografia pixel `Silkscreen` + `JetBrains Mono`,
+biseles skeuomorficos y textura con grano/scanlines. Tokens en `src/styles/theme.css`
+(claro por defecto + variante oscura para el toggle).
+
+Los iconos son de **Font Awesome 6** via `react-icons` (`src/lib/icons.jsx`): heredan
+`currentColor`, asi que siguen el tema y se personalizan desde CSS. Se usan iconos de mano
+para los gestos (Open_Palm, Thumb_Up/Down, Closed_Fist, Victory, Pointing_Up, ILoveYou) en
+lugar de emojis.
+
+La app tiene dos paginas con router por hash (sin dependencias): **Inicio** (`#/`) y
+**Sobre mi** (`#/sobre-mi`).
 
 ## Detección de la app de escritorio
 
