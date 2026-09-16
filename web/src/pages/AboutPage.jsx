@@ -14,26 +14,38 @@ const SKILL_GROUPS = [
   },
   {
     area: 'Backend',
-    items: ['Node.js', 'Express', 'Nest.js', 'Laravel', 'REST APIs', 'WebSockets'],
+    items: ['Node.js', 'Express', 'Nest.js', 'Laravel', 'REST APIs', 'GraphQL', 'WebSockets'],
   },
   {
     area: 'Bases de datos',
-    items: ['MongoDB', 'MySQL', 'PostgreSQL', 'Redis', 'Firebase'],
+    items: ['MongoDB', 'MySQL', 'SQL Server', 'PostgreSQL', 'Neon', 'Redis'],
+  },
+  {
+    area: 'Infra y DevOps',
+    items: [
+      'Docker',
+      'Git / GitHub',
+      'Vercel',
+      'Netlify',
+      'Render',
+      'Oracle Cloud (VPS)',
+      'Cloudflare R2',
+    ],
+  },
+  {
+    area: 'Pagos e integraciones',
+    items: ['MercadoPago', 'Firebase', 'Nodemailer'],
   },
   {
     area: 'Lenguajes',
-    items: ['JavaScript (ES6+)', 'TypeScript', 'Java', 'C++', 'Python'],
-  },
-  {
-    area: 'Herramientas',
-    items: ['Git / GitHub', 'Docker', 'Vercel', 'Render', 'Netlify', 'Scrum'],
+    items: ['JavaScript (ES6+)', 'TypeScript', 'Java', 'C++'],
   },
 ];
 
 const TIMELINE = [
   {
     when: '2025 – Actualidad',
-    what: 'Tutor de programación',
+    what: 'Tutor / Mentor de programación',
     where: 'RollingCode School',
     detail:
       'Acompaño a estudiantes en el stack MERN y en buenas prácticas de desarrollo web y trabajo colaborativo.',
@@ -75,7 +87,7 @@ const HOW_I_WORK = [
   {
     icon: 'book',
     title: 'Enseño',
-    text: 'Ser tutor me obliga a explicar con claridad y a mantener el código legible. Documentar y simplificar es parte del trabajo.',
+    text: 'Ser tutor/mentor me obliga a explicar con claridad y a mantener el código legible. Documentar y simplificar es parte del trabajo.',
   },
   {
     icon: 'wrench',
@@ -103,20 +115,24 @@ function AboutPhoto() {
 
   return (
     <figure className="about-photo">
-      {failed ? (
-        <div>
-          <div className="about-photo__icon">
-            <Icon name="user" size={52} />
+      <div className="about-photo__frame">
+        {failed ? (
+          <div className="about-photo__fallback">
+            <div className="about-photo__icon">
+              <Icon name="user" size={52} />
+            </div>
+            <p>Tu foto aquí (coloca el archivo en web/public/me.webp)</p>
           </div>
-          <p>Tu foto aquí (coloca el archivo en web/public/me.webp)</p>
-        </div>
-      ) : (
-        <img
-          src={PHOTO_SRC}
-          alt="Retrato de Franco Nicolás Toledo"
-          onError={() => setFailed(true)}
-        />
-      )}
+        ) : (
+          <img
+            className="about-photo__img"
+            src={PHOTO_SRC}
+            alt="Retrato de Franco Nicolás Toledo"
+            onError={() => setFailed(true)}
+          />
+        )}
+      </div>
+      <figcaption className="about-photo__label">Franco Nicolás Toledo</figcaption>
     </figure>
   );
 }
@@ -132,23 +148,28 @@ export function AboutPage() {
             <p className="eyebrow">Sobre mí</p>
             <h1>Franco Nicolás Toledo</h1>
             <p className="about-role">
-              Desarrollador Web Full Stack &middot; Estudiante de Ingeniería en Sistemas
+              Desarrollador Web Full Stack &middot; Tutor/Mentor &middot; Estudiante de
+              Ingeniería en Sistemas
             </p>
             <p>
-              Soy desarrollador web full stack y tutor de programación en Tucumán, Argentina.
-              Trabajé en el desarrollo de proyectos internos con el stack MERN y hoy combino el
-              trabajo independiente y freelance con mis estudios de Ingeniería en Sistemas de
-              Información.
+              Soy Franco, desarrollador web full stack de Tucumán, Argentina. Me gusta construir
+              productos completos: de la interfaz a la base de datos y el deploy.
             </p>
             <p>
-              Me apasiona la tecnología y el aprendizaje continuo: arranqué como autodidacta y
-              sigo formándome en Python y en desarrollo con inteligencia artificial. Disfruto
-              tanto construir productos como explicar cómo funcionan.
+              Trabajo con el stack MERN y también con Next.js, Nest.js y Laravel. Integro
+              pasarelas de pago como MercadoPago, servicios como Firebase y Nodemailer, y
+              despliego en Vercel, Netlify, Render o en un VPS propio en Oracle Cloud. También
+              manejo Cloudflare R2, GraphQL y bases de datos SQL y NoSQL.
             </p>
             <p>
-              Recognizer nació como un proyecto propio para explorar visión por computadora:
-              reconocer gestos con la cámara y convertirlos en acciones reales, en el navegador
-              y en el escritorio.
+              Además de programar, doy clases: soy tutor/mentor en RollingCode School, donde
+              acompaño a estudiantes con el stack MERN. Enseñar me obliga a explicar claro y a
+              mantener el código legible, algo que después se nota en lo que construyo.
+            </p>
+            <p>
+              Estudio Ingeniería en Sistemas de Información y soy autodidacta en programación.
+              Recognizer nació como proyecto propio para explorar visión por computadora:
+              reconocer gestos con la cámara y convertirlos en acciones reales.
             </p>
 
             <ul className="contact-list">

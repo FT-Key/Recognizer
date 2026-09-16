@@ -778,27 +778,64 @@ a { color: var(--link); }
 }
 
 .about-photo {
+  position: relative;
+  width: 100%;
+  max-width: 260px;
+  margin: 0 auto var(--space-4);
+}
+
+/* Marco cuadrado: recorta el retrato (suele ser vertical) sin deformarlo. */
+.about-photo__frame {
+  position: relative;
   aspect-ratio: 1;
   width: 100%;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  color: var(--color-text-muted);
-  font-size: 0.72rem;
+  overflow: hidden;
   background: var(--color-surface-sunken);
   border: 2px solid;
   border-color: var(--bevel-dark) var(--bevel-light) var(--bevel-light) var(--bevel-dark);
+  box-shadow: 5px 5px 0 rgba(0, 0, 0, 0.28);
 }
 
-.about-photo img {
+.about-photo__img {
   width: 100%;
   height: 100%;
+  display: block;
   object-fit: cover;
+  object-position: center 25%;
+}
+
+.about-photo__fallback {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
 }
 
 .about-photo__icon { color: var(--color-primary-strong); }
+
+/* Etiqueta tipo sticker, pisando la esquina del marco (estilo vintage). */
+.about-photo__label {
+  position: absolute;
+  right: -10px;
+  bottom: -12px;
+  transform: rotate(-4deg);
+  padding: var(--space-1) var(--space-3);
+  background: #e8877a;
+  color: #ffffff;
+  border: 2px solid #2a2622;
+  box-shadow: 3px 3px 0 rgba(42, 38, 34, 0.35);
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
 
 .about-hero h1 { font-size: 1.7rem; }
 
