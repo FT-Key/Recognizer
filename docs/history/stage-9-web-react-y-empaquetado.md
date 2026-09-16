@@ -159,6 +159,17 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
 - **La camara persiste entre paginas:** ya no se apaga al salir de Inicio; al volver se
   reengancha el stream al `<video>` y el worker de gestos sigue vivo (no re-inicializa).
 
+### Fix: reproductor en negro al volver a Inicio
+- **Sintoma:** tras ir a *Sobre mí* y volver, la cámara seguía activa pero el iframe de
+  YouTube quedaba en negro (aunque los gestos cambiaban de video).
+- **Causa:** YouTube reemplaza el `<div>` que le pasa React por su propio `<iframe>`; al
+  desmontar la página React eliminaba un nodo que ya no era suyo y, al volver, el
+  contenedor quedaba vacío.
+- **Arreglo:** el reproductor se monta en un `<div>` creado a mano (no gestionado por
+  React) y su ciclo de vida sigue a la ruta: `useYouTube(containerRef, videoId, enabled)`
+  crea el player al entrar a Inicio y lo destruye (`destroyPlayer()`) al salir. Al volver
+  se recrea limpio.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).
