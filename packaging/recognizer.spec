@@ -35,6 +35,7 @@ for package in ("mediapipe",):
     hiddenimports += pkg_hidden
 
 hiddenimports += collect_submodules("pynput")
+hiddenimports += collect_submodules("websocket")
 
 a = Analysis(  # noqa: F821
     [str(PROJECT_ROOT / "packaging" / "entrypoint.py")],

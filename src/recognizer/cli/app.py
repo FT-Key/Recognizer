@@ -248,6 +248,11 @@ def _build_parser() -> argparse.ArgumentParser:
         help="No mueve el puntero aunque este habilitado en config.",
     )
     parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="No ejecuta acciones de navegador (open_tab/tab_seek/tab_press).",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Log detallado (DEBUG) para calibrar gestos y umbrales.",
@@ -316,6 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 app_config.actions.mappings or app_config.actions.menus
             )
             pointer_active = app_config.pointer.enabled and not args.no_pointer
+            browser_active = not args.no_browser and bool(app_config.browser.tabs)
             gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
             bindings = ActionBindings(mapping={}, gate=gate)
             if pointer_active:
@@ -329,6 +335,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     actions=app_config.actions,
                     catalog=catalog,
                     gate=gate,
+                    browser_config=app_config.browser if browser_active else None,
                 )
                 dispatcher = GestureActionDispatcher(
                     actions=bindings.mapping,

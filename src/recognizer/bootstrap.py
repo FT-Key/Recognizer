@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from recognizer.adapters.chrome_link_opener import ChromeLinkOpener
+from recognizer.adapters.chromium_cdp import ChromiumCdpBrowser
 from recognizer.adapters.overlay_opencv import (
     GestureOverlay,
     LandmarkOverlay,
@@ -15,6 +16,7 @@ from recognizer.adapters.pynput_keys import PynputKeySender
 from recognizer.adapters.pynput_mouse import PynputMouseController
 from recognizer.adapters.subprocess_command import SubprocessCommandRunner
 from recognizer.adapters.subprocess_script import SubprocessScriptRunner
+from recognizer.core.actions.browser import OpenTabAction, TabPressAction, TabSeekAction
 from recognizer.core.actions.decorators import (
     ActionGate,
     DebouncedAction,
@@ -29,16 +31,21 @@ from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
     AppConfig,
+    BrowserConfig,
     CameraConfig,
     CommandActionConfig,
     GestureConfig,
     HotkeyActionConfig,
     MediaKeyActionConfig,
     OpenLinksActionConfig,
+    OpenTabActionConfig,
     PointerConfig,
     ScriptActionConfig,
+    TabPressActionConfig,
+    TabSeekActionConfig,
 )
 from recognizer.core.domain.action import Action, ScriptRequest
+from recognizer.core.domain.browser import TabKey
 from recognizer.core.domain.gesture import GestureCatalog, GestureId
 from recognizer.core.domain.pointer import PointerCalibration
 from recognizer.core.errors import ActionError, RecognizerError
@@ -51,6 +58,7 @@ from recognizer.core.pipeline.pointer_detection import PointerDetectionProcessor
 from recognizer.core.pointer.clicker import PointerClicker
 from recognizer.core.pointer.mover import PointerMover
 from recognizer.core.pointer.smoothing import create_smoothing
+from recognizer.core.ports.browser_tabs import BrowserTabs
 from recognizer.core.ports.command_runner import CommandRunner
 from recognizer.core.ports.event_bus import EventBus
 from recognizer.core.ports.gesture_classifier import GestureClassifier
@@ -195,6 +203,8 @@ def build_action_bindings(
     command_runner: CommandRunner | None = None,
     script_runner: ScriptRunner | None = None,
     link_opener: LinkOpener | None = None,
+    browser_tabs: BrowserTabs | None = None,
+    browser_config: BrowserConfig | None = None,
     gate: ActionGate | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionBindings:
@@ -213,6 +223,41 @@ def build_action_bindings(
     opener = link_opener or ChromeLinkOpener()
     shared_gate = gate if gate is not None else ActionGate()
 
+    resolved_browser: BrowserTabs | None = browser_tabs
+    if resolved_browser is None and browser_config is not None:
+        _has_browser_actions = any(
+            getattr(spec, "tab", None) is not None
+            for spec in (
+                *actions.mappings.values(),
+                *(opt for menu in actions.menus.values() for opt in menu.options.values()),
+            )
+        )
+        if _has_browser_actions:
+            from recognizer.adapters.chromium import autodetect_browser
+
+            detected = autodetect_browser(executable_override=browser_config.executable)
+            if detected is not None:
+                from pathlib import Path
+
+                from recognizer.adapters.chromium import resolve_profile_dir
+
+                base = (
+                    Path(browser_config.user_data_dir) if browser_config.user_data_dir else Path()
+                )
+                profile = resolve_profile_dir(detected, base)
+                from recognizer.core.domain.browser import TabSpec
+
+                specs = {
+                    TabKey(name): TabSpec(key=TabKey(name), url=tab.url, match=tab.match)
+                    for name, tab in browser_config.tabs.items()
+                }
+                resolved_browser = ChromiumCdpBrowser(
+                    tabs=specs,
+                    detected=detected,
+                    profile_dir=profile,
+                    port=browser_config.debugging_port,
+                )
+
     def decorated(spec: ActionConfig) -> Action:
         action = _build_action(
             spec=spec,
@@ -220,6 +265,8 @@ def build_action_bindings(
             command_runner=runner,
             script_runner=script,
             link_opener=opener,
+            browser_tabs=resolved_browser,
+            browser_config=browser_config,
         )
         return _wrap_action(
             action=action,
@@ -290,6 +337,8 @@ def _build_action(
     command_runner: CommandRunner,
     script_runner: ScriptRunner,
     link_opener: LinkOpener,
+    browser_tabs: BrowserTabs | None = None,
+    browser_config: BrowserConfig | None = None,
 ) -> Action:
     match spec:
         case MediaKeyActionConfig(key=key):
@@ -317,5 +366,30 @@ def _build_action(
                 urls=urls,
                 opener=link_opener if browser is None else ChromeLinkOpener(executable=browser),
             )
+        case OpenTabActionConfig(tab=tab_name, urls=urls):
+            if browser_tabs is None:
+                msg = "Se requiere un navegador CDP para open_tab"
+                raise ActionError(msg)
+            tab_key = TabKey(tab_name)
+            effective_urls = urls
+            if not effective_urls and browser_config is not None:
+                tab_cfg = browser_config.tabs.get(tab_name)
+                if tab_cfg is not None:
+                    effective_urls = (tab_cfg.url,)
+            return OpenTabAction(
+                urls=effective_urls,
+                browser=browser_tabs,
+                tab=tab_key,
+            )
+        case TabSeekActionConfig(tab=tab_name, fraction=fraction):
+            if browser_tabs is None:
+                msg = "Se requiere un navegador CDP para tab_seek"
+                raise ActionError(msg)
+            return TabSeekAction(tab=TabKey(tab_name), fraction=fraction, browser=browser_tabs)
+        case TabPressActionConfig(tab=tab_name, keys=keys):
+            if browser_tabs is None:
+                msg = "Se requiere un navegador CDP para tab_press"
+                raise ActionError(msg)
+            return TabPressAction(tab=TabKey(tab_name), keys=keys, browser=browser_tabs)
     msg = f"Accion no soportada: {type(spec).__name__}"
     raise ActionError(msg)

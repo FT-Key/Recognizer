@@ -13,9 +13,11 @@ frame -> [HandPipeline] -> GestureStabilizer -> EventBus -> ActionSink (decorado
 ## Capas y contrato de dependencias
 
 - `core/domain`: vocabulario (enums), objetos de valor (`Frame`), eventos frozen, acciones.
-- `core/ports`: Protocols que el núcleo necesita (`FrameSource`, `HandTracker`, `EventBus`...).
+- `core/ports`: Protocols que el núcleo necesita (`FrameSource`, `HandTracker`, `EventBus`,
+  `BrowserTabs`...).
 - `core/pipeline`: processors + `PipelineBuilder` (pipes & filters).
-- `adapters/`: OpenCV, MediaPipe, pynput, subprocess, persistencia, red (futuro).
+- `adapters/`: OpenCV, MediaPipe, pynput, subprocess, persistencia, red (futuro),
+  Chromium CDP (`ChromiumCdpBrowser`).
 - `settings.py`, `bootstrap.py`, `cli/`: composición y entrada.
 - Contratos verificados por import-linter en `pyproject.toml`: el core no importa capas
   externas ni infraestructura; los adapters no importan cli/settings.
@@ -94,6 +96,22 @@ Con dos manos, una sostiene un gesto modificador y la otra elige una opción de 
 consume el gesto disparador (`consume_trigger`) y evita repeticiones hasta liberar la mano.
 El puntero se desactiva con más de una mano visible (`PointerDetectionProcessor`). La
 lateralidad del modelo se puede corregir con `gestures.swap_handedness`.
+
+## Navegador controlado via CDP (etapa 9b)
+
+El puerto `BrowserTabs` (`core/ports/browser_tabs.py`) define `ensure`, `seek_media` y
+`press_keys` para controlar pestañas del navegador Chromium. La implementación es
+`ChromiumCdpBrowser` (`adapters/chromium_cdp.py`), que usa `CdpClient`
+(`adapters/cdp_client.py`) para la comunicación CDP: transporte HTTP (`UrllibCdpTransport`)
+para listar/crear targets y transporte WebSocket (`WebsocketCdpTransport`) para comandos
+(`Page.navigate`, `Runtime.evaluate`, `Input.dispatchKeyEvent`).
+
+`ChromiumCdpBrowser` auto-detecta el navegador Chromium instalado (Chrome > Edge > Brave >
+Vivaldi > Opera > Chromium) via `chromium.py`, lanza una instancia con perfil aislado
+(`browser-profile/<familia>/`) en `--remote-debugging-port=9222` si no está corriendo, y
+busca pestañas por matching de URL (`TabSpec.match`). Las acciones `open_tab`
+(playlist rotatoria via `TabKey`), `tab_seek` (fracción 0..1 de `<video>`) y
+`tab_press` (teclas via CDP) se configuran en `config.yaml` bajo `browser.tabs`.
 
 ## Gate
 

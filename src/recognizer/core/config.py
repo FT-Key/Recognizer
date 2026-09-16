@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from recognizer.core.constants import (
     DEFAULT_ACTION_COOLDOWN_SECONDS,
+    DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
     DEFAULT_FRAME_HEIGHT,
     DEFAULT_FRAME_WIDTH,
@@ -265,12 +266,55 @@ class OpenLinksActionConfig(BaseModel):
         return urls
 
 
+class OpenTabActionConfig(BaseModel):
+    """Accion que abre o enfoca una pestana en el navegador controlado."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["open_tab"] = "open_tab"
+    tab: str = Field(min_length=1)
+    urls: tuple[str, ...] = ()
+
+    @field_validator("urls")
+    @classmethod
+    def _validate_urls(cls, urls: tuple[str, ...]) -> tuple[str, ...]:
+        for url in urls:
+            parsed = urlparse(url)
+            if not url.startswith(URL_PREFIXES) or not parsed.netloc:
+                msg = f"La URL debe ser http(s) con host valido: {url}"
+                raise ValueError(msg)
+        return urls
+
+
+class TabSeekActionConfig(BaseModel):
+    """Accion que posiciona el video de una pestana."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["tab_seek"] = "tab_seek"
+    tab: str = Field(min_length=1)
+    fraction: float = Field(ge=0.0, le=1.0)
+
+
+class TabPressActionConfig(BaseModel):
+    """Accion que envia teclas a una pestana."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["tab_press"] = "tab_press"
+    tab: str = Field(min_length=1)
+    keys: tuple[str, ...] = Field(min_length=1)
+
+
 ActionConfig = Annotated[
     MediaKeyActionConfig
     | HotkeyActionConfig
     | CommandActionConfig
     | ScriptActionConfig
-    | OpenLinksActionConfig,
+    | OpenLinksActionConfig
+    | OpenTabActionConfig
+    | TabSeekActionConfig
+    | TabPressActionConfig,
     Field(discriminator="type"),
 ]
 
@@ -305,6 +349,42 @@ class ActionsConfig(BaseModel):
             msg = "El gesto None no puede mapearse a una accion."
             raise ValueError(msg)
         return mappings
+
+
+class BrowserTabConfig(BaseModel):
+    """Pestana registrada en el navegador controlado."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    url: str
+    match: str = ""
+
+    @model_validator(mode="after")
+    def _default_match(self) -> Self:
+        if not self.match:
+            parsed = urlparse(self.url)
+            object.__setattr__(self, "match", parsed.netloc)
+        return self
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, url: str) -> str:
+        parsed = urlparse(url)
+        if not url.startswith(URL_PREFIXES) or not parsed.netloc:
+            msg = f"La URL debe ser http(s) con host valido: {url}"
+            raise ValueError(msg)
+        return url
+
+
+class BrowserConfig(BaseModel):
+    """Navegador controlado: instancia Chromium aislada para acciones."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    executable: str | None = None
+    debugging_port: int = Field(default=DEFAULT_BROWSER_DEBUGGING_PORT, gt=0, le=65535)
+    user_data_dir: str | None = None
+    tabs: dict[str, BrowserTabConfig] = Field(default_factory=dict)
 
 
 class ActiveZoneConfig(BaseModel):
@@ -360,6 +440,7 @@ class AppConfig(BaseModel):
     gestures: GestureConfig = Field(default_factory=GestureConfig)
     pointer: PointerConfig = Field(default_factory=PointerConfig)
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)
 
     def gesture_catalog(self) -> GestureCatalog:
         """Reconstruye el catalogo de gestos declarado por la configuracion."""
@@ -381,4 +462,26 @@ class AppConfig(BaseModel):
             catalog.require(self.pointer.activation_gesture)
         except ConfigError as exc:
             raise ValueError(str(exc)) from exc
+        return self
+
+    @model_validator(mode="after")
+    def _validate_browser_tab_references(self) -> Self:
+        tab_names = set(self.browser.tabs)
+        for label, spec in self.actions.mappings.items():
+            tab_ref = getattr(spec, "tab", None)
+            if tab_ref is not None and tab_ref not in tab_names:
+                msg = (
+                    f"La accion '{label}' referencia la pestana '{tab_ref}' "
+                    f"que no esta definida en browser.tabs."
+                )
+                raise ValueError(msg)
+        for menu_name, menu_config in self.actions.menus.items():
+            for opt_label, spec in menu_config.options.items():
+                tab_ref = getattr(spec, "tab", None)
+                if tab_ref is not None and tab_ref not in tab_names:
+                    msg = (
+                        f"La opcion '{opt_label}' del menu '{menu_name}' "
+                        f"referencia la pestana '{tab_ref}' que no esta en browser.tabs."
+                    )
+                    raise ValueError(msg)
         return self

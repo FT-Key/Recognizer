@@ -36,4 +36,3 @@ dataset/
 
 # Salida de scripts de ejemplo del usuario
 scripts/actions/gesture_log.txt
-scripts/actions/video_start.log
