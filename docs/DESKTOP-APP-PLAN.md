@@ -34,6 +34,38 @@ descomprime y ejecuta `Recognizer.exe` (no necesita Python ni `uv`).
 
 ---
 
+## Publicar una release (GitHub Releases)
+
+La web enlaza el botón "Descargar para Windows" a
+`https://github.com/FT-Key/Recognizer/releases/latest` (siempre la última release).
+
+```powershell
+# 1. Compilar (genera dist/Recognizer/)
+uv run python scripts/build_exe.py
+
+# 2. Sacar la carpeta logs (la crea el .exe al correr) y comprimir
+Remove-Item -Recurse -Force dist\Recognizer\logs -ErrorAction SilentlyContinue
+Compress-Archive -Path dist\Recognizer -DestinationPath dist\Recognizer-v0.1.0-win64.zip
+```
+
+3. En GitHub: **Releases → Draft a new release**.
+   - Tag: `v0.1.0` (crear el tag nuevo).
+   - Target: `main` (o `dev` si todavía no se mergeó).
+   - Título y descripción (usar el Markdown con el logo del repo).
+   - **Attach binaries**: subir el `.zip`.
+   - Marcar **Set as the latest release** y publicar.
+
+Notas:
+- El `.zip` **no** va al repositorio (git bloquea archivos > 100 MB); va como *asset* de
+  la release, que admite hasta 2 GB por archivo.
+- El logo para la descripción sale del repo:
+  `https://raw.githubusercontent.com/FT-Key/Recognizer/main/web/public/logo.png`.
+- El `.exe` no está firmado: Windows muestra "Windows protegió tu PC" la primera vez.
+- Al publicar una versión nueva, el botón de la web apunta sola a la última (no hay que
+  tocar el código).
+
+---
+
 ## Cómo funciona PyInstaller (resumen)
 
 PyInstaller **congela** el intérprete de Python y todas las dependencias dentro de la

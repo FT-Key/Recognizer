@@ -82,7 +82,8 @@ web/
 5. **Overlay** de landmarks, lateralidad, gesto y FPS en canvas de alto DPI.
 6. **Tema claro/oscuro** con persistencia en `localStorage`.
 7. **Banner dinámico**: sondea `http://127.0.0.1:8765/health`; si la app de escritorio
-   responde, ofrece "Abrir app"; si no, "Descargar app".
+   responde, ofrece "Abrir app"; si no, "Descargar para Windows", que enlaza a la última
+   release (`github.com/FT-Key/Recognizer/releases/latest`).
 8. **Gestos personalizados**: `CONFIG.gestures.customModelUrl` permite cargar un modelo
    `.task` propio (generado con `scripts/train_gesture_model.py`).
 
