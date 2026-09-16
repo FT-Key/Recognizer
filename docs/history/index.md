@@ -15,5 +15,6 @@ etapa que se necesite.
 | 7 | Abrir enlaces (playlist secuencial, ILoveYou) | completada | [stage-7-abrir-enlaces.md](stage-7-abrir-enlaces.md) |
 | 8 | Gestos compuestos (menús por mano) + script de video | completada | [stage-8-gestos-compuestos.md](stage-8-gestos-compuestos.md) |
 | 8b | Fix: el video sigue reproduciendo al volver al inicio | completada | [stage-8b-fix-video-playback.md](stage-8b-fix-video-playback.md) |
-| 9 | App web (React) + empaquetado de escritorio (PyInstaller) | implementada | [stage-9-web-react-y-empaquetado.md](stage-9-web-react-y-empaquetado.md) |
+| 9 | App web (React) + empaquetado de escritorio (PyInstaller) | completada | [stage-9-web-react-y-empaquetado.md](stage-9-web-react-y-empaquetado.md) |
+| 9b | Navegador controlado (CDP) | completada | [stage-9b-navegador-controlado.md](stage-9b-navegador-controlado.md) |
 | 10 | Enrolamiento facial, roles y despliegue web | pendiente | - |

@@ -1,10 +1,9 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 9 (app web React + empaquetado de escritorio con PyInstaller)
-  implementada en el árbol de trabajo (sin commit/merge); siguiente: etapa 10
-  (enrolamiento facial, roles y despliegue web)
-- **Rama:** `dev` (trabajo de etapa 9 sin commitear; ver `git status`)
-- **Actualizado:** 2026-09-15
+- **Fase actual:** etapa 9b (navegador controlado via CDP) completada; siguiente: etapa 10
+  (enrolamiento facial, roles/permisos, despliegue web)
+- **Rama:** `dev` (trabajo de etapas 9/9b sin commitear; ver `git status`)
+- **Actualizado:** 2026-09-16
 
 ## Hecho
 - Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
@@ -49,8 +48,8 @@
   (vuelve el video de Chrome al inicio). Gate verde: pytest 442 tests, 98.94%, mypy 99,
   check-arch 3/3, smoke 13.3 FPS.
 - Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7), etapa 6 (1e5f36e)
-  y etapa 7 (656478a).
+  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7), etapa 6 (1e5f36e),
+  etapa 7 (656478a) y etapa 9 (ver historial).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
 - Etapa 9 (web React + empaquetado): app web en `web/` migrada a React 19 + Vite con
@@ -69,13 +68,23 @@
   MediaPipe en Web Worker, estabilizador con transición entre gestos, overlay espejado y
   textos con escapes `\uXXXX`. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
   `docs/WEB-PLAN.md` y `docs/DESKTOP-APP-PLAN.md`.
+- Etapa 9b (navegador controlado via CDP): puerto `BrowserTabs` con `ensure`,
+  `seek_media` y `press_keys`; `CdpClient` (transporte HTTP + WebSocket
+  `UrllibCdpTransport`/`WebsocketCdpTransport`); `ChromiumCdpBrowser` implementa
+  `BrowserTabs` sobre Chromium (auto-deteccion de Chrome/Edge/Brave/Vivaldi/Opera,
+  perfil aislado `browser-profile/`, lanzamiento automatico con `--remote-debugging-port`).
+  Acciones `open_tab` (playlist rotatoria via `TabKey`), `tab_seek` (fraccion 0..1) y
+  `tab_press` (teclas via CDP `Input.dispatchKeyEvent`). Config `browser.tabs` en
+  `config.yaml`; `ILoveYou` ahora usa `open_tab` en vez de `open_links`. Menus Replay
+  migrados de script PowerShell a `tab_seek`. Gate verde: pytest 575 tests (575 passed),
+  mypy strict, check-arch 3/3.
 
 ## Siguiente (etapa 10 — enrolamiento y despliegue)
 - Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-8 (gestos, acciones reales, puntero, reglas de
-  landmarks, scripts, enlaces, menús compuestos y FPS) consolidadas en
+- Verificaciones manuales de etapas 0-9b (gestos, acciones reales, puntero, reglas de
+  landmarks, scripts, enlaces, menús compuestos, FPS y navegador CDP) consolidadas en
   `docs/PENDING-TESTS.md`; las ejecuta el usuario cuando pueda.
 - Calibrar `gestures.swap_handedness` con la cámara real (izquierda/derecha).
 - Pendiente decidir la nueva funcionalidad de los gestos `Pointing_Up` y `Victory`.

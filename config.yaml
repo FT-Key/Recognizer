@@ -98,10 +98,8 @@ actions:
       keys: [ctrl, shift, m]
     # Playlist secuencial (no aleatoria): cada ILoveYou abre el siguiente enlace.
     ILoveYou:
-      type: open_links
-      urls:
-        - "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
-      # browser: ""   # opcional: ruta a chrome.exe; vacio = autodetectar
+      type: open_tab
+      tab: video
     # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
     # Ejemplos de acciones script (descomenta y asigna a un gesto):
     # ILoveYou:
@@ -120,25 +118,39 @@ actions:
   # la izquierda sostenga el modificador, puede ejecutar tambien su accion global.
   menus:
     # Gesto compuesto: con la IZQUIERDA sosteniendo Pointing_Up, el gesto de la
-    # DERECHA elige la posicion del video. Las teclas 0/4/7 de YouTube saltan al
-    # 0% / 40% / 70% de la duracion.
+    # DERECHA elige la posicion del video.
     Replay:
       hand: Left
       modifier: Pointing_Up
       consume_trigger: true
       options:
         Pointing_Up:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "0"]
+          type: tab_seek
+          tab: video
+          fraction: 0.0
         Victory:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "4"]
+          type: tab_seek
+          tab: video
+          fraction: 0.4
         OK_Sign:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "7"]
+          type: tab_seek
+          tab: video
+          fraction: 0.7
+
+# Navegador controlado: Recognizer lanza su propia instancia de Chromium
+# (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla
+# por Chrome DevTools Protocol (CDP). Las acciones de navegador actuan sobre
+# pestanas registradas, no sobre la ventana activa.
+# Login: OPCIONAL. YouTube funciona sin cuenta. El perfil vive en
+# browser-profile/<familia>/ junto a config.yaml; borralo para resetear.
+browser:
+  # executable: null autodetecta Chromium (Chrome > Edge > Brave > Vivaldi > Opera > Chromium).
+  # Puedes forzar una ruta explicita si prefieres otro navegador.
+  executable: null
+  debugging_port: 9222
+  # user_data_dir: null = browser-profile/<familia>/ junto a config/.exe
+  user_data_dir: null
+  tabs:
+    video:
+      url: "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
+      match: "youtube.com/watch"

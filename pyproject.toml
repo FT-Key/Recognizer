@@ -18,6 +18,7 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "pynput>=1.8.2",
     "pyyaml>=6.0.3",
+    "websocket-client>=1.8.0",
 ]
 
 [project.scripts]
@@ -84,6 +85,14 @@ show_error_codes = true
 [[tool.mypy.overrides]]
 module = ["cv2", "cv2.*", "mediapipe", "mediapipe.*", "pynput", "pynput.*"]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["websocket", "websocket.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

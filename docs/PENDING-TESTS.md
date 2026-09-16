@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-8) — verificación manual del usuario
+# Tests pendientes (etapas 0-9b) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -199,6 +199,27 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Añadir una segunda opción a `menus.Replay.options` (p. ej. `Thumb_Up`) y verificar que
   se puede añadir otra con solo config.
 - [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.
+
+### Etapa 9b — navegador controlado (CDP)
+
+- [ ] Auto-detección: ejecutar `uv run recognizer --verbose` sin Chrome abierto y verificar
+  en el log que detecta el navegador Chromium instalado (Chrome, Edge, Brave, etc.) y lo
+  lanza en `--remote-debugging-port=9222`. Con el navegador ya corriendo, verificar que lo
+  reutiliza sin lanzar otro proceso.
+- [ ] `ILoveYou` abre pestaña: con el navegador corriendo, hacer el gesto `ILoveYou` y
+  comprobar que se abre (o enfoca) una pestaña de YouTube con el video configurado. Si la
+  pestaña ya existe, debe enfocarla y reproducir; si no, crearla.
+- [ ] Menú Replay (izquierda `Pointing_Up`) con las 3 opciones CDP:
+  - `Pointing_Up` → `tab_seek` fracción 0.0 → video al inicio.
+  - `Victory` → `tab_seek` fracción 0.4 → video al 40%.
+  - `OK_Sign` → `tab_seek` fracción 0.7 → video al 70%.
+  Verificar que el salto funciona y el video sigue reproduciéndose tras cada seek.
+- [ ] `tab_press`: configurar una acción `tab_press` con teclas `["space"]` y comprobar que
+  pausa/reproduce el video de la pestaña activa via CDP.
+- [ ] Error controlado: sin navegador Chromium instalado, ejecutar y comprobar que la app
+  registra un `WARNING` y sigue corriendo sin caerse.
+- [ ] Perfil aislado: verificar que se crea `browser-profile/<familia>/` junto a config.yaml
+  y que el login de YouTube es opcional (el video funciona sin cuenta).
 
 ### Ajustes post-etapa 8 — arranque rápido y menú Replay
 
