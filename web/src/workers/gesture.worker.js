@@ -8,6 +8,30 @@
 
 import { FilesetResolver, GestureRecognizer } from '@mediapipe/tasks-vision';
 
+/**
+ * MediaPipe carga su WASM con `importScripts()`, que en un worker de modulo
+ * existe pero lanza ("Module scripts don't support importScripts()"). Lo
+ * sustituimos por una carga sincrona via XHR + eval, que es lo que hace
+ * `importScripts` internamente, para que funcione en dev y en produccion.
+ */
+function installImportScriptsShim() {
+  if (typeof self.importScripts !== 'function') return;
+
+  self.importScripts = (...urls) => {
+    for (const url of urls) {
+      const xhr = new XMLHttpRequest();
+      xhr.open('GET', url, false);
+      xhr.send(null);
+      if (xhr.status < 200 || xhr.status >= 300) {
+        throw new Error(`No se pudo cargar ${url} (${xhr.status})`);
+      }
+      (0, eval)(xhr.responseText);
+    }
+  };
+}
+
+installImportScriptsShim();
+
 let recognizer = null;
 let lastTimestamp = -1;
 let activeDelegate = null;

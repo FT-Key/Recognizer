@@ -1,8 +1,11 @@
 /**
  * Recognizer Web — Estabilizador de gestos.
  *
- * Misma lógica que la app de escritorio: buffer de N frames, confirmación tras
- * M apariciones consecutivas, liberación tras M frames sin detectar el gesto.
+ * Misma lógica que la app de escritorio: un gesto se confirma tras N frames
+ * consecutivos y se libera tras M frames sin verlo. Un gesto distinto puede
+ * reemplazar al confirmado cuando alcanza N frames (publica la liberación del
+ * anterior y la detección del nuevo).
+ *
  * Se expone como fábrica para que cada motor tenga su propio estado.
  */
 
@@ -13,9 +16,10 @@ export function createStabilizer({ onConfirm, onRelease, onHeld } = {}) {
   const releaseFrames = CONFIG.gestures.releaseFrames;
   const minConfidence = CONFIG.gestures.minConfidence;
 
-  let buffer = [];
   let confirmed = null;
-  let framesSinceLastSeen = 0;
+  let candidate = null;
+  let candidateFrames = 0;
+  let missingFrames = 0;
 
   function selectTop(detections) {
     const filtered = detections.filter(
@@ -25,41 +29,53 @@ export function createStabilizer({ onConfirm, onRelease, onHeld } = {}) {
     return filtered.reduce((best, curr) => (curr.confidence > best.confidence ? curr : best));
   }
 
-  function allSame(arr) {
-    return arr.every((v) => v === arr[0]);
-  }
-
   function update(detections) {
     const top = selectTop(detections ?? []);
 
-    if (top) {
-      buffer.push(top.name);
-      if (buffer.length > stabilizationFrames) buffer.shift();
+    // 1) El gesto confirmado sigue presente: se mantiene y se emite "held".
+    if (top && confirmed === top.name) {
+      candidate = null;
+      candidateFrames = 0;
+      missingFrames = 0;
+      onHeld?.(confirmed, top.confidence, top.handedness);
+      return confirmed;
+    }
 
-      if (!confirmed) {
-        if (buffer.length === stabilizationFrames && allSame(buffer)) {
-          confirmed = top.name;
-          framesSinceLastSeen = 0;
-          onConfirm?.(confirmed, top.confidence, top.handedness);
-        }
+    // 2) Hay una observacion: acumular candidato y confirmarlo al llegar a N.
+    if (top) {
+      if (candidate === top.name) {
+        candidateFrames += 1;
       } else {
-        framesSinceLastSeen = 0;
-        if (top.name === confirmed) {
-          onHeld?.(confirmed, top.confidence, top.handedness);
-        } else {
-          buffer = [top.name];
+        candidate = top.name;
+        candidateFrames = 1;
+      }
+
+      if (candidateFrames >= stabilizationFrames) {
+        const previous = confirmed;
+        if (previous !== null && previous !== top.name) {
+          onRelease?.(previous);
         }
+        confirmed = top.name;
+        candidate = null;
+        candidateFrames = 0;
+        missingFrames = 0;
+        onConfirm?.(confirmed, top.confidence, top.handedness);
+        return confirmed;
       }
     } else {
-      buffer = [];
-      if (confirmed) {
-        framesSinceLastSeen += 1;
-        if (framesSinceLastSeen >= releaseFrames) {
-          const released = confirmed;
-          confirmed = null;
-          framesSinceLastSeen = 0;
-          onRelease?.(released);
-        }
+      candidate = null;
+      candidateFrames = 0;
+    }
+
+    // 3) El gesto confirmado no se observa (o lo desplaza un candidato):
+    //    contar ausencias y liberarlo al llegar a M.
+    if (confirmed !== null) {
+      missingFrames += 1;
+      if (missingFrames >= releaseFrames) {
+        const released = confirmed;
+        confirmed = null;
+        missingFrames = 0;
+        onRelease?.(released);
       }
     }
 
@@ -67,9 +83,10 @@ export function createStabilizer({ onConfirm, onRelease, onHeld } = {}) {
   }
 
   function reset() {
-    buffer = [];
     confirmed = null;
-    framesSinceLastSeen = 0;
+    candidate = null;
+    candidateFrames = 0;
+    missingFrames = 0;
   }
 
   return { update, reset, getConfirmed: () => confirmed };

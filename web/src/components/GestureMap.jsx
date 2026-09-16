@@ -8,7 +8,7 @@ export function GestureMap() {
       <thead>
         <tr>
           <th>Gesto</th>
-          <th>Acci\u00F3n</th>
+          <th>Acción</th>
         </tr>
       </thead>
       <tbody>
@@ -16,7 +16,7 @@ export function GestureMap() {
           <tr key={name}>
             <td className="emoji">{mapping.emoji}</td>
             <td>
-              {name} \u2192 {mapping.label}
+              {name} → {mapping.label}
             </td>
           </tr>
         ))}

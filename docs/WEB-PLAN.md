@@ -129,6 +129,35 @@ npx vercel --prod    # o conectar el repo a Vercel
 
 `getUserMedia` exige contexto seguro (HTTPS o localhost); Vercel/GitHub Pages lo dan.
 
+## Problemas conocidos y soluciones (MediaPipe en el navegador)
+
+1. **`importScripts` en Web Workers de módulo.** MediaPipe carga su WASM con
+   `importScripts()`, que existe en un worker de tipo `module` pero lanza
+   `Module scripts don't support importScripts()`. Solución: `src/workers/gesture.worker.js`
+   instala un shim que reemplaza `importScripts` por una carga síncrona (XHR + `eval`),
+   que es lo que hace internamente. Así funciona igual en `vite dev` (worker módulo) y en
+   el build de producción.
+2. **Overlay espejado.** El `<video>` se muestra espejado (selfie) con `scaleX(-1)`, pero
+   los landmarks llegan en el espacio de la imagen original. Solución: `landmarks.js`
+   invierte `x` (`1 - x`) al dibujar geometría; el texto se mantiene legible.
+3. **Gestos que no cambian.** El estabilizador debe permitir que un gesto distinto
+   reemplace al confirmado tras N frames (publicando la liberación del anterior). Un
+   estabilizador que solo libera por ausencia deja la app clavada en el primer gesto.
+   Ver `src/lib/stabilizer.js` (misma semántica que `GestureStabilizerProcessor`).
+4. **Acciones repetidas al mantener un gesto.** Solo los gestos marcados con
+   `repeat: true` (volumen) se re-disparan mientras se sostienen; el resto ejecuta una vez
+   al confirmarse.
+
+## Verificación local
+
+```bash
+npm run dev      # http://localhost:5173
+npm run build && npm run preview   # build de producción en http://localhost:4173
+```
+
+Ambos modos deben mostrar `Listo · GPU` (o `CPU`) y dibujar los landmarks al mostrar la
+mano. Si aparece un banner rojo de error, el mensaje indica la causa.
+
 ## Riesgos
 
 - **Privacidad**: el video se procesa localmente; no se sube a ningún servidor.

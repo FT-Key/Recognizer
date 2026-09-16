@@ -54,12 +54,16 @@ export const CONFIG = {
         command: 'volume_up',
         label: 'Subir volumen',
         emoji: '\uD83D\uDC4D',
+        repeat: true,
+        repeatIntervalMs: 400,
       },
       Thumb_Down: {
         action: 'youtube',
         command: 'volume_down',
         label: 'Bajar volumen',
         emoji: '\uD83D\uDC4E',
+        repeat: true,
+        repeatIntervalMs: 400,
       },
       Closed_Fist: {
         action: 'youtube',

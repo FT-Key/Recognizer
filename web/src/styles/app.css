@@ -102,6 +102,20 @@ body {
   border-color: var(--accent);
 }
 
+/* Error banner */
+.error-banner {
+  margin: 12px auto 0;
+  padding: 10px 18px;
+  width: calc(100% - 40px);
+  max-width: 1360px;
+  background: rgba(255, 82, 82, 0.14);
+  border: 1px solid var(--red);
+  color: var(--red);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  word-break: break-word;
+}
+
 /* Layout */
 .main {
   flex: 1;
