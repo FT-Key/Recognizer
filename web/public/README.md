@@ -4,13 +4,14 @@ Archivos estáticos que Vite copia tal cual a `dist/`.
 
 ## Foto de "Sobre mí"
 
-Coloca aquí tu retrato con el nombre exacto **`franco.jpg`**:
+La página *Sobre mí* carga el retrato desde **`/me.webp`**:
 
 ```
-web/public/franco.jpg
+web/public/me.webp
 ```
 
-La página *Sobre mí* lo carga desde `/franco.jpg`. Si el archivo no existe,
-se muestra un marcador de posición con las instrucciones (no rompe nada).
+Si el archivo no existe, se muestra un marcador de posición con las instrucciones
+(no rompe nada). Para cambiarlo, reemplazá `me.webp` o ajustá `PHOTO_SRC` en
+`src/pages/AboutPage.jsx`.
 
-Recomendado: imagen cuadrada, mínimo 400×400 px, menos de ~300 KB.
+Recomendado: imagen cuadrada, mínimo 400×400 px.

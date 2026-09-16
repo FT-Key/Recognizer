@@ -5,7 +5,7 @@ const PORTFOLIO_URL = 'https://ftkey-portfolio.netlify.app/';
 const GITHUB_URL = 'https://github.com/FT-Key';
 const LINKEDIN_URL = 'https://www.linkedin.com/in/ftkey/';
 const EMAIL = 'fr4nc0t2@gmail.com';
-const PHOTO_SRC = '/franco.jpg';
+const PHOTO_SRC = '/me.webp';
 
 const SKILL_GROUPS = [
   {
@@ -108,7 +108,7 @@ function AboutPhoto() {
           <div className="about-photo__icon">
             <Icon name="user" size={52} />
           </div>
-          <p>Tu foto aquí (coloca el archivo en web/public/franco.jpg)</p>
+          <p>Tu foto aquí (coloca el archivo en web/public/me.webp)</p>
         </div>
       ) : (
         <img
