@@ -33,5 +33,8 @@ class PointerMover:
                     self._controller.move_to(x=x, y=y)
                 except ActionError as exc:
                     self._logger.warning("Fallo el movimiento del puntero: %s", exc)
+                except Exception:
+                    # Frontera: un fallo inesperado del puntero no debe tumbar la app.
+                    self._logger.exception("Error inesperado moviendo el puntero")
             case _:
                 return

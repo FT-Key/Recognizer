@@ -1,9 +1,10 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 8 (gestos compuestos / menús por mano) completada y mergeada en
-  `dev`; siguiente: etapa 9 (bases de escalado: identidad, políticas y plan web)
-- **Rama:** `dev` (etapa 8 mergeada con `--no-ff`)
-- **Actualizado:** 2026-09-13
+- **Fase actual:** etapa 9 (app web React + empaquetado de escritorio con PyInstaller)
+  implementada en el árbol de trabajo (sin commit/merge); siguiente: etapa 10
+  (enrolamiento facial, roles y despliegue web)
+- **Rama:** `dev` (trabajo de etapa 9 sin commitear; ver `git status`)
+- **Actualizado:** 2026-09-15
 
 ## Hecho
 - Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
@@ -52,9 +53,23 @@
   y etapa 7 (656478a).
 - Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
   2 skills y 4 comandos.
+- Etapa 9 (web React + empaquetado): app web en `web/` migrada a React 19 + Vite con
+  MediaPipe en **Web Worker** (fallback GPU→CPU), lógica pura en `src/lib`, hooks y
+  componentes; tema claro/oscuro persistente; **banner dinámico** que detecta la app de
+  escritorio vía `http://127.0.0.1:8765/health`; gestos personalizados con
+  `scripts/train_gesture_model.py` (Model Maker). Escritorio empaquetado con PyInstaller
+  (`packaging/recognizer.spec` onedir + `scripts/build_exe.py` → `dist/Recognizer/`),
+  servidor de salud local (`adapters/health_server.py`) y resolución de rutas junto al
+  `.exe`. Gate verde: pytest 492 tests, 98.38%, mypy 107 archivos, check-arch 3/3;
+  `npm run build` OK; `.exe` verificado (`--help`, frames headless y `GET /health`).
+  El `.exe` escribe `logs/recognizer.log` junto al ejecutable (config, pantalla, modelo y
+  crashes). Bug del puntero en el `.exe` corregido: faltaba `tkinter` en el bundle (lo usa
+  `pynput_mouse` para el tamaño de pantalla) y los fallos inesperados de acción/puntero ya
+  no tumban la app. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
+  `docs/WEB-PLAN.md` y `docs/DESKTOP-APP-PLAN.md`.
 
-## Siguiente (etapa 9 — bases de escalado)
-- Identidad, políticas de permisos por gesto y plan de despliegue web.
+## Siguiente (etapa 10 — enrolamiento y despliegue)
+- Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).
 
 ## Bloqueos / notas
 - Verificaciones manuales de etapas 0-8 (gestos, acciones reales, puntero, reglas de

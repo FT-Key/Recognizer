@@ -1,0 +1,10 @@
+# Dependencias del entrenamiento de gestos personalizados (opcional).
+#
+# NO se instalan con el proyecto; solo si vas a entrenar tu propio modelo:
+#     uv pip install -r scripts/requirements-model-maker.txt
+#
+# Nota: mediapipe-model-maker depende de TensorFlow. En Windows puede no
+# instalarse; usa WSL o Linux/macOS para el entrenamiento.
+
+mediapipe-model-maker>=0.2.1.4
+tensorflow>=2.15

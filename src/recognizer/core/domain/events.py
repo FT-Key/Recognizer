@@ -38,6 +38,15 @@ class GestureReleased(DomainEvent):
 
 
 @dataclass(frozen=True, slots=True)
+class GestureHeld(DomainEvent):
+    """Gesto confirmado que se mantiene activo en una mano (se publica periodicamente)."""
+
+    gesture: GestureId
+    confidence: float
+    handedness: Handedness
+
+
+@dataclass(frozen=True, slots=True)
 class PointerMoved(DomainEvent):
     """Posicion normalizada del puntero publicada mientras esta activo."""
 

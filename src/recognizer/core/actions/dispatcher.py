@@ -15,7 +15,7 @@ from recognizer.core.actions.menus import (
 from recognizer.core.actions.noop import NoOpAction
 from recognizer.core.constants import ACTION_LOGGER_NAME
 from recognizer.core.domain.action import Action, ActionContext
-from recognizer.core.domain.events import DomainEvent, GestureDetected, GestureReleased
+from recognizer.core.domain.events import DomainEvent, GestureDetected, GestureHeld, GestureReleased
 from recognizer.core.domain.gesture import GESTURE_NONE, GestureId
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.errors import ActionError
@@ -106,6 +106,19 @@ class GestureActionDispatcher:
                 self._tracker.release(handedness)
                 if self._last_match is not None and self._last_match[0] == handedness:
                     self._last_match = None
+            case GestureHeld(
+                gesture=gesture,
+                confidence=confidence,
+                handedness=handedness,
+            ):
+                if gesture == GESTURE_NONE:
+                    return
+                self._run_global(
+                    gesture=gesture,
+                    confidence=confidence,
+                    handedness=handedness,
+                    timestamp=event.timestamp,
+                )
             case _:
                 return
 
@@ -151,3 +164,6 @@ class GestureActionDispatcher:
             action.execute(context)
         except ActionError as exc:
             self._logger.warning("Fallo la accion para %s: %s", context.gesture.value, exc)
+        except Exception:
+            # Frontera: un fallo inesperado de una accion no debe tumbar la app.
+            self._logger.exception("Error inesperado en la accion para %s", context.gesture.value)

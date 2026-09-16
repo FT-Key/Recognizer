@@ -331,8 +331,10 @@ def test_repo_config_loads_expected_mappings() -> None:
         "Victory",
         "ILoveYou",
     }
-    assert mappings["Thumb_Up"] == MediaKeyActionConfig(key=MediaKey.VOLUME_UP)
-    assert mappings["Thumb_Down"] == MediaKeyActionConfig(key=MediaKey.VOLUME_DOWN)
+    assert mappings["Thumb_Up"] == MediaKeyActionConfig(key=MediaKey.VOLUME_UP, repeat_seconds=0.5)
+    assert mappings["Thumb_Down"] == MediaKeyActionConfig(
+        key=MediaKey.VOLUME_DOWN, repeat_seconds=0.5
+    )
     assert mappings["Closed_Fist"] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
     assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
     assert mappings["Victory"] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))

@@ -50,6 +50,18 @@ class FailingMouseController:
         pass
 
 
+class CrashingMouseController:
+    """Doble que falla con un error inesperado (no ActionError)."""
+
+    def move_to(self, *, x: float, y: float) -> None:
+        del x, y
+        msg = "fallo inesperado"
+        raise ModuleNotFoundError(msg)
+
+    def click(self) -> None:
+        pass
+
+
 def _event(*, x: float = POINTER_X, y: float = POINTER_Y) -> PointerMoved:
     return PointerMoved(timestamp=EVENT_TIMESTAMP, x=x, y=y)
 
@@ -90,6 +102,18 @@ def test_action_error_is_logged_and_not_propagated(
     assert record.levelno == logging.WARNING
     assert record.name == POINTER_LOGGER_NAME
     assert "puntero" in record.getMessage().lower()
+
+
+def test_unexpected_error_is_logged_and_not_propagated(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    mover = PointerMover(controller=CrashingMouseController())
+
+    with caplog.at_level(logging.ERROR, logger=POINTER_LOGGER_NAME):
+        mover.handle(_event())
+
+    assert any(record.levelno == logging.ERROR for record in caplog.records)
+    assert any("inesperado" in record.getMessage().lower() for record in caplog.records)
 
 
 @pytest.mark.parametrize(

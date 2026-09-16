@@ -100,7 +100,33 @@ lateralidad del modelo se puede corregir con `gestures.swap_handedness`.
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·
 `uv run check-arch` · `uv run smoke --frames 30 --no-window`.
 
-## Futuro web
+## Arquitectura dual: Web + Desktop
 
-Ver `docs/WEB-PLAN.md`. El core se reutiliza como librería; el servidor web será otro
-adaptador (`FrameSource` por WebSocket/WebRTC, `ActionSink` remoto).
+Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
+(reconocimiento de gestos) pero son implementaciones independientes:
+
+### Desktop (`src/recognizer/`)
+- **Lenguaje:** Python 3.12
+- **Core:** `src/recognizer/core/` — pipeline, puertos, dominio
+- **Adaptadores:** `src/recognizer/adapters/` — OpenCV, MediaPipe Python, pynput
+- **Capacidad:** Control completo del SO (mouse, teclado, apps, volumen)
+- **Distribución:** `uv run` / PyInstaller `.exe`
+
+### Web (`web/`)
+- **Lenguaje:** JavaScript vanilla (Vite bundler)
+- **Core:** `@mediapipe/tasks-vision` (mismo modelo `.task` que Python)
+- **Capacidad:** Solo control dentro de la pestaña (sandbox del navegador)
+- **Distribución:** HTML + JS + CSS estático (Vercel / GitHub Pages)
+
+### Qué comparten
+- Mismos gestos (8 canned gestures de MediaPipe)
+- Mismos umbrales de confianza y estabilización
+- Mismo modelo de reconocimiento (`gesture_recognizer.task`)
+
+### Qué es distinto
+- **Pointing_Up**: Web = scroll, Desktop = puntero del mouse
+- **Thumb_Up**: Web = volumen del video, Desktop = volumen del sistema
+- **Victory**: Web = nueva pestaña, Desktop = hotkey
+- Desktop tiene acciones que la web no puede hacer (mouse, teclado, apps)
+
+Ver `docs/WEB-PLAN.md` para detalles de la versión web.
