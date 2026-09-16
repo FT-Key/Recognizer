@@ -42,44 +42,30 @@ const SKILL_GROUPS = [
   },
 ];
 
-const TIMELINE = [
+const PROCESS = [
   {
-    when: '2025 – Actualidad',
-    what: 'Tutor / Mentor de programación',
-    where: 'RollingCode School',
+    step: '01',
+    title: 'Entender',
     detail:
-      'Acompaño a estudiantes en el stack MERN y en buenas prácticas de desarrollo web y trabajo colaborativo.',
+      'Escucho el problema, pregunto lo que falta y armo un plan corto antes de escribir la primera línea de código.',
   },
   {
-    when: '2025',
-    what: 'Desarrollador Web',
-    where: 'RollingCode School',
+    step: '02',
+    title: 'Prototipar',
     detail:
-      'Proyectos internos con MongoDB, Next.js, React, Node.js, Express y TailwindCSS; integración de Firebase, Nodemailer y pagos, y despliegues en Vercel, Netlify y Render.',
+      'Saco una versión mínima que funcione para validar la idea y detectar problemas temprano.',
   },
   {
-    when: '2024 – Actualidad',
-    what: 'Ingeniería en Sistemas de Información (4.º año)',
-    where: 'Universidad Tecnológica Nacional',
-    detail: 'Carrera de grado en curso, combinada con formación autodidacta en programación.',
+    step: '03',
+    title: 'Construir',
+    detail:
+      'Cuido la interfaz, el rendimiento y la legibilidad del código. Prefiero algo sólido a algo apurado.',
   },
   {
-    when: '2025 – 2026',
-    what: 'Programación asistida por IA',
-    where: 'RollingCode School',
-    detail: 'Formación enfocada en desarrollo con inteligencia artificial y automatización.',
-  },
-  {
-    when: '2024',
-    what: 'Desarrollo Web Full Stack (MERN)',
-    where: 'RollingCode School',
-    detail: 'MongoDB, Express, React y Node.js, con foco en proyectos reales.',
-  },
-  {
-    when: '2016 – 2019',
-    what: 'Pasantía en desarrollo de sistemas de escritorio',
-    where: 'Atilio Marola SRL',
-    detail: 'Primeros pasos profesionales desarrollando un sistema de escritorio.',
+    step: '04',
+    title: 'Desplegar',
+    detail:
+      'Lo pongo en producción (Vercel, Netlify, Render o mi VPS) y ajusto con feedback real.',
   },
 ];
 
@@ -231,7 +217,7 @@ export function AboutPage() {
           </div>
           <div className="grid-2">
             {SKILL_GROUPS.map((group) => (
-              <article className="card" key={group.area}>
+              <article className="card card--tech" key={group.area}>
                 <h3>{group.area}</h3>
                 <ul className="tag-list">
                   {group.items.map((item) => (
@@ -249,17 +235,19 @@ export function AboutPage() {
       <section className="section section--tight">
         <div className="container">
           <div className="section__head">
-            <p className="eyebrow">Trayectoria</p>
-            <h2>Experiencia y formación</h2>
+            <p className="eyebrow">Proceso</p>
+            <h2>De la idea al deploy</h2>
+            <p className="muted">
+              Así encaro cada proyecto, del primer boceto al ajuste con usuarios reales.
+            </p>
           </div>
           <ol className="timeline">
-            {TIMELINE.map((entry) => (
-              <li className="timeline__item" key={`${entry.when}-${entry.what}`}>
-                <span className="timeline__when">{entry.when}</span>
+            {PROCESS.map((item) => (
+              <li className="timeline__item" key={item.step}>
+                <span className="timeline__when">{item.step}</span>
                 <div className="timeline__what">
-                  <h3>{entry.what}</h3>
-                  <p className="muted">{entry.where}</p>
-                  <p>{entry.detail}</p>
+                  <h3>{item.title}</h3>
+                  <p>{item.detail}</p>
                 </div>
               </li>
             ))}

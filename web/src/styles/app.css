@@ -143,16 +143,24 @@ a { color: var(--link); }
   text-decoration: none;
 }
 
+/* Plato claro para el logo: el emblema es teal con contorno negro, así que
+   necesita un fondo claro para leerse igual en tema claro y oscuro. */
 .navbar__brand-badge {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  background: var(--color-primary);
-  color: var(--color-primary-contrast);
+  width: 38px;
+  height: 38px;
+  padding: 2px;
+  background: #e9e5dd;
   border: 2px solid;
   border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
-  font-size: 0.9rem;
+}
+
+.navbar__logo {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
 }
 
 .navbar__links {
@@ -640,6 +648,15 @@ a { color: var(--link); }
 .card h3 { font-size: 0.9rem; }
 .card p { font-size: 0.8rem; color: var(--color-text-muted); }
 
+/* Variante para habilidades: fondo hundido y titulo con acento, para no
+   confundirse con las cards de proyectos. */
+.card--tech { background: var(--color-surface-alt); }
+
+.card--tech h3 {
+  padding-bottom: var(--space-1);
+  border-bottom: 2px solid var(--color-primary-soft);
+}
+
 /* Pasos */
 .steps {
   list-style: none;
@@ -863,6 +880,7 @@ a { color: var(--link); }
   border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
 }
 
+/* Timeline (proceso): separador entre "Con que trabajo" y "Proyectos". */
 .timeline {
   list-style: none;
   display: flex;
@@ -872,20 +890,29 @@ a { color: var(--link); }
 
 .timeline__item {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 84px 1fr;
   gap: var(--space-4);
   padding-bottom: var(--space-3);
   border-bottom: 1px solid var(--bevel-dark);
 }
 
+.timeline__item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
 .timeline__when {
   font-family: var(--font-display);
-  font-size: 0.68rem;
+  font-size: 1.15rem;
   color: var(--color-primary-strong);
 }
 
-.timeline__what h3 { font-size: 0.85rem; }
-.timeline__what p { font-size: 0.78rem; color: var(--color-text-muted); }
+.timeline__what h3 { font-size: 0.9rem; }
+
+.timeline__what p {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
 
 .contact-list {
   list-style: none;
