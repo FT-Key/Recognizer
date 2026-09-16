@@ -149,6 +149,16 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   descarga) y página **Sobre mí** con foto (placeholder en `web/public/franco.jpg`), bio,
   habilidades, trayectoria, proyectos y portfolio.
 
+### Ajustes de layout y navegacion
+- **Orden de la pagina:** la demo (camara + video lado a lado) va primero, con el mapa de
+  gestos debajo del video (columna derecha); despues el intro (hero mas discreto, en panel,
+  conservando todo el texto) y el resto de secciones.
+- **Router por rutas reales** (History API) en vez de hash: `/` y `/sobre-mi`, con scroll
+  al inicio al cambiar de pagina. `web/vercel.json` reescribe todo a `index.html` para que
+  recargar `/sobre-mi` no de 404.
+- **La camara persiste entre paginas:** ya no se apaga al salir de Inicio; al volver se
+  reengancha el stream al `<video>` y el worker de gestos sigue vivo (no re-inicializa).
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

@@ -111,8 +111,14 @@ Los iconos son de **Font Awesome 6** via `react-icons` (`src/lib/icons.jsx`): he
 para los gestos (Open_Palm, Thumb_Up/Down, Closed_Fist, Victory, Pointing_Up, ILoveYou) en
 lugar de emojis.
 
-La app tiene dos paginas con router por hash (sin dependencias): **Inicio** (`#/`) y
-**Sobre mi** (`#/sobre-mi`).
+La app tiene dos paginas con router propio por rutas reales (History API, sin
+dependencias): **Inicio** (`/`) y **Sobre mi** (`/sobre-mi`). Al cambiar de pagina se sube
+al inicio y, al volver a Inicio, el stream de la camara se reengancha al `<video>` (el
+estado de la camara se mantiene entre paginas; el worker de gestos sigue vivo).
+
+Para que recargar una ruta como `/sobre-mi` no de 404 en produccion, `web/vercel.json`
+reescribe todo a `/index.html` (los archivos estaticos siguen sirviendose normalmente). En
+dev y `vite preview` el fallback SPA de Vite ya lo cubre.
 
 ## Detección de la app de escritorio
 
