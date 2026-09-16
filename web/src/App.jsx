@@ -1,20 +1,24 @@
-import { useCallback, useRef, useState } from 'react';
-import { Header } from './components/Header.jsx';
-import { CameraPanel } from './components/CameraPanel.jsx';
-import { VideoPanel } from './components/VideoPanel.jsx';
-import { DownloadBanner } from './components/DownloadBanner.jsx';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Navbar } from './components/Navbar.jsx';
+import { Footer } from './components/Footer.jsx';
 import { ActionFeedback } from './components/ActionFeedback.jsx';
+import { HomePage } from './pages/HomePage.jsx';
+import { AboutPage } from './pages/AboutPage.jsx';
 import { useCamera } from './hooks/useCamera.js';
 import { useGestureEngine } from './hooks/useGestureEngine.js';
 import { useYouTube } from './hooks/useYouTube.js';
 import { useTheme } from './hooks/useTheme.js';
 import { useDesktopApp } from './hooks/useDesktopApp.js';
+import { useHashRoute } from './hooks/useHashRoute.js';
+import { usePlaylist } from './hooks/usePlaylist.js';
+import * as YT from './lib/youtube-controller.js';
 
 const YOUTUBE_CONTAINER_ID = 'youtube-player';
-const YOUTUBE_VIDEO_ID = 'dQw4w9WgXcQ';
-const FEEDBACK_MS = 800;
+const DEFAULT_VIDEO_ID = 'dQw4w9WgXcQ';
+const FEEDBACK_MS = 900;
 
-function resolveHeaderStatus(engineStatus, engineError, cameraStatus) {
+function resolveHeaderStatus(engineStatus, engineError, cameraStatus, route) {
+  if (route !== 'home') return engineError ? 'error' : 'idle';
   if (engineError) return 'error';
   if (engineStatus === 'ready') return 'ready';
   if (engineStatus === 'loading' || cameraStatus === 'requesting') return 'loading';
@@ -27,30 +31,43 @@ export default function App() {
   const feedbackTimer = useRef(null);
   const [feedback, setFeedback] = useState(null);
 
+  const { route } = useHashRoute();
   const { theme, toggle } = useTheme();
   const { available: desktopAvailable } = useDesktopApp();
   const camera = useCamera(videoRef);
+  const playlist = usePlaylist();
+
+  const initialVideoId = useRef(playlist.current?.id ?? DEFAULT_VIDEO_ID);
+  const youtube = useYouTube(YOUTUBE_CONTAINER_ID, initialVideoId.current);
 
   const handleAction = useCallback(
     (mapping) => {
       if (mapping.action === 'ui' && mapping.command === 'toggle_theme') {
         toggle();
       }
-      setFeedback({ label: mapping.label, emoji: mapping.emoji });
+      if (mapping.action === 'playlist' && mapping.command === 'next') {
+        const video = playlist.next();
+        if (video) YT.loadVideoById(video.id);
+      }
+      setFeedback({ label: mapping.label, icon: mapping.icon });
       if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
       feedbackTimer.current = setTimeout(() => setFeedback(null), FEEDBACK_MS);
     },
-    [toggle],
+    [toggle, playlist],
   );
 
   const engine = useGestureEngine({
     videoRef,
     canvasRef,
-    enabled: camera.status === 'ready',
+    enabled: route === 'home' && camera.status === 'ready',
     onAction: handleAction,
   });
 
-  const youtube = useYouTube(YOUTUBE_CONTAINER_ID, YOUTUBE_VIDEO_ID);
+  // Al salir de la página principal se apaga la cámara (privacidad).
+  const stopCamera = camera.stop;
+  useEffect(() => {
+    if (route !== 'home') stopCamera();
+  }, [route, stopCamera]);
 
   const handleSelectDevice = useCallback(
     (id) => {
@@ -60,38 +77,68 @@ export default function App() {
     [camera],
   );
 
+  const handleAddVideo = useCallback(
+    (url, title) => {
+      const result = playlist.add(url, title);
+      if (result.ok && result.video && playlist.videos.length === 0) {
+        YT.loadVideoById(result.video.id);
+      }
+      return result;
+    },
+    [playlist],
+  );
+
+  const handleSelectVideo = useCallback(
+    (position) => {
+      playlist.select(position);
+      const video = playlist.videos[position];
+      if (video) YT.loadVideoById(video.id);
+    },
+    [playlist],
+  );
+
+  const headerStatus = resolveHeaderStatus(engine.status, engine.error, camera.status, route);
+
   return (
     <div className="app">
-      <Header
-        status={resolveHeaderStatus(engine.status, engine.error, camera.status)}
-        delegate={engine.delegate}
+      <Navbar
+        route={route}
         theme={theme}
         onToggleTheme={toggle}
+        status={headerStatus}
+        delegate={engine.delegate}
       />
-      {engine.error && (
-        <div className="error-banner" role="alert">
-          Error del reconocimiento: {engine.error}
+
+      {engine.error && route === 'home' && (
+        <div className="container">
+          <div className="error-banner" role="alert">
+            Error del reconocimiento: {engine.error}
+          </div>
         </div>
       )}
-      <main className="main">
-        <CameraPanel
-          videoRef={videoRef}
-          canvasRef={canvasRef}
-          devices={camera.devices}
-          deviceId={camera.deviceId}
-          onSelectDevice={handleSelectDevice}
-          cameraStatus={camera.status}
-          cameraError={camera.error}
-          onRequestCamera={() => camera.start()}
-          gesture={engine.gesture}
-        />
-        <VideoPanel
-          containerId={YOUTUBE_CONTAINER_ID}
-          fps={engine.fps}
-          youtubeError={youtube.error}
-        />
+
+      <main>
+        {route === 'sobre-mi' ? (
+          <AboutPage />
+        ) : (
+          <HomePage
+            videoRef={videoRef}
+            canvasRef={canvasRef}
+            camera={camera}
+            engine={engine}
+            playlist={playlist}
+            youtube={youtube}
+            desktopAvailable={desktopAvailable}
+            onSelectDevice={handleSelectDevice}
+            onStartCamera={() => camera.start()}
+            onAddVideo={handleAddVideo}
+            onSelectVideo={handleSelectVideo}
+            youtubeContainerId={YOUTUBE_CONTAINER_ID}
+          />
+        )}
       </main>
-      <DownloadBanner desktopAvailable={desktopAvailable} />
+
+      <Footer />
       <ActionFeedback feedback={feedback} />
     </div>
   );

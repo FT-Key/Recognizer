@@ -37,19 +37,13 @@ export function createDispatcher({ onAction } = {}) {
     }
   }
 
-  function dispatchNavigation(command, url) {
+  function dispatchNavigation(command) {
     switch (command) {
-      case 'new_tab':
-        navigator.openNewTab();
-        break;
       case 'scroll_up':
         navigator.scrollUp();
         break;
       case 'scroll_down':
         navigator.scrollDown();
-        break;
-      case 'open_url':
-        navigator.openNewTab(url);
         break;
       default:
         break;
@@ -66,10 +60,10 @@ export function createDispatcher({ onAction } = {}) {
     if (mapping.action === 'youtube') {
       dispatchYouTube(mapping.command);
     } else if (mapping.action === 'navigation') {
-      dispatchNavigation(mapping.command, mapping.url);
+      dispatchNavigation(mapping.command);
     }
-    // Las acciones 'ui' no tienen efecto directo aqui: la app las interpreta
-    // a traves de onAction (p. ej. cambiar el tema).
+    // Las acciones 'ui' (tema) y 'playlist' (siguiente video) no tienen efecto
+    // directo aqui: la app las interpreta a traves de onAction.
 
     onAction?.(mapping, { confidence, handedness });
   }

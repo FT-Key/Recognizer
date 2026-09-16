@@ -18,6 +18,7 @@ export function useCamera(videoRef) {
       streamRef.current = null;
     }
     if (videoRef.current) videoRef.current.srcObject = null;
+    setStatus('idle');
   }, [videoRef]);
 
   const refreshDevices = useCallback(async () => {
