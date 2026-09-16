@@ -1,6 +1,6 @@
-import { Hero } from '../components/Hero.jsx';
 import { CameraPanel } from '../components/CameraPanel.jsx';
 import { VideoPanel } from '../components/VideoPanel.jsx';
+import { Intro } from '../components/Intro.jsx';
 import { PlaylistManager } from '../components/PlaylistManager.jsx';
 import { Features } from '../components/Features.jsx';
 import { HowItWorks } from '../components/HowItWorks.jsx';
@@ -23,9 +23,7 @@ export function HomePage({
 }) {
   return (
     <>
-      <Hero onStart={onStartCamera} />
-
-      <section className="section" id="demo">
+      <section className="section section--tight" id="demo">
         <div className="container">
           <div className="section__head">
             <p className="eyebrow">Demo en vivo</p>
@@ -57,6 +55,8 @@ export function HomePage({
           </div>
         </div>
       </section>
+
+      <Intro onStart={onStartCamera} />
 
       <section className="section section--tight" id="playlist">
         <div className="container">

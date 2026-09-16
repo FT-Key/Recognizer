@@ -9,12 +9,12 @@ import { useGestureEngine } from './hooks/useGestureEngine.js';
 import { useYouTube } from './hooks/useYouTube.js';
 import { useTheme } from './hooks/useTheme.js';
 import { useDesktopApp } from './hooks/useDesktopApp.js';
-import { useHashRoute } from './hooks/useHashRoute.js';
+import { usePathRoute } from './hooks/usePathRoute.js';
 import { usePlaylist } from './hooks/usePlaylist.js';
+import { CONFIG } from './lib/config.js';
 import * as YT from './lib/youtube-controller.js';
 
 const YOUTUBE_CONTAINER_ID = 'youtube-player';
-const DEFAULT_VIDEO_ID = 'dQw4w9WgXcQ';
 const FEEDBACK_MS = 900;
 
 function resolveHeaderStatus(engineStatus, engineError, cameraStatus, route) {
@@ -31,13 +31,13 @@ export default function App() {
   const feedbackTimer = useRef(null);
   const [feedback, setFeedback] = useState(null);
 
-  const { route } = useHashRoute();
+  const { route, navigate } = usePathRoute();
   const { theme, toggle } = useTheme();
   const { available: desktopAvailable } = useDesktopApp();
   const camera = useCamera(videoRef);
   const playlist = usePlaylist();
 
-  const initialVideoId = useRef(playlist.current?.id ?? DEFAULT_VIDEO_ID);
+  const initialVideoId = useRef(playlist.current?.id ?? CONFIG.video.defaultVideoId);
   const youtube = useYouTube(YOUTUBE_CONTAINER_ID, initialVideoId.current);
 
   const handleAction = useCallback(
@@ -59,15 +59,26 @@ export default function App() {
   const engine = useGestureEngine({
     videoRef,
     canvasRef,
-    enabled: route === 'home' && camera.status === 'ready',
+    enabled: camera.status === 'ready',
     onAction: handleAction,
   });
 
-  // Al salir de la página principal se apaga la cámara (privacidad).
-  const stopCamera = camera.stop;
+  // La cámara sigue activa al cambiar de página; al volver a Inicio se
+  // reengancha el stream al <video> recién montado.
+  const reattach = camera.reattach;
   useEffect(() => {
-    if (route !== 'home') stopCamera();
-  }, [route, stopCamera]);
+    if (route === 'home') reattach();
+  }, [route, reattach]);
+
+  // Al cambiar de página, subir al inicio (salvo en la carga inicial).
+  const firstRoute = useRef(true);
+  useEffect(() => {
+    if (firstRoute.current) {
+      firstRoute.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [route]);
 
   const handleSelectDevice = useCallback(
     (id) => {
@@ -103,6 +114,7 @@ export default function App() {
     <div className="app">
       <Navbar
         route={route}
+        onNavigate={navigate}
         theme={theme}
         onToggleTheme={toggle}
         status={headerStatus}
@@ -138,7 +150,7 @@ export default function App() {
         )}
       </main>
 
-      <Footer />
+      <Footer onNavigate={navigate} />
       <ActionFeedback feedback={feedback} />
     </div>
   );

@@ -21,6 +21,18 @@ export function useCamera(videoRef) {
     setStatus('idle');
   }, [videoRef]);
 
+  /** Reengancha el stream existente a un <video> nuevo (al volver a la página). */
+  const reattach = useCallback(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    const played = video.play();
+    if (played && typeof played.catch === 'function') played.catch(() => {});
+  }, [videoRef]);
+
   const refreshDevices = useCallback(async () => {
     try {
       const all = await navigator.mediaDevices.enumerateDevices();
@@ -65,5 +77,5 @@ export function useCamera(videoRef) {
 
   useEffect(() => () => stop(), [stop]);
 
-  return { devices, deviceId, setDeviceId, status, error, start, stop };
+  return { devices, deviceId, setDeviceId, status, error, start, stop, reattach };
 }

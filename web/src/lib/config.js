@@ -45,6 +45,9 @@ export const CONFIG = {
   video: {
     /** Volumen inicial del reproductor (0-100). */
     initialVolume: 50,
+    /** Video que se muestra al cargar y que se agrega si la playlist esta vacia. */
+    defaultVideoId: 'dQw4w9WgXcQ',
+    defaultVideoTitle: 'Rick Astley - Never Gonna Give You Up',
   },
 
   actions: {

@@ -26,7 +26,7 @@ export function VideoPanel({ containerId, fps, youtubeError, currentTitle }) {
           </p>
         )}
 
-        <div className="hero__actions" style={{ justifyContent: 'flex-start' }}>
+        <div className="panel__controls">
           <button type="button" className="btn btn--sm" onClick={() => YT.togglePlayPause()}>
             Play / Pause
           </button>

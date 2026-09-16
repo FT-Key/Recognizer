@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { CONFIG } from '../lib/config.js';
 import {
   extractYouTubeId,
   loadPlaylist,
@@ -10,8 +11,20 @@ import {
   savePlaylist,
 } from '../lib/playlist.js';
 
+/** Playlist inicial: lo guardado, o el video por defecto para que nunca este vacia. */
+function initialPlaylist() {
+  const stored = loadPlaylist();
+  if (stored.length > 0) return stored;
+  return [
+    {
+      id: CONFIG.video.defaultVideoId,
+      title: CONFIG.video.defaultVideoTitle,
+    },
+  ];
+}
+
 export function usePlaylist() {
-  const [videos, setVideos] = useState(() => loadPlaylist());
+  const [videos, setVideos] = useState(initialPlaylist);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {

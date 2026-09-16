@@ -26,10 +26,6 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
 
   useEffect(() => {
     if (!enabled) return undefined;
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    if (!video || !canvas) return undefined;
-
     let cancelled = false;
     const latest = { landmarks: [], handednesses: [], gesture: null, fps: 0 };
 
@@ -113,7 +109,12 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
     const loop = (timestamp) => {
       if (cancelled) return;
       rafId = requestAnimationFrame(loop);
-      if (video.readyState < 2) return;
+
+      // Los refs se leen en cada frame: al cambiar de pagina el <video>/<canvas>
+      // se desmontan y el worker sigue vivo, listo para cuando vuelvan.
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      if (!video || !canvas || video.readyState < 2) return;
 
       if (lastTs) {
         frameCount += 1;

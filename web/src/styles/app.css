@@ -270,6 +270,14 @@ a { color: var(--link); }
   gap: var(--space-3);
 }
 
+.panel__body--flush { padding: 0; gap: 0; }
+
+.panel__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 /* Campos */
 .field {
   display: flex;
@@ -315,33 +323,47 @@ a { color: var(--link); }
 .hint--ok { color: var(--color-success); }
 
 /* Hero */
-.hero {
-  padding: var(--space-12) 0 var(--space-8);
-  text-align: center;
+/* Demo: cámara + video (lo primero de la página) */
+.workbench {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+/* Intro: hero discreto (va después de la demo) */
+.intro {
+  padding: var(--space-8) 0;
   border-bottom: 2px solid var(--bevel-dark);
 }
 
-.hero__title {
-  font-size: clamp(1.6rem, 5vw, 2.6rem);
-  margin-bottom: var(--space-3);
+.intro__panel {
+  background: var(--color-surface);
+  border: 2px solid;
+  border-color: var(--bevel-light) var(--bevel-dark) var(--bevel-dark) var(--bevel-light);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.hero__title span { color: var(--color-primary-strong); }
+.intro__title { font-size: clamp(1.25rem, 2.4vw, 1.75rem); }
+.intro__title span { color: var(--color-primary-strong); }
 
-.hero__subtitle {
-  margin: 0 auto var(--space-6);
+.intro__text {
   color: var(--color-text-muted);
+  font-size: 0.88rem;
 }
 
-.hero__actions {
+.intro__actions {
   display: flex;
   gap: var(--space-3);
-  justify-content: center;
   flex-wrap: wrap;
+  margin-top: var(--space-1);
 }
 
 .marquee {
-  margin-top: var(--space-6);
+  margin-top: var(--space-2);
   padding: var(--space-3);
   background: var(--color-surface-sunken);
   border: 2px solid;
@@ -924,7 +946,7 @@ a { color: var(--link); }
   .steps { grid-template-columns: 1fr; }
   .timeline__item { grid-template-columns: 1fr; gap: var(--space-1); }
   .navbar__inner { justify-content: center; }
-  .hero { padding: var(--space-8) 0 var(--space-6); }
+  .intro { padding: var(--space-6) 0; }
   .banner { flex-direction: column; text-align: center; }
 }
 
