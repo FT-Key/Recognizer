@@ -19,7 +19,7 @@ export function Navbar({ route, onNavigate, theme, onToggleTheme, status, delega
       <div className="container navbar__inner">
         <a className="navbar__brand" href="/" onClick={(event) => go(event, 'home')}>
           <span className="navbar__brand-badge">
-            <Icon name="handPaper" size={16} />
+            <img className="navbar__logo" src="/logo.png" alt="" width="34" height="34" />
           </span>
           Recognizer
         </a>
