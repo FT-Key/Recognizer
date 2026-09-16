@@ -170,6 +170,16 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   crea el player al entrar a Inicio y lo destruye (`destroyPlayer()`) al salir. Al volver
   se recrea limpio.
 
+### Ajustes de "Sobre mi"
+- **Foto:** marco cuadrado con recorte centrado en el rostro (`object-fit: cover`,
+  `object-position: center 25%`) y sombra dura estilo vintage.
+- **Etiqueta:** sticker con el nombre superpuesto a la esquina del marco, rotado, con borde
+  oscuro, fondo salmon y sombra (referencia: el label "EN RESTAURACION" del cassette en
+  `OpenDesign/src/pages/landings/VintageLanding.tsx`).
+- **Texto:** se reescribio como presentacion (no CV), se quito Python como lenguaje
+  principal, se paso a "tutor/mentor" y se sumaron MercadoPago, Oracle Cloud (VPS),
+  Cloudflare R2, GraphQL, SQL Server y Neon.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).
