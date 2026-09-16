@@ -33,9 +33,8 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
     let cancelled = false;
     const latest = { landmarks: [], handednesses: [], gesture: null, fps: 0 };
 
-    const worker = new Worker(new URL('../workers/gesture.worker.js', import.meta.url), {
-      type: 'module',
-    });
+    // Worker clasico (sin imports ESM): funciona igual en dev y en produccion.
+    const worker = new Worker(new URL('../workers/gesture.worker.js', import.meta.url));
 
     const dispatcher = createDispatcher({
       onAction: (mapping, meta) => onActionRef.current?.(mapping, meta),
@@ -65,16 +64,19 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
     worker.onmessage = (event) => {
       const message = event.data;
       if (message.type === 'ready') {
+        workerReady = true;
         setDelegate(message.delegate);
         setStatus('ready');
         return;
       }
       if (message.type === 'error') {
+        frameInFlight = false;
         console.error('[gesture.worker]', message.message);
         setError(message.message);
         return;
       }
       if (message.type === 'result') {
+        frameInFlight = false;
         latest.landmarks = message.landmarks;
         latest.handednesses = message.handednesses;
         stabilizer.update(message.gestures);
@@ -84,6 +86,7 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
     setStatus('loading');
     worker.postMessage({
       type: 'init',
+      moduleUrl: CONFIG.gestures.moduleUrl,
       wasmUrl: CONFIG.gestures.wasmUrl,
       modelUrl: resolveModelUrl(),
       delegate: CONFIG.gestures.delegate,
@@ -98,6 +101,14 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
     let lastTs = 0;
     let frameCount = 0;
     let fpsAccum = 0;
+    // No enviar frames hasta que el modelo este cargado: si llegan durante la
+    // inicializacion el worker los descarta y, con backpressure, la cola se
+    // quedaria bloqueada esperando una respuesta que nunca llega.
+    let workerReady = false;
+    // Backpressure: como mucho un frame en vuelo hacia el worker. Sin esto, si
+    // la inferencia va mas lenta que la camara la cola crece sin limite y el
+    // overlay se retrasa segundos respecto a la mano real.
+    let frameInFlight = false;
 
     const loop = (timestamp) => {
       if (cancelled) return;
@@ -117,11 +128,14 @@ export function useGestureEngine({ videoRef, canvasRef, enabled, onAction }) {
       }
       lastTs = timestamp;
 
-      if (video.currentTime !== lastVideoTime) {
+      if (workerReady && !frameInFlight && video.currentTime !== lastVideoTime) {
         lastVideoTime = video.currentTime;
+        frameInFlight = true;
         createImageBitmap(video)
           .then((bitmap) => worker.postMessage({ type: 'frame', bitmap, timestamp }, [bitmap]))
-          .catch(() => {});
+          .catch(() => {
+            frameInFlight = false;
+          });
       }
 
       const { ctx, width, height } = syncCanvasSize(canvas, video);

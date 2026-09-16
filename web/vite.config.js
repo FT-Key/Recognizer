@@ -13,6 +13,9 @@ export default defineConfig({
     open: true,
   },
   worker: {
-    format: 'es',
+    // Worker clasico (iife) en produccion: MediaPipe usa importScripts() nativo
+    // para cargar su WASM. En dev Vite sirve el worker como modulo y se aplica
+    // un shim (ver gesture.worker.js).
+    format: 'iife',
   },
 });
