@@ -1,5 +1,6 @@
 """Tests de ChromiumCdpBrowser con mocks de cliente CDP y popen."""
 
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -11,6 +12,8 @@ from recognizer.adapters.chromium import BrowserFamily, DetectedBrowser
 from recognizer.adapters.chromium_cdp import ChromiumCdpBrowser
 from recognizer.core.domain.browser import TabKey, TabSpec
 from recognizer.core.errors import ActionError
+
+PROFILE_BASE = Path(tempfile.gettempdir()) / "recognizer-browser-tests"
 
 
 def _detected() -> DetectedBrowser:
@@ -58,7 +61,7 @@ class FakeCdpClient:
         self._evaluate_result = evaluate_result
         self.activate_calls: list[str] = []
         self.navigate_calls: list[tuple[str, str]] = []
-        self.create_target_calls: list[str] = []
+        self.create_target_calls: int = 0
         self.evaluate_calls: list[tuple[str, str, bool]] = []
         self.key_down_calls: list[tuple[str, str, str, int, int]] = []
         self.key_up_calls: list[tuple[str, str, str, int, int]] = []
@@ -69,8 +72,8 @@ class FakeCdpClient:
     def list_targets(self) -> tuple[CdpTarget, ...]:
         return tuple(self._targets)
 
-    def create_target(self, url: str) -> str:
-        self.create_target_calls.append(url)
+    def create_target(self) -> str:
+        self.create_target_calls += 1
         return self._create_target_id
 
     def activate_target(self, target_id: str) -> None:
@@ -131,7 +134,7 @@ def _browser(
     browser = ChromiumCdpBrowser(
         tabs=_tabs(),
         detected=_detected(),
-        profile_dir=Path("base"),
+        profile_dir=PROFILE_BASE,
         popen=popen,
         client=client,  # type: ignore[arg-type]
     )
@@ -143,7 +146,8 @@ class TestEnsure:
         client = FakeCdpClient(available=True, targets=[])
         browser, _ = _browser(client=client)
         browser.ensure(tab=TabKey("video"), url="https://youtube.com/watch?v=abc")
-        assert client.create_target_calls == ["https://youtube.com/watch?v=abc"]
+        assert client.create_target_calls == 1
+        assert client.navigate_calls == [("new-1", "https://youtube.com/watch?v=abc")]
         assert client.activate_calls == ["new-1"]
 
     def test_navigates_if_url_differs(self) -> None:
@@ -192,6 +196,12 @@ class TestEnsure:
         args = popen.argvs[0]
         assert args[0] == "C:\\chrome.exe"
         assert "--remote-debugging-port=9222" in args
+        user_data_args = [arg for arg in args if arg.startswith("--user-data-dir=")]
+        assert len(user_data_args) == 1
+        profile_arg = Path(user_data_args[0].removeprefix("--user-data-dir="))
+        assert profile_arg.is_absolute()
+        assert profile_arg.name == "chrome"
+        assert profile_arg.parent.name == "browser-profile"
 
     def test_ensure_running_already_available(self) -> None:
         client = FakeCdpClient(available=True)
@@ -199,7 +209,7 @@ class TestEnsure:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=popen,
             client=client,  # type: ignore[arg-type]
         )
@@ -222,7 +232,7 @@ class TestEnsure:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=failing_popen,
             client=client,  # type: ignore[arg-type]
         )
@@ -235,7 +245,7 @@ class TestEnsure:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=popen,
             client=client,  # type: ignore[arg-type]
         )
@@ -354,7 +364,7 @@ class TestFindTarget:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=RecordingPopen(),
             client=client,  # type: ignore[arg-type]
         )
@@ -380,7 +390,7 @@ class TestFindTarget:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=RecordingPopen(),
             client=client,  # type: ignore[arg-type]
         )
@@ -396,7 +406,7 @@ class TestFindTarget:
         browser = ChromiumCdpBrowser(
             tabs=_tabs(),
             detected=_detected(),
-            profile_dir=Path("base"),
+            profile_dir=PROFILE_BASE,
             popen=RecordingPopen(),
             client=client,  # type: ignore[arg-type]
         )

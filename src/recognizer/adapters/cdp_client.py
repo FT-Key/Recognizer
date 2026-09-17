@@ -3,7 +3,6 @@
 import json
 import logging
 import urllib.error
-import urllib.parse
 import urllib.request
 from contextlib import suppress
 from dataclasses import dataclass
@@ -42,23 +41,28 @@ class UrllibCdpTransport:
         self._timeout = timeout
 
     def request_json(self, *, method: str, path: str, body: bytes | None = None) -> JsonValue:
-        """Realiza GET o PUT a http://127.0.0.1:{port}{path}."""
+        """Realiza GET o PUT a http://127.0.0.1:{port}{path}.
+
+        Devuelve ``None`` cuando la respuesta no es JSON: algunos endpoints
+        (``/json/activate``, ``/json/close``) responden texto plano y no deben
+        romper el flujo.
+        """
         url = f"http://127.0.0.1:{self._port}{path}"
         try:
             req = urllib.request.Request(url, method=method, data=body)
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # noqa: S310
                 data = resp.read()
-                result: JsonValue = json.loads(data)
-                return result
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             msg = f"Error HTTP CDP ({method} {path}): {exc}"
             raise ActionError(msg) from exc
         except TimeoutError as exc:
             msg = f"Timeout CDP ({method} {path})"
             raise ActionError(msg) from exc
-        except json.JSONDecodeError as exc:
-            msg = f"Respuesta JSON invalida CDP ({method} {path})"
-            raise ActionError(msg) from exc
+        try:
+            result: JsonValue = json.loads(data)
+        except json.JSONDecodeError:
+            return None
+        return result
 
     def command(
         self,
@@ -199,13 +203,13 @@ class CdpClient:
             )
         return tuple(targets)
 
-    def create_target(self, url: str) -> str:
-        """Crea un nuevo target con la URL indicada y devuelve su ID."""
-        encoded_url = urllib.parse.quote(url, safe="")
-        result = self._http.request_json(
-            method="PUT",
-            path=f"/json/new?url={encoded_url}",
-        )
+    def create_target(self) -> str:
+        """Crea un target nuevo (about:blank) y devuelve su ID.
+
+        Chrome >= 152 ignora el parametro ``url`` de ``/json/new`` (crea
+        about:blank), asi que la navegacion se hace despues con ``navigate``.
+        """
+        result = self._http.request_json(method="PUT", path="/json/new")
         if not isinstance(result, dict):
             msg = "Respuesta invalida al crear target"
             raise ActionError(msg)

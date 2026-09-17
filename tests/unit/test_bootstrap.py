@@ -1,6 +1,7 @@
 """Tests del composition root: camara, acciones y pipeline."""
 
 from collections.abc import Callable, Sequence
+from pathlib import Path
 from typing import cast
 
 import numpy as np
@@ -28,10 +29,13 @@ from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
     AppConfig,
+    BrowserConfig,
+    BrowserTabConfig,
     CameraConfig,
     GestureConfig,
     GestureRuleConfig,
     OpenLinksActionConfig,
+    OpenTabActionConfig,
     PointerConfig,
     ScriptActionConfig,
 )
@@ -757,3 +761,41 @@ def test_build_pipeline_with_pointer_places_menu_overlay_before_pointer_overlay(
         MenuOverlay,
         PointerOverlay,
     ]
+
+
+def test_browser_tabs_receive_base_dir_not_double_resolved_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[dict[str, object]] = []
+
+    class CapturingBrowser:
+        def __init__(self, **kwargs: object) -> None:
+            captured.append(kwargs)
+
+    from recognizer.adapters.chromium import BrowserFamily, DetectedBrowser
+
+    monkeypatch.setattr(bootstrap, "ChromiumCdpBrowser", CapturingBrowser)
+    monkeypatch.setattr(
+        "recognizer.adapters.chromium.autodetect_browser",
+        lambda **_kw: DetectedBrowser(family=BrowserFamily.CHROME, executable="C:\\chrome.exe"),
+    )
+
+    actions = ActionsConfig(mappings={"ILoveYou": OpenTabActionConfig(tab="video")})
+    browser_config = BrowserConfig(
+        tabs={
+            "video": BrowserTabConfig(url="https://youtube.com/watch?v=abc", match="youtube.com")
+        },
+    )
+
+    build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        browser_config=browser_config,
+    )
+
+    assert len(captured) == 1
+    profile_dir = captured[0]["profile_dir"]
+    assert isinstance(profile_dir, Path)
+    assert profile_dir == Path.cwd()
+    assert profile_dir.name != "browser-profile"
+    assert profile_dir != Path.cwd() / "browser-profile" / "chrome"

@@ -99,7 +99,8 @@ class ChromiumCdpBrowser:
                         await_promise=False,
                     )
         else:
-            target_id = self._client.create_target(url)
+            target_id = self._client.create_target()
+            self._client.navigate(target_id, url)
             self._client.activate_target(target_id)
 
     def seek_media(self, *, tab: TabKey, fraction: float) -> None:
@@ -239,15 +240,19 @@ class ChromiumCdpBrowser:
         return playing or fallback
 
     def _resolve_profile_dir(self, base_dir: Path) -> Path:
-        """Resuelve el directorio del perfil, con fallback a tmp."""
+        """Resuelve el directorio del perfil (absoluto) con fallback a tmp.
+
+        Chrome ignora silenciosamente ``--user-data-dir`` con rutas relativas,
+        por lo que el perfil debe ser absoluto para que CDP funcione.
+        """
         try:
-            profile = resolve_profile_dir(self._detected, base_dir)
+            profile = resolve_profile_dir(self._detected, base_dir).resolve()
             profile.mkdir(parents=True, exist_ok=True)
             return profile
         except OSError:
             fallback = (
                 Path(tempfile.gettempdir()) / "recognizer-browser" / self._detected.family.value
-            )
+            ).resolve()
             fallback.mkdir(parents=True, exist_ok=True)
             LOGGER.warning(
                 "No se pudo crear perfil en %s; usando %s",

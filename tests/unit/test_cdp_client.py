@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import urllib.request
 from typing import Any
 
 import pytest
 
-from recognizer.adapters.cdp_client import CdpClient, CdpTarget, JsonValue
+from recognizer.adapters.cdp_client import (
+    CdpClient,
+    CdpTarget,
+    JsonValue,
+    UrllibCdpTransport,
+)
 from recognizer.core.errors import ActionError
 
 
@@ -166,25 +172,22 @@ class TestListTargets:
 
 class TestCreateTarget:
     def test_calls_put_and_extracts_id(self) -> None:
-        path = "/json/new?url=https%3A%2F%2Fexample.com"
-        http = FakeCdpTransport(http_responses={path: {"id": "new-123"}})
+        http = FakeCdpTransport(http_responses={"/json/new": {"id": "new-123"}})
         client, _, _ = _make_client(http=http)
-        target_id = client.create_target("https://example.com")
+        target_id = client.create_target()
         assert target_id == "new-123"
 
     def test_raises_on_invalid_response(self) -> None:
-        path = "/json/new?url=https%3A%2F%2Fexample.com"
-        http = FakeCdpTransport(http_responses={path: "bad"})
+        http = FakeCdpTransport(http_responses={"/json/new": "bad"})
         client, _, _ = _make_client(http=http)
         with pytest.raises(ActionError, match="Respuesta invalida"):
-            client.create_target("https://example.com")
+            client.create_target()
 
     def test_raises_on_missing_id(self) -> None:
-        path = "/json/new?url=https%3A%2F%2Fexample.com"
-        http = FakeCdpTransport(http_responses={path: {"other": "val"}})
+        http = FakeCdpTransport(http_responses={"/json/new": {"other": "val"}})
         client, _, _ = _make_client(http=http)
         with pytest.raises(ActionError, match="No se pudo obtener el ID"):
-            client.create_target("https://example.com")
+            client.create_target()
 
 
 class TestActivateTarget:
@@ -284,3 +287,47 @@ class TestFindTargetById:
         client, _, _ = _make_client(http=http, ws=ws)
         with pytest.raises(ActionError, match="Target no encontrado"):
             client.navigate("nonexistent", "https://y.com")
+
+
+class _FakeHttpResponse:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def read(self) -> bytes:
+        return self._body
+
+    def __enter__(self) -> _FakeHttpResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+class TestUrllibTransportParsing:
+    def test_plain_text_response_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            lambda *_a, **_kw: _FakeHttpResponse(b"Target activated"),
+        )
+        transport = UrllibCdpTransport(port=9222)
+        assert transport.request_json(method="PUT", path="/json/activate/t1") is None
+
+    def test_json_response_is_parsed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            lambda *_a, **_kw: _FakeHttpResponse(b'{"Browser": "Chrome/152"}'),
+        )
+        transport = UrllibCdpTransport(port=9222)
+        result = transport.request_json(method="GET", path="/json/version")
+        assert result == {"Browser": "Chrome/152"}
+
+    def test_empty_response_returns_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            urllib.request,
+            "urlopen",
+            lambda *_a, **_kw: _FakeHttpResponse(b""),
+        )
+        transport = UrllibCdpTransport(port=9222)
+        assert transport.request_json(method="PUT", path="/json/activate/t1") is None

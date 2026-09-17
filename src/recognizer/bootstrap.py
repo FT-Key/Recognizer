@@ -239,12 +239,11 @@ def build_action_bindings(
             if detected is not None:
                 from pathlib import Path
 
-                from recognizer.adapters.chromium import resolve_profile_dir
-
                 base = (
-                    Path(browser_config.user_data_dir) if browser_config.user_data_dir else Path()
+                    Path(browser_config.user_data_dir)
+                    if browser_config.user_data_dir
+                    else Path.cwd()
                 )
-                profile = resolve_profile_dir(detected, base)
                 from recognizer.core.domain.browser import TabSpec
 
                 specs = {
@@ -254,7 +253,7 @@ def build_action_bindings(
                 resolved_browser = ChromiumCdpBrowser(
                     tabs=specs,
                     detected=detected,
-                    profile_dir=profile,
+                    profile_dir=base,
                     port=browser_config.debugging_port,
                 )
 
