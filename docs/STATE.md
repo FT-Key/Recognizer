@@ -78,6 +78,13 @@
   `config.yaml`; `ILoveYou` ahora usa `open_tab` en vez de `open_links`. Menus Replay
   migrados de script PowerShell a `tab_seek`. Gate verde: pytest 575 tests (575 passed),
   mypy strict, check-arch 3/3.
+- Fix CDP para Chrome 152 (post-etapa 9b, commit `dcd64b0`): el `--user-data-dir` del
+  perfil aislado se resuelve a **ruta absoluta** (Chrome ignora rutas relativas: no abría
+  CDP y cada gesto relanzaba el navegador), se eliminó el doble anidado
+  `browser-profile/<familia>/browser-profile/<familia>` en `bootstrap`, `create_target()`
+  crea `about:blank` y `ensure()` navega con `Page.navigate` (Chrome >= 152 ignora el
+  parámetro `url` de `/json/new`) y el transporte HTTP tolera respuestas texto plano
+  (`/json/activate`). Gate verde: pytest 579 tests, 95.68%, check-arch 3/3.
 
 ## Siguiente (etapa 10 — enrolamiento y despliegue)
 - Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).
