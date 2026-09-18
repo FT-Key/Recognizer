@@ -21,6 +21,7 @@ etapa que se necesite.
 | 10a | Launcher multi-app (menú) y roadmap de apps | completada | [stage-10a-app-menu.md](stage-10a-app-menu.md) |
 | 10b | Contador de personas: detección y conteo (YOLO) | completada | [stage-10b-people-counter.md](stage-10b-people-counter.md) |
 | 10b-fix | Menú GUI + salida a menú (ESC/q+X, tkinter) | completada | [stage-10b-fix-menu-gui.md](stage-10b-fix-menu-gui.md) |
+| 10d | Rediseño UX/UI del menú (estética Vintage + logo/icono) | completada | [stage-10d-menu-ui.md](stage-10d-menu-ui.md) |
 | 10c | Contador de personas: tracking, zona/línea y overlay | pendiente | - |
 | 11 | Anti-intrusos (zona + alerta) | pendiente | - |
 | 12 | Postura ergonómica (YOLO pose) | pendiente | - |

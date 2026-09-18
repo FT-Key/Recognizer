@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-9b) — verificación manual del usuario
+# Tests pendientes (etapas 0-10d) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -260,6 +260,39 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Rendimiento: abrir el menú no debe cargar MediaPipe ni abrir la cámara; el arranque es
   inmediato (sin espera de inferencia). Anotar si el primer `1` tarda lo esperado.
 - [ ] `.exe`: doble clic abre el menú en consola; `ESC`/`q` dentro de gestos vuelve al menú.
+
+### Etapa 10b — contador de personas (YOLO)
+
+- [ ] `uv run recognizer`, elegir `2` (Contador de personas): debe abrir la cámara, cargar
+  `yolo26n.pt` (se autodescarga a `models/` si falta) y dibujar cajas + HUD `Personas: N`.
+- [ ] `ESC`/`q` (o la X) vuelve al menú; anotar FPS con 0/1/2 personas en cuadro.
+- [ ] Calibrar `people_counter.min_confidence` en `config.yaml` (0.5 por defecto): bajarlo si
+  no detecta, subirlo si hay falsos positivos.
+- [ ] `.exe`: pendiente de regenerar con `assets`/icono; verificar que el contador arranca
+  (torch/YOLO siguen excluidos del bundle, bundle ~1 GB).
+
+### Etapa 10b-fix — salida a menú y menú GUI
+
+- [ ] Dentro de cualquier app (`1` gestos, `2` contador), `ESC`/`q` vuelve al menú **con la
+  ventana de la cámara enfocada**; la `X` de la ventana también vuelve al menú.
+- [ ] `uv run recognizer` sin argumentos abre la ventana del menú (tkinter); al elegir una app
+  y salir, la ventana del menú reaparece.
+- [ ] `uv run recognizer --no-gui` usa el menú de consola; sin display también cae a consola.
+
+### Etapa 10d — rediseño visual del menú (Vintage)
+
+- [ ] Aspecto general: ventana amplia y centrada, colores teal/plata, biseles retro, textos
+  legibles; **todas las apps visibles** (si la pantalla es baja, scroll vertical).
+- [ ] Cada app es un **botón**; las no implementadas se ven deshabilitadas con su badge
+  (`PRÓXIMAMENTE`/`DESHABILITADA`) y no se pueden abrir.
+- [ ] **Icono del logo** (mismo `minilogo` de la web) visible en la barra de título y en la
+  barra de tareas de Windows.
+- [ ] Tipografía pixel (Silkscreen) en título/secciones/badges; si no se registra, cae a una
+  monoespaciada (anotar qué se ve).
+- [ ] Teclado: flechas ↑/↓ mueven el foco entre apps, `Enter`/espacio abren la enfocada, `ESC`
+  cierra, `Tab` navega; el foco se ve resaltado.
+- [ ] Contraste: los textos sobre badges y cabecera se leen bien (sin gris sobre gris).
+- [ ] Regenerar assets si cambia el logo de la web: `uv run python scripts/build_assets.py`.
 
 ## Notas de registro
 
