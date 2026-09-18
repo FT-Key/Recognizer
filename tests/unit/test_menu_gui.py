@@ -1,4 +1,10 @@
-"""Tests del menu grafico del launcher, sin display real ni hardware."""
+"""Tests del menu grafico del launcher, sin display real ni hardware.
+
+El modulo `menu_gui` resuelve los widgets como atributos de `tkinter` en tiempo
+de llamada, asi que basta con parchear `tkinter.Frame/Label/Button/PhotoImage/
+Canvas/Scrollbar` e inyectar `FakeRoot` via `tk_factory`. Los assets se anulan
+para que el branding no toque el sistema de archivos ni registre fuentes.
+"""
 
 from __future__ import annotations
 
@@ -7,20 +13,34 @@ import sys
 import tkinter
 from collections.abc import Callable
 from pathlib import Path
-from tkinter import ttk
 from typing import ClassVar, cast
 
 import pytest
 
 from recognizer.cli import menu, menu_gui
 from recognizer.cli.menu import LABEL_AVAILABLE, LABEL_COMING_SOON, LABEL_DISABLED
-from recognizer.cli.menu_gui import MenuRow, build_menu_rows, run_gui_menu
+from recognizer.cli.menu_gui import (
+    DEFAULT_THEME,
+    WRAPLENGTH_MIN,
+    MenuRow,
+    _apply_branding,
+    _apply_window_icon,
+    _badge_background,
+    _button_wraplength,
+    _center_window,
+    badge_foreground,
+    build_menu_rows,
+    compute_window_geometry,
+    run_gui_menu,
+)
 from recognizer.core.config import AppConfig, AppsConfig
-from recognizer.core.domain.app import AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
 
 REQUEST = AppRunRequest(config_path=Path("config.yaml"))
 TEST_LOGGER = logging.getLogger("recognizer.menu.gui.test")
 HEAVY_MODULES = ("ultralytics", "torch", "mediapipe", "cv2")
+SCREEN_WIDTH = 1920
+SCREEN_HEIGHT = 1080
 
 
 class FakeRoot:
@@ -28,11 +48,15 @@ class FakeRoot:
 
     on_mainloop: ClassVar[Callable[..., None] | None] = None
     instances: ClassVar[list[FakeRoot]] = []
+    screen_width: ClassVar[int] = SCREEN_WIDTH
+    screen_height: ClassVar[int] = SCREEN_HEIGHT
+    iconbitmap_error: ClassVar[type[Exception] | None] = None
 
     def __init__(self) -> None:
         self.titles: list[str] = []
         self.protocols: dict[str, Callable[[], None]] = {}
         self.bindings: dict[str, Callable[..., None]] = {}
+        self.geometry_calls: list[str] = []
         self.withdraw_calls = 0
         self.deiconify_calls = 0
         self.destroy_calls = 0
@@ -41,6 +65,32 @@ class FakeRoot:
 
     def title(self, name: str) -> None:
         self.titles.append(name)
+
+    def configure(self, *_args: object, **_kwargs: object) -> None:
+        pass
+
+    def geometry(self, value: str) -> None:
+        self.geometry_calls.append(value)
+
+    def minsize(self, *_args: object) -> None:
+        pass
+
+    def resizable(self, *_args: object) -> None:
+        pass
+
+    def winfo_screenwidth(self) -> int:
+        return type(self).screen_width
+
+    def winfo_screenheight(self) -> int:
+        return type(self).screen_height
+
+    def iconbitmap(self, *_args: object, **_kwargs: object) -> None:
+        error = type(self).iconbitmap_error
+        if error is not None:
+            raise error("icono no disponible")
+
+    def iconphoto(self, *_args: object, **_kwargs: object) -> None:
+        pass
 
     def withdraw(self) -> None:
         self.withdraw_calls += 1
@@ -64,80 +114,166 @@ class FakeRoot:
             hook(self)
 
 
-class FakeListbox:
-    """Doble de tkinter.Listbox: items y seleccion en memoria."""
-
-    instances: ClassVar[list[FakeListbox]] = []
+class _WidgetBase:
+    """Comportamiento comun de los widgets falsos: pack/bind/configure no-op."""
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
-        self.items: list[str] = []
-        self.selected: tuple[int, ...] = ()
-        self.bindings: dict[str, Callable[..., None]] = {}
-        self.instances.append(self)
-
-    def insert(self, _index: object, text: str) -> None:
-        self.items.append(text)
+        self.bindings: dict[str, Callable[..., object]] = {}
 
     def pack(self, *_args: object, **_kwargs: object) -> None:
         pass
 
-    def selection_set(self, index: int) -> None:
-        self.selected = (index,)
-
-    def curselection(self) -> tuple[int, ...]:
-        return self.selected
-
-    def bind(self, sequence: str, func: Callable[..., None]) -> None:
+    def bind(self, sequence: str, func: Callable[..., object]) -> None:
         self.bindings[sequence] = func
 
-
-class FakeFrame:
-    """Doble de ttk.Frame sin display."""
-
-    def __init__(self, *_args: object, **_kwargs: object) -> None:
+    def configure(self, *_args: object, **_kwargs: object) -> None:
         pass
 
-    def pack(self, *_args: object, **_kwargs: object) -> None:
+    def focus_set(self) -> None:
         pass
 
 
-class FakeButton:
-    """Doble de ttk.Button que registra su comando por texto."""
+class FakeFrame(_WidgetBase):
+    """Doble de tkinter.Frame sin display."""
 
-    commands: ClassVar[dict[str, Callable[[], None] | None]] = {}
+    instances: ClassVar[list[FakeFrame]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakeFrame.instances.append(self)
+
+
+class FakeLabel(_WidgetBase):
+    """Doble de tkinter.Label sin display."""
+
+    instances: ClassVar[list[FakeLabel]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.text = str(kwargs.get("text", ""))
+        self.fg = kwargs.get("fg")
+        self.bg = kwargs.get("bg")
+        FakeLabel.instances.append(self)
+
+
+class FakeButton(_WidgetBase):
+    """Doble de tkinter.Button que registra texto, comando y estado."""
+
+    instances: ClassVar[list[FakeButton]] = []
 
     def __init__(
         self,
         *_args: object,
         text: str = "",
         command: Callable[[], None] | None = None,
-        **_kwargs: object,
+        **kwargs: object,
     ) -> None:
-        self.commands[text] = command
+        super().__init__(*_args, **kwargs)
+        self.text = text
+        self.command = command
+        self.state = str(kwargs.get("state", menu_gui.STATE_NORMAL))
+        self.wraplength = kwargs.get("wraplength")
+        FakeButton.instances.append(self)
 
-    def pack(self, *_args: object, **_kwargs: object) -> None:
+
+class FakePhotoImage(_WidgetBase):
+    """Doble de tkinter.PhotoImage (no lee ningun archivo)."""
+
+    instances: ClassVar[list[FakePhotoImage]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakePhotoImage.instances.append(self)
+
+
+class FakeCanvas(_WidgetBase):
+    """Doble de tkinter.Canvas: ventana embebida y scroll no-op."""
+
+    instances: ClassVar[list[FakeCanvas]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.windows: list[object] = []
+        self.itemconfigure_calls: list[tuple[object, dict[str, object]]] = []
+        FakeCanvas.instances.append(self)
+
+    def create_window(self, *_args: object, window: object = None, **_kwargs: object) -> int:
+        self.windows.append(window)
+        return len(self.windows)
+
+    def bbox(self, *_args: object) -> tuple[int, int, int, int]:
+        return (0, 0, 0, 0)
+
+    def itemconfigure(self, item: object, **kwargs: object) -> None:
+        self.itemconfigure_calls.append((item, kwargs))
+
+    def yview(self, *_args: object) -> None:
         pass
 
 
-def _install_tk_fakes(
-    monkeypatch: pytest.MonkeyPatch,
-) -> tuple[type[FakeRoot], type[FakeListbox], type[FakeButton]]:
-    """Limpia los fakes de Tk y los instala en tkinter/ttk (sin display)."""
+class FakeScrollbar(_WidgetBase):
+    """Doble de tkinter.Scrollbar sin display."""
+
+    instances: ClassVar[list[FakeScrollbar]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakeScrollbar.instances.append(self)
+
+    def set(self, *_args: object) -> None:
+        pass
+
+
+def _install_tk_fakes(monkeypatch: pytest.MonkeyPatch) -> type[FakeRoot]:
+    """Limpia los fakes de Tk y los instala en tkinter (sin display)."""
     FakeRoot.on_mainloop = None
     FakeRoot.instances.clear()
-    FakeListbox.instances.clear()
-    FakeButton.commands.clear()
-    monkeypatch.setattr(tkinter, "Listbox", FakeListbox)
-    monkeypatch.setattr(ttk, "Frame", FakeFrame)
-    monkeypatch.setattr(ttk, "Button", FakeButton)
-    return FakeRoot, FakeListbox, FakeButton
+    FakeRoot.screen_width = SCREEN_WIDTH
+    FakeRoot.screen_height = SCREEN_HEIGHT
+    FakeRoot.iconbitmap_error = None
+    FakeFrame.instances.clear()
+    FakeLabel.instances.clear()
+    FakeButton.instances.clear()
+    FakePhotoImage.instances.clear()
+    FakeCanvas.instances.clear()
+    FakeScrollbar.instances.clear()
+    monkeypatch.setattr(tkinter, "Frame", FakeFrame)
+    monkeypatch.setattr(tkinter, "Label", FakeLabel)
+    monkeypatch.setattr(tkinter, "Button", FakeButton)
+    monkeypatch.setattr(tkinter, "PhotoImage", FakePhotoImage)
+    monkeypatch.setattr(tkinter, "Canvas", FakeCanvas)
+    monkeypatch.setattr(tkinter, "Scrollbar", FakeScrollbar)
+    monkeypatch.setattr(menu_gui, "display_font_paths", lambda: ())
+    monkeypatch.setattr(menu_gui, "desktop_icon_path", lambda: None)
+    monkeypatch.setattr(menu_gui, "desktop_logo_path", lambda: None)
+    return FakeRoot
+
+
+def _button_with_text(text: str) -> FakeButton:
+    for button in FakeButton.instances:
+        if button.text == text:
+            return button
+    msg = f"no existe el boton {text!r}"
+    raise AssertionError(msg)
+
+
+def _app_button(number: int) -> FakeButton:
+    prefix = f"{number}. "
+    for button in FakeButton.instances:
+        if button.text.startswith(prefix):
+            return button
+    msg = f"no existe el boton de la app {number}"
+    raise AssertionError(msg)
+
+
+def _press(command: Callable[[], None] | None) -> None:
+    assert command is not None
+    command()
 
 
 def _press_open_button() -> None:
     """Pulsa Abrir en el fake; falla si el boton no existe."""
-    open_command = FakeButton.commands[menu_gui.GUI_OPEN_TEXT]
-    assert open_command is not None
-    open_command()
+    _press(_button_with_text(menu_gui.GUI_OPEN_TEXT).command)
 
 
 def _tk_factory() -> Callable[[], tkinter.Tk]:
@@ -152,28 +288,190 @@ def test_menu_row_is_frozen() -> None:
         setattr(row, "title", "x")  # noqa: B010 - ejerce el frozen a proposito
 
 
-def test_build_menu_rows_reflects_states() -> None:
+def test_build_menu_rows_reflects_states_and_descriptions() -> None:
     rows = build_menu_rows(AppCatalog(), AppsConfig())
     by_id = {row.app_id: row for row in rows}
 
     assert [row.number for row in rows] == [1, 2, 3, 4, 5, 6, 7]
     assert rows[0].title == "Reconocimiento de gestos"
+    assert rows[0].description == "Controla el equipo con gestos de mano (MediaPipe)."
     assert by_id[AppId.GESTURES].selectable is True
     assert by_id[AppId.GESTURES].label == LABEL_AVAILABLE
+    assert by_id[AppId.GESTURES].availability is AppAvailability.AVAILABLE
     assert by_id[AppId.PEOPLE_COUNTER].selectable is True
     assert by_id[AppId.ANTI_INTRUDER].selectable is False
     assert by_id[AppId.ANTI_INTRUDER].label == LABEL_COMING_SOON
+    assert by_id[AppId.ANTI_INTRUDER].availability is AppAvailability.COMING_SOON
 
     disabled_config = AppsConfig(enabled={AppId.GESTURES: False})
     disabled = {row.app_id: row for row in build_menu_rows(AppCatalog(), disabled_config)}
     assert disabled[AppId.GESTURES].selectable is False
     assert disabled[AppId.GESTURES].label == LABEL_DISABLED
+    assert disabled[AppId.GESTURES].availability is AppAvailability.DISABLED
+
+
+def test_badge_background_maps_availability() -> None:
+    assert _badge_background(AppAvailability.AVAILABLE, DEFAULT_THEME) == DEFAULT_THEME.primary
+    assert _badge_background(AppAvailability.DISABLED, DEFAULT_THEME) == DEFAULT_THEME.neutral
+    assert _badge_background(AppAvailability.COMING_SOON, DEFAULT_THEME) == DEFAULT_THEME.warning
+    assert _badge_background(cast(AppAvailability, "desconocido"), DEFAULT_THEME) == (
+        DEFAULT_THEME.neutral
+    )
+
+
+def test_badge_foreground_maps_contrast_color() -> None:
+    assert badge_foreground(AppAvailability.AVAILABLE, DEFAULT_THEME) == (
+        DEFAULT_THEME.primary_contrast
+    )
+    assert badge_foreground(AppAvailability.DISABLED, DEFAULT_THEME) == DEFAULT_THEME.text
+    assert badge_foreground(AppAvailability.COMING_SOON, DEFAULT_THEME) == DEFAULT_THEME.text
+    assert badge_foreground(cast(AppAvailability, "desconocido"), DEFAULT_THEME) == (
+        DEFAULT_THEME.text
+    )
+
+
+def test_compute_window_geometry_centers_and_uses_top_third() -> None:
+    width, height, x, y = compute_window_geometry(7, SCREEN_WIDTH, SCREEN_HEIGHT)
+
+    assert width == menu_gui.WINDOW_WIDTH
+    assert height >= menu_gui.WINDOW_MIN_HEIGHT
+    assert x == (SCREEN_WIDTH - menu_gui.WINDOW_WIDTH) // 2
+    assert y == max(0, (SCREEN_HEIGHT - height) // menu_gui.WINDOW_TOP_DIVISOR)
+
+
+def test_compute_window_geometry_fits_every_row_on_tall_screen() -> None:
+    tall_screen = 4000
+    _, height, _, _ = compute_window_geometry(7, SCREEN_WIDTH, tall_screen)
+
+    assert height == max(menu_gui._window_height(7), menu_gui.WINDOW_MIN_HEIGHT)
+    assert height > menu_gui._window_height(1)
+
+
+def test_compute_window_geometry_clamps_to_screen_ratio() -> None:
+    screen_height = 720
+    _, height, _, _ = compute_window_geometry(50, 1280, screen_height)
+    expected = max(
+        menu_gui.WINDOW_MIN_HEIGHT,
+        round(screen_height * menu_gui.WINDOW_SCREEN_HEIGHT_RATIO),
+    )
+
+    assert height == expected
+
+
+def test_compute_window_geometry_respects_minimum_and_clamps_x() -> None:
+    _, height, x, _ = compute_window_geometry(0, 400, SCREEN_HEIGHT)
+
+    assert height == menu_gui.WINDOW_MIN_HEIGHT
+    assert x == 0
+
+
+def test_compute_window_geometry_clamps_width_to_narrow_screen() -> None:
+    narrow_width = menu_gui.WINDOW_WIDTH - 160
+    width, _, x, _ = compute_window_geometry(7, narrow_width, SCREEN_HEIGHT)
+
+    assert width == narrow_width
+    assert width < menu_gui.WINDOW_WIDTH
+    assert x == 0
+
+
+def test_button_wraplength_shrinks_with_width_and_respects_floor() -> None:
+    wide = _button_wraplength(menu_gui.WINDOW_WIDTH)
+    narrower = _button_wraplength(menu_gui.WINDOW_MIN_WIDTH)
+
+    assert wide > narrower >= WRAPLENGTH_MIN
+    assert _button_wraplength(0) == WRAPLENGTH_MIN
+
+
+def test_center_window_returns_real_width_and_clamps_on_narrow_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+
+    assert (
+        _center_window(cast("tkinter.Tk", fake_root_cls()), row_count=7, logger=TEST_LOGGER)
+        == menu_gui.WINDOW_WIDTH
+    )
+
+    fake_root_cls.screen_width = menu_gui.WINDOW_WIDTH - 120
+    narrow = _center_window(cast("tkinter.Tk", fake_root_cls()), row_count=7, logger=TEST_LOGGER)
+    assert narrow == menu_gui.WINDOW_WIDTH - 120
+
+
+def test_run_gui_menu_badges_use_contrast_foreground(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: None)
+    disabled_config = AppsConfig(enabled={AppId.GESTURES: False})
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=disabled_config,
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+    badges = {label.text: label for label in FakeLabel.instances}
+    assert badges[LABEL_AVAILABLE].fg == DEFAULT_THEME.primary_contrast
+    assert badges[LABEL_COMING_SOON].fg == DEFAULT_THEME.text
+    assert badges[LABEL_DISABLED].fg == DEFAULT_THEME.text
+
+
+def test_run_gui_menu_uses_clamped_width_for_wraplength_on_narrow_screen(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+    fake_root_cls.screen_width = 600
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: None)
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=AppsConfig(),
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+    expected = _button_wraplength(600)
+    assert expected < _button_wraplength(menu_gui.WINDOW_WIDTH)
+    app_buttons = [button for button in FakeButton.instances if button.text[:1].isdigit()]
+    assert app_buttons
+    assert all(button.wraplength == expected for button in app_buttons)
+
+
+def test_apply_window_icon_returns_photo_for_retention(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu_gui, "desktop_icon_path", lambda: Path("minilogo.ico"))
+    monkeypatch.setattr(menu_gui, "desktop_logo_path", lambda: Path("minilogo-128.png"))
+    fake_root_cls.iconbitmap_error = tkinter.TclError
+
+    photo = _apply_window_icon(cast("tkinter.Tk", fake_root_cls()), logger=TEST_LOGGER)
+
+    assert photo is not None
+    assert any(cast(object, photo) is instance for instance in FakePhotoImage.instances)
+
+
+def test_apply_branding_retains_icon_and_logo(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu_gui, "desktop_icon_path", lambda: Path("minilogo.ico"))
+    monkeypatch.setattr(menu_gui, "desktop_logo_path", lambda: Path("minilogo-128.png"))
+    fake_root_cls.iconbitmap_error = tkinter.TclError
+
+    branding = _apply_branding(cast("tkinter.Tk", fake_root_cls()), logger=TEST_LOGGER)
+
+    assert branding.icon is not None
+    assert branding.logo is not None
 
 
 def test_run_gui_menu_opens_runner_and_returns_to_menu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_root_cls, fake_listbox_cls, _ = _install_tk_fakes(monkeypatch)
+    fake_root_cls = _install_tk_fakes(monkeypatch)
     calls: list[AppRunRequest] = []
 
     def fake_runner(request: AppRunRequest) -> int:
@@ -195,26 +493,22 @@ def test_run_gui_menu_opens_runner_and_returns_to_menu(
     assert calls == [REQUEST]
     assert root.withdraw_calls == 1
     assert root.deiconify_calls == 1
-    assert fake_listbox_cls.instances[0].selected == (0,)
-    assert len(fake_listbox_cls.instances[0].items) == len(AppCatalog().apps)
+    assert _app_button(1).state == menu_gui.STATE_NORMAL
+    assert root.geometry_calls
 
 
 def test_run_gui_menu_ignores_non_selectable_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    fake_root_cls, fake_listbox_cls, _ = _install_tk_fakes(monkeypatch)
+    fake_root_cls = _install_tk_fakes(monkeypatch)
     calls: list[AppRunRequest] = []
 
     def fake_runner(request: AppRunRequest) -> int:
         calls.append(request)
         return 0
 
-    def _open_coming_soon(_root: object) -> None:
-        fake_listbox_cls.instances[0].selected = (2,)
-        _press_open_button()
-
     monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: fake_runner)
-    fake_root_cls.on_mainloop = _open_coming_soon
+    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(3).command)
 
     result = run_gui_menu(
         request=REQUEST,
@@ -226,10 +520,11 @@ def test_run_gui_menu_ignores_non_selectable_rows(
     assert result == 0
     assert calls == []
     assert fake_root_cls.instances[0].withdraw_calls == 0
+    assert _app_button(3).state == menu_gui.STATE_DISABLED
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake_root_cls, _, fake_button_cls = _install_tk_fakes(monkeypatch)
+    fake_root_cls = _install_tk_fakes(monkeypatch)
 
     result = run_gui_menu(
         request=REQUEST,
@@ -240,15 +535,56 @@ def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result == 0
     root = fake_root_cls.instances[0]
-    assert "WM_DELETE_WINDOW" in root.protocols
-    assert "<Escape>" in root.bindings
-    assert menu_gui.GUI_EXIT_TEXT in fake_button_cls.commands
-    root.protocols["WM_DELETE_WINDOW"]()
-    root.bindings["<Escape>"](None)
-    close = fake_button_cls.commands[menu_gui.GUI_EXIT_TEXT]
-    assert close is not None
-    close()
+    assert menu_gui.EVENT_CLOSE_WINDOW in root.protocols
+    assert menu_gui.EVENT_ESCAPE in root.bindings
+    exit_command = _button_with_text(menu_gui.GUI_EXIT_TEXT).command
+    root.protocols[menu_gui.EVENT_CLOSE_WINDOW]()
+    root.bindings[menu_gui.EVENT_ESCAPE](None)
+    _press(exit_command)
     assert root.destroy_calls == 3
+
+
+def test_keyboard_interrupt_in_mainloop_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+
+    def _interrupt(_root: FakeRoot) -> None:
+        raise KeyboardInterrupt
+
+    fake_root_cls.on_mainloop = _interrupt
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=AppsConfig(),
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+
+def test_opening_gui_menu_does_not_import_heavy_deps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: None)
+    before = set(sys.modules)
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=AppsConfig(),
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+    added = set(sys.modules) - before
+    for heavy in HEAVY_MODULES:
+        assert heavy not in added
 
 
 def test_run_launcher_falls_back_to_console_on_tcl_error(
@@ -297,7 +633,7 @@ def test_list_only_and_no_gui_do_not_open_gui(monkeypatch: pytest.MonkeyPatch) -
     assert len(console_calls) == 1
 
 
-def test_opening_menu_does_not_import_heavy_deps(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_list_only_does_not_import_heavy_deps(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(menu, "default_config_path", lambda: Path("config.yaml"))
     monkeypatch.setattr(menu, "load_config", lambda _path: AppConfig())
 
@@ -331,3 +667,11 @@ def test_spec_includes_menu_gui_hiddenimport() -> None:
     spec = Path(__file__).resolve().parents[2] / "packaging" / "recognizer.spec"
 
     assert "recognizer.cli.menu_gui" in spec.read_text(encoding="utf-8")
+
+
+def test_spec_bundles_assets_and_icon() -> None:
+    spec = Path(__file__).resolve().parents[2] / "packaging" / "recognizer.spec"
+    text = spec.read_text(encoding="utf-8")
+
+    assert "assets" in text
+    assert "minilogo.ico" in text
