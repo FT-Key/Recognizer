@@ -242,6 +242,25 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   (`distance.max_ratio: 0.35`). Verificar en el overlay que se detecta al hacer la señal OK;
   si no dispara, subir `max_ratio` (o bajarlo si hay falsos positivos).
 
+### Etapa 10a — launcher multi-app (menú)
+
+- [ ] `uv run recognizer` sin argumentos abre el menú con las 7 apps en orden: 1 gestos
+  `[disponible]`, 2-4 `[proximamente]` (sin entrenamiento) y 5-7
+  `[proximamente] - requiere entrenamiento/enrolamiento`.
+- [ ] `uv run recognizer --list-apps` lista el menú y sale sin abrir la cámara.
+- [ ] Seleccionar `1`: abre la app de gestos; `ESC`/`q` vuelve al menú principal (no cierra
+  el programa) y se registra `Volviendo al menu principal.`.
+- [ ] Seleccionar `2`, `3` o `4`: avisa `aun no esta implementada (proximamente)` y sigue en
+  el menú, sin abrir cámara.
+- [ ] Seleccionar `5`, `6` o `7`: avisa que requiere entrenamiento/enrolamiento y sigue en
+  el menú.
+- [ ] Opción inválida (`abc`, `99`, vacío) y `0`/`q`/`salir`/`exit`: mensaje y salida limpia.
+- [ ] `apps.enabled.gestures: false` en `config.yaml`: la opción 1 pasa a
+  `[deshabilitada]` y no se puede lanzar; restaurar a `true` al terminar.
+- [ ] Rendimiento: abrir el menú no debe cargar MediaPipe ni abrir la cámara; el arranque es
+  inmediato (sin espera de inferencia). Anotar si el primer `1` tarda lo esperado.
+- [ ] `.exe`: doble clic abre el menú en consola; `ESC`/`q` dentro de gestos vuelve al menú.
+
 ## Notas de registro
 
 - Marcar cada checkbox al completarlo y anotar fecha, equipo, carga de CPU y FPS en cada

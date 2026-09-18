@@ -18,10 +18,16 @@ Antes de tocar código:
 
 Reglas:
 - Contrato de capas: `core` no importa `adapters`, `cli`, `settings` ni librerías de
-  infraestructura (`cv2`, `mediapipe`, `pynput`, `yaml`, `fastapi`).
+  infraestructura (`cv2`, `mediapipe`, `pynput`, `yaml`, `fastapi`, y a futuro
+  `ultralytics`/`torch`).
 - Sin `typing.Any`, sin strings/números mágicos, sin `print`, sin `except` desnudos.
 - Efectos secundarios (OpenCV, MediaPipe, teclado, subprocess) solo en `adapters/` y `cli/`.
 - Tipos estrictos y docstrings breves en APIs públicas; `config.yaml` para umbrales.
+- **Modularidad y rendimiento**: cada app del launcher importa sus dependencias de forma
+  perezosa (solo al seleccionarse) y usa una sola vía de inferencia; prohibido agregar un
+  detector de respaldo que reprocese el mismo fotograma. Mide FPS (`uv run smoke`) antes y
+  después de cambios de visión.
+- Para una app nueva sigue la skill `new-app` y `docs/WORKFLOW.md` (sección de apps).
 - Al terminar ejecuta `uv run lint`, `uv run typecheck` y `uv run test`; corrige hasta
   que pasen.
 - No hagas commits ni merges (eso es de `git-ops`). No pidas permisos ni confirmaciones.

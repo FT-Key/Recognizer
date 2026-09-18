@@ -29,6 +29,7 @@ frame -> [HandPipeline] -> GestureStabilizer -> EventBus -> ActionSink (decorado
 3. Identidad: sin enrolamiento -> rol/perfil con permisos.
 4. Persistencia: ninguna -> embeddings de rostro / dataset de gestos.
 5. Interfaz: overlay OpenCV -> UI de escritorio -> web.
+6. Producto: una sola app de gestos -> launcher con varias apps de visión.
 
 ## Patrones y regla de admisión
 
@@ -117,6 +118,35 @@ busca pestañas por matching de URL (`TabSpec.match`). Las acciones `open_tab`
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·
 `uv run check-arch` · `uv run smoke --frames 30 --no-window`.
+
+## Launcher multi-app y modularidad (etapa 10a)
+
+`recognizer` sin argumentos abre un **menú de aplicaciones**; con flags ejecuta la app de
+gestos directamente (compatibilidad con scripts y `smoke`). El catalogo de apps es
+vocabulario puro del dominio:
+
+- `core/domain/app.py`: `AppId`, `AppInfo` (título, descripción, `implemented`,
+  `preparation`), `AppAvailability` y `AppCatalog` (orden, resolución por id/número y
+  estado). `AppRunRequest` transporta las opciones comunes de arranque.
+- `core/config.py`: `AppsConfig` (`apps.enabled`) es un override de habilitación; solo
+  aplica a apps implementadas.
+- `cli/menu.py`: render del menú y bucle interactivo (imperative shell). Resuelve el runner
+  de cada app de forma **perezosa** dentro de `resolve_runner`.
+- `cli/app.py`: `run_gestures(request, ...)` es el runner de gestos; `main` decide entre
+  menú (sin args) y ejecución directa.
+- `cli/paths.py`: resolución de rutas y modo `frozen` sin importar `cv2`/`mediapipe`, para
+  que abrir el menú no cargue librerías de visión.
+
+**Reglas de rendimiento (no negociables):**
+
+1. **Carga perezosa por app.** Cada runner importa sus dependencias pesadas dentro de su
+   módulo y solo al lanzarse. Abrir el menú no importa MediaPipe/YOLO ni abre la cámara.
+2. **Sin doble procesamiento.** Una app usa una sola vía de inferencia; no se agrega un
+   detector de respaldo que reprocese el mismo fotograma (p. ej. MediaPipe + YOLO a la vez).
+3. **Salida al menú.** Toda app termina con `ESC`/`q` y devuelve el control al launcher;
+   nunca cierra el proceso por sí misma.
+4. **Una dependencia pesada por etapa.** Se añade `ultralytics`/`torch` solo cuando exista
+   una app que lo use, y se declara en el contrato de import-linter del core.
 
 ## Arquitectura dual: Web + Desktop
 
