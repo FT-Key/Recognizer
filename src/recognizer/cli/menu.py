@@ -35,6 +35,18 @@ LABEL_DISABLED = "[deshabilitada]"
 LABEL_COMING_SOON = "[proximamente]"
 
 AppRunner = Callable[[AppRunRequest], int]
+GuiRunner = Callable[[AppRunRequest, AppsConfig, AppCatalog | None], int]
+
+
+def _default_gui_runner(
+    request: AppRunRequest,
+    apps_config: AppsConfig,
+    catalog: AppCatalog | None,
+) -> int:
+    """GuiRunner real: delega en el menu grafico (import perezoso)."""
+    from recognizer.cli.menu_gui import run_gui_menu
+
+    return run_gui_menu(request=request, apps_config=apps_config, catalog=catalog)
 
 
 def resolve_runner(app_id: AppId) -> AppRunner | None:
@@ -142,8 +154,20 @@ def run_menu(
         logger.info("Volviendo al menu principal.")
 
 
-def run_launcher(*, list_only: bool = False) -> int:
-    """Arranca el menu (o solo lista las apps) sin cargar librerias de vision."""
+def run_launcher(
+    *,
+    list_only: bool = False,
+    use_gui: bool = True,
+    gui_runner: GuiRunner | None = None,
+) -> int:
+    """Arranca el menu (o solo lista las apps) sin cargar librerias de vision.
+
+    Con ``use_gui=False`` va directo al menu de consola. Con ``use_gui=True``
+    usa ``gui_runner`` si se inyecta (dobles en tests) o el menu grafico real
+    por defecto. Si el runner grafico falla con ``ImportError`` (sin tkinter)
+    o ``tkinter.TclError`` (sin display) —lo lance el runner real o un doble
+    inyectado—, cae al menu de consola.
+    """
     configure_logging(verbose=False, log_file=default_log_file())
     log_banner(LOGGER)
 
@@ -160,4 +184,15 @@ def run_launcher(*, list_only: bool = False) -> int:
         return 0
 
     request = AppRunRequest(config_path=config_path, show_window=True)
+    if use_gui:
+        try:
+            import tkinter
+        except ImportError as exc:
+            LOGGER.info("sin display; usando menú de consola (%s)", exc)
+        else:
+            runner = gui_runner if gui_runner is not None else _default_gui_runner
+            try:
+                return runner(request, app_config.apps, catalog)
+            except tkinter.TclError as exc:
+                LOGGER.info("sin display; usando menú de consola (%s)", exc)
     return run_menu(request=request, apps_config=app_config.apps, catalog=catalog)
