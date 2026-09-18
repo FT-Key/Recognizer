@@ -27,6 +27,7 @@ from recognizer.core.actions.links import OpenLinksAction
 from recognizer.core.actions.local import CommandAction, HotkeyAction, MediaKeyAction
 from recognizer.core.actions.menus import Menu
 from recognizer.core.actions.script import ScriptAction
+from recognizer.core.actions.scroll import ScrollAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
@@ -41,6 +42,7 @@ from recognizer.core.config import (
     OpenTabActionConfig,
     PointerConfig,
     ScriptActionConfig,
+    ScrollActionConfig,
     TabPressActionConfig,
     TabSeekActionConfig,
 )
@@ -83,12 +85,19 @@ def _wrap_action(
     gate: ActionGate,
     cooldown_seconds: float,
     logger: logging.Logger | None,
+    spec: ActionConfig | None = None,
 ) -> Action:
-    """Envuelve una accion con log, debounce y gate compartido."""
+    """Envuelve una accion con log, debounce y gate compartido.
+
+    Si la config de la accion declara ``cooldown_seconds``, este prevalece
+    sobre el cooldown global (p. ej. el scroll necesita ticks mas rapidos).
+    """
+    override: float | None = getattr(spec, "cooldown_seconds", None)
+    effective_cooldown = override if override is not None else cooldown_seconds
     return GatedAction(
         DebouncedAction(
             LoggedAction(action, logger=logger),
-            cooldown_seconds=cooldown_seconds,
+            cooldown_seconds=effective_cooldown,
         ),
         gate=gate,
     )
@@ -205,6 +214,7 @@ def build_action_bindings(
     link_opener: LinkOpener | None = None,
     browser_tabs: BrowserTabs | None = None,
     browser_config: BrowserConfig | None = None,
+    mouse_controller: MouseController | None = None,
     gate: ActionGate | None = None,
     logger: logging.Logger | None = None,
 ) -> ActionBindings:
@@ -221,6 +231,10 @@ def build_action_bindings(
     runner = command_runner or SubprocessCommandRunner()
     script = script_runner or SubprocessScriptRunner()
     opener = link_opener or ChromeLinkOpener()
+    scroll_mouse = mouse_controller
+    if scroll_mouse is None and _has_scroll_actions(actions):
+        # Controlador dedicado al scroll (no se reutiliza el del puntero).
+        scroll_mouse = PynputMouseController()
     shared_gate = gate if gate is not None else ActionGate()
 
     resolved_browser: BrowserTabs | None = browser_tabs
@@ -266,12 +280,14 @@ def build_action_bindings(
             link_opener=opener,
             browser_tabs=resolved_browser,
             browser_config=browser_config,
+            mouse_controller=scroll_mouse,
         )
         return _wrap_action(
             action=action,
             gate=shared_gate,
             cooldown_seconds=actions.cooldown_seconds,
             logger=logger,
+            spec=spec,
         )
 
     mapping: dict[GestureId, Action] = {}
@@ -293,6 +309,17 @@ def build_action_bindings(
             )
         )
     return ActionBindings(mapping=mapping, gate=shared_gate, menus=tuple(menus))
+
+
+def _has_scroll_actions(actions: ActionsConfig) -> bool:
+    """Indica si alguna accion global o de menu es de tipo scroll."""
+    return any(
+        isinstance(spec, ScrollActionConfig)
+        for spec in (
+            *actions.mappings.values(),
+            *(opt for menu in actions.menus.values() for opt in menu.options.values()),
+        )
+    )
 
 
 def build_pointer_mover(
@@ -338,6 +365,7 @@ def _build_action(
     link_opener: LinkOpener,
     browser_tabs: BrowserTabs | None = None,
     browser_config: BrowserConfig | None = None,
+    mouse_controller: MouseController | None = None,
 ) -> Action:
     match spec:
         case MediaKeyActionConfig(key=key):
@@ -390,5 +418,11 @@ def _build_action(
                 msg = "Se requiere un navegador CDP para tab_press"
                 raise ActionError(msg)
             return TabPressAction(tab=TabKey(tab_name), keys=keys, browser=browser_tabs)
+        case ScrollActionConfig(direction=direction, lines=lines):
+            return ScrollAction(
+                direction=direction,
+                lines=lines,
+                controller=mouse_controller or PynputMouseController(),
+            )
     msg = f"Accion no soportada: {type(spec).__name__}"
     raise ActionError(msg)

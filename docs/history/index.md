@@ -17,4 +17,5 @@ etapa que se necesite.
 | 8b | Fix: el video sigue reproduciendo al volver al inicio | completada | [stage-8b-fix-video-playback.md](stage-8b-fix-video-playback.md) |
 | 9 | App web (React) + empaquetado de escritorio (PyInstaller) | completada | [stage-9-web-react-y-empaquetado.md](stage-9-web-react-y-empaquetado.md) |
 | 9b | Navegador controlado (CDP) | completada | [stage-9b-navegador-controlado.md](stage-9b-navegador-controlado.md) |
+| 9c | Scroll con gestos sostenidos | completada | [stage-9c-scroll.md](stage-9c-scroll.md) |
 | 10 | Enrolamiento facial, roles y despliegue web | pendiente | - |

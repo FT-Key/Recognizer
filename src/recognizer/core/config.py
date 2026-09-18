@@ -27,6 +27,8 @@ from recognizer.core.constants import (
     DEFAULT_REPEAT_SECONDS,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
     DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
+    DEFAULT_SCROLL_LINES,
+    DEFAULT_SCROLL_REPEAT_SECONDS,
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
@@ -44,7 +46,7 @@ from recognizer.core.domain.gesture import (
     RulesPriority,
 )
 from recognizer.core.domain.hand import Handedness
-from recognizer.core.domain.pointer import SmoothingKind
+from recognizer.core.domain.pointer import ScrollDirection, SmoothingKind
 from recognizer.core.errors import ConfigError
 
 
@@ -306,6 +308,18 @@ class TabPressActionConfig(BaseModel):
     keys: tuple[str, ...] = Field(min_length=1)
 
 
+class ScrollActionConfig(BaseModel):
+    """Accion que desplaza la rueda del raton ante un gesto sostenido."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["scroll"] = "scroll"
+    direction: ScrollDirection
+    lines: int = Field(default=DEFAULT_SCROLL_LINES, ge=1)
+    repeat_seconds: float = Field(default=DEFAULT_SCROLL_REPEAT_SECONDS, ge=0)
+    cooldown_seconds: float | None = Field(default=None, ge=0)
+
+
 ActionConfig = Annotated[
     MediaKeyActionConfig
     | HotkeyActionConfig
@@ -314,7 +328,8 @@ ActionConfig = Annotated[
     | OpenLinksActionConfig
     | OpenTabActionConfig
     | TabSeekActionConfig
-    | TabPressActionConfig,
+    | TabPressActionConfig
+    | ScrollActionConfig,
     Field(discriminator="type"),
 ]
 

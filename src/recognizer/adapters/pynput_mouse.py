@@ -31,6 +31,10 @@ class PositionController(Protocol):
         """Realiza un click con el boton indicado."""
         ...
 
+    def scroll(self, dx: int, dy: int) -> None:
+        """Desplaza la rueda del raton."""
+        ...
+
 
 def _default_screen_size() -> tuple[int, int]:
     """Obtiene el tamano de pantalla con tkinter (import diferido, solo adaptador)."""
@@ -106,6 +110,18 @@ class PynputMouseController(MouseController):
             self._controller.click(Button.left)
         except (OSError, ValueError) as exc:
             msg = "No se pudo realizar el click."
+            raise ActionError(msg) from exc
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        """Desplaza la rueda del raton (dy positivo = arriba).
+
+        Raises:
+            ActionError: si no se pudo desplazar la rueda.
+        """
+        try:
+            self._controller.scroll(dx, dy)
+        except (OSError, ValueError, RuntimeError) as exc:
+            msg = "No se pudo desplazar la rueda del raton."
             raise ActionError(msg) from exc
 
     def _resolve_screen_size(self) -> tuple[int, int]:
