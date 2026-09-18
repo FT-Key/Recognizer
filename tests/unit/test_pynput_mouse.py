@@ -22,6 +22,7 @@ class RecordingPositionController:
     def __init__(self) -> None:
         self._position: tuple[int, int] = (-1, -1)
         self.clicks: list[Button] = []
+        self.scrolls: list[tuple[int, int]] = []
 
     @property
     def position(self) -> tuple[int, int]:
@@ -33,6 +34,9 @@ class RecordingPositionController:
 
     def click(self, button: Button) -> None:
         self.clicks.append(button)
+
+    def scroll(self, dx: int, dy: int) -> None:
+        self.scrolls.append((dx, dy))
 
 
 class FailingPositionController:
@@ -50,6 +54,11 @@ class FailingPositionController:
 
     def click(self, button: Button) -> None:
         del button
+        msg = "sin mouse"
+        raise OSError(msg)
+
+    def scroll(self, dx: int, dy: int) -> None:
+        del dx, dy
         msg = "sin mouse"
         raise OSError(msg)
 
@@ -199,6 +208,26 @@ def test_default_screen_size_uses_tkinter(monkeypatch: pytest.MonkeyPatch) -> No
     mouse.move_to(x=1.0, y=1.0)
 
     assert controller.position == (SCREEN_WIDTH - 1, SCREEN_HEIGHT - 1)
+
+
+def test_scroll_by_delegates_to_controller() -> None:
+    controller = RecordingPositionController()
+    mouse = _mouse(controller, ScreenSizeProvider((SCREEN_WIDTH, SCREEN_HEIGHT)))
+
+    mouse.scroll_by(dx=0, dy=3)
+    mouse.scroll_by(dx=0, dy=-3)
+
+    assert controller.scrolls == [(0, 3), (0, -3)]
+
+
+def test_scroll_by_error_becomes_action_error() -> None:
+    mouse = _mouse(
+        FailingPositionController(),
+        ScreenSizeProvider((SCREEN_WIDTH, SCREEN_HEIGHT)),
+    )
+
+    with pytest.raises(ActionError, match="rueda"):
+        mouse.scroll_by(dx=0, dy=3)
 
 
 def test_screen_size_helper_returns_default_size(monkeypatch: pytest.MonkeyPatch) -> None:

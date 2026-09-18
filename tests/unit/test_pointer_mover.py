@@ -30,12 +30,16 @@ class RecordingMouseController:
 
     def __init__(self) -> None:
         self.moves: list[tuple[float, float]] = []
+        self.scrolls: list[tuple[int, int]] = []
 
     def move_to(self, *, x: float, y: float) -> None:
         self.moves.append((x, y))
 
     def click(self) -> None:
         pass
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        self.scrolls.append((dx, dy))
 
 
 class FailingMouseController:
@@ -49,6 +53,11 @@ class FailingMouseController:
     def click(self) -> None:
         pass
 
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        del dx, dy
+        msg = "sin mouse"
+        raise ActionError(msg)
+
 
 class CrashingMouseController:
     """Doble que falla con un error inesperado (no ActionError)."""
@@ -60,6 +69,11 @@ class CrashingMouseController:
 
     def click(self) -> None:
         pass
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        del dx, dy
+        msg = "fallo inesperado"
+        raise ModuleNotFoundError(msg)
 
 
 def _event(*, x: float = POINTER_X, y: float = POINTER_Y) -> PointerMoved:

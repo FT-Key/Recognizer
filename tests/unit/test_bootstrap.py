@@ -21,10 +21,11 @@ from recognizer.bootstrap import (
     build_pointer_mover,
     resolve_camera_config,
 )
-from recognizer.core.actions.decorators import ActionGate, GatedAction
+from recognizer.core.actions.decorators import ActionGate, DebouncedAction, GatedAction
 from recognizer.core.actions.links import OpenLinksAction
 from recognizer.core.actions.menus import Menu
 from recognizer.core.actions.script import ScriptAction
+from recognizer.core.actions.scroll import ScrollAction
 from recognizer.core.config import (
     ActionConfig,
     ActionsConfig,
@@ -38,6 +39,7 @@ from recognizer.core.config import (
     OpenTabActionConfig,
     PointerConfig,
     ScriptActionConfig,
+    ScrollActionConfig,
 )
 from recognizer.core.constants import CONTEXT_ENV_GESTURE
 from recognizer.core.domain.action import ActionContext, MediaKey, ScriptInterpreter, ScriptRequest
@@ -49,6 +51,7 @@ from recognizer.core.domain.events import (
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.gesture import (
+    GESTURE_CLOSED_FIST,
     GESTURE_ILOVE_YOU,
     GESTURE_POINTING_UP,
     GESTURE_THUMB_UP,
@@ -66,6 +69,7 @@ from recognizer.core.domain.hand import (
     HandLandmarks,
     Point,
 )
+from recognizer.core.domain.pointer import ScrollDirection
 from recognizer.core.errors import ActionError, RecognizerError
 from recognizer.core.pipeline.gesture_detection import GestureDetectionProcessor
 from recognizer.core.pipeline.gesture_stabilization import GestureStabilizerProcessor
@@ -114,12 +118,16 @@ class RecordingMouseController:
 
     def __init__(self) -> None:
         self.moves: list[tuple[float, float]] = []
+        self.scrolls: list[tuple[int, int]] = []
 
     def move_to(self, *, x: float, y: float) -> None:
         self.moves.append((x, y))
 
     def click(self) -> None:
         pass
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        self.scrolls.append((dx, dy))
 
 
 class RecordingScriptRunner:
@@ -799,3 +807,114 @@ def test_browser_tabs_receive_base_dir_not_double_resolved_profile(
     assert profile_dir == Path.cwd()
     assert profile_dir.name != "browser-profile"
     assert profile_dir != Path.cwd() / "browser-profile" / "chrome"
+
+
+def test_build_action_builds_scroll_with_injected_controller() -> None:
+    controller = RecordingMouseController()
+    spec = ScrollActionConfig(direction=ScrollDirection.UP, lines=3)
+
+    action = bootstrap._build_action(
+        spec=spec,
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=RecordingLinkOpener(),
+        mouse_controller=controller,
+    )
+
+    assert isinstance(action, ScrollAction)
+    action.execute(_context())
+
+    assert controller.scrolls == [(0, 3)]
+
+
+def test_build_action_bindings_routes_scroll_mapping_with_injected_controller() -> None:
+    controller = RecordingMouseController()
+    actions = ActionsConfig.model_validate(
+        {
+            "mappings": {
+                "Closed_Fist": {
+                    "type": "scroll",
+                    "direction": "down",
+                    "lines": 3,
+                    "repeat_seconds": 0.15,
+                    "cooldown_seconds": 0.12,
+                }
+            }
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=RecordingLinkOpener(),
+        mouse_controller=controller,
+    )
+
+    bindings.mapping[GESTURE_CLOSED_FIST].execute(_context())
+
+    assert controller.scrolls == [(0, -3)]
+
+
+class _FakeClock:
+    """Reloj manual que solo avanza cuando el test lo indica."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def _unwrap_debounced(action: object) -> DebouncedAction:
+    assert isinstance(action, GatedAction)
+    inner = action._action
+    assert isinstance(inner, DebouncedAction)
+    return inner
+
+
+def test_build_action_bindings_respects_scroll_cooldown_override() -> None:
+    controller = RecordingMouseController()
+    actions = ActionsConfig.model_validate(
+        {
+            "cooldown_seconds": 1.0,
+            "mappings": {
+                "Closed_Fist": {
+                    "type": "scroll",
+                    "direction": "down",
+                    "lines": 3,
+                    "repeat_seconds": 0.15,
+                    "cooldown_seconds": 0.12,
+                },
+            },
+        }
+    )
+
+    bindings = build_action_bindings(
+        actions=actions,
+        catalog=_catalog(),
+        key_sender=RecordingKeySender(),
+        command_runner=RecordingCommandRunner(),
+        script_runner=RecordingScriptRunner(),
+        link_opener=RecordingLinkOpener(),
+        mouse_controller=controller,
+    )
+
+    debounced = _unwrap_debounced(bindings.mapping[GESTURE_CLOSED_FIST])
+    clock = _FakeClock()
+    debounced._clock = clock
+    context = _context()
+
+    debounced.execute(context)
+    assert controller.scrolls == [(0, -3)]
+
+    clock.now = 0.06
+    debounced.execute(context)
+    assert controller.scrolls == [(0, -3)]
+
+    clock.now = 0.13
+    debounced.execute(context)
+    assert controller.scrolls == [(0, -3), (0, -3)]

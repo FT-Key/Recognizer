@@ -11,6 +11,7 @@ from recognizer.core.domain.action import Action, ActionContext
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
+    GestureHeld,
     GestureReleased,
     HandsDetected,
 )
@@ -314,6 +315,71 @@ def test_menu_modifier_releases_global_action_after_modifier_release() -> None:
     dispatcher.handle(_detected(GESTURE_THUMB_UP))
 
     assert len(global_thumb.contexts) == 1
+
+
+def _held(
+    gesture: GestureId = GESTURE_VICTORY,
+    *,
+    confidence: float = GESTURE_CONFIDENCE,
+    handedness: Handedness = Handedness.RIGHT,
+) -> GestureHeld:
+    return GestureHeld(
+        timestamp=TIMESTAMP,
+        gesture=gesture,
+        confidence=confidence,
+        handedness=handedness,
+    )
+
+
+def test_held_without_menus_runs_global_action() -> None:
+    global_victory = RecordingAction()
+    dispatcher = GestureActionDispatcher(actions={GESTURE_VICTORY: global_victory})
+
+    dispatcher.handle(_held(GESTURE_VICTORY))
+
+    assert len(global_victory.contexts) == 1
+    assert global_victory.contexts[0].gesture is GESTURE_VICTORY
+
+
+def test_held_none_is_ignored() -> None:
+    fallback = RecordingAction()
+    dispatcher = GestureActionDispatcher(actions={}, fallback=fallback)
+
+    dispatcher.handle(_held(GESTURE_NONE))
+
+    assert fallback.contexts == []
+
+
+def test_held_with_active_menu_consumes_global_trigger() -> None:
+    menu_action = RecordingAction()
+    global_victory = RecordingAction()
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_VICTORY: global_victory},
+        menus=[_menu(action=menu_action)],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_detected(GESTURE_VICTORY))
+    assert len(menu_action.contexts) == 1
+    assert global_victory.contexts == []
+
+    dispatcher.handle(_held(GESTURE_VICTORY))
+
+    assert len(menu_action.contexts) == 1
+    assert global_victory.contexts == []
+
+
+def test_held_with_modifier_held_but_no_match_suppresses_global() -> None:
+    global_thumb = RecordingAction()
+    dispatcher = GestureActionDispatcher(
+        actions={GESTURE_THUMB_UP: global_thumb},
+        menus=[_menu(action=RecordingAction())],
+    )
+
+    dispatcher.handle(_detected(GESTURE_POINTING_UP, handedness=Handedness.LEFT))
+    dispatcher.handle(_held(GESTURE_THUMB_UP))
+
+    assert global_thumb.contexts == []
 
 
 def test_menu_option_action_error_is_logged_and_not_propagated(

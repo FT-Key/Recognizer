@@ -1,9 +1,9 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 9b (navegador controlado via CDP) completada; siguiente: etapa 10
+- **Fase actual:** etapa 9c (scroll con gestos sostenidos) completada; siguiente: etapa 10
   (enrolamiento facial, roles/permisos, despliegue web)
-- **Rama:** `dev` (trabajo de etapas 9/9b sin commitear; ver `git status`)
-- **Actualizado:** 2026-09-16
+- **Rama:** `stage/9c-scroll` (sin mergear a `dev`)
+- **Actualizado:** 2026-09-18
 
 ## Hecho
 - Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
@@ -85,6 +85,15 @@
   crea `about:blank` y `ensure()` navega con `Page.navigate` (Chrome >= 152 ignora el
   parámetro `url` de `/json/new`) y el transporte HTTP tolera respuestas texto plano
   (`/json/activate`). Gate verde: pytest 579 tests, 95.68%, check-arch 3/3.
+- Etapa 9c (scroll con gestos sostenidos): `Victory` sostenido = scroll arriba,
+  `Closed_Fist` sostenido = scroll abajo (ticks `GestureHeld` + repeat, como volumen);
+  mute reubicado al menú compuesto `System` (izq `Pointing_Up` + der `Closed_Fist`).
+  Nuevo `ScrollAction` (`core/actions/scroll.py`), `ScrollDirection` en el dominio,
+  `scroll_by` en `MouseController`/`PynputMouseController`, `ScrollActionConfig` y
+  cooldown por acción con `None`-check en `bootstrap`; `GestureHeld` resuelve menús en
+  solo lectura (sin scroll fantasma). Gate verde: pytest 600 tests, 95.95%, mypy 120
+  archivos, check-arch 3/3, ruff check OK. Ver
+  `docs/history/stage-9c-scroll.md`.
 
 ## Siguiente (etapa 10 — enrolamiento y despliegue)
 - Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).

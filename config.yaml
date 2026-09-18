@@ -87,15 +87,23 @@ actions:
       type: media_key
       key: volume_down
       repeat_seconds: 0.5
+    # Scroll hacia abajo al sostener el puno (ticks via repeat_seconds).
     Closed_Fist:
-      type: media_key
-      key: volume_mute
+      type: scroll
+      direction: down
+      lines: 3
+      repeat_seconds: 0.15
+      cooldown_seconds: 0.12
     Open_Palm:
       type: media_key
       key: play_pause
+    # Scroll hacia arriba al sostener la V (ticks via repeat_seconds).
     Victory:
-      type: hotkey
-      keys: [ctrl, shift, m]
+      type: scroll
+      direction: up
+      lines: 3
+      repeat_seconds: 0.15
+      cooldown_seconds: 0.12
     # Playlist secuencial (no aleatoria): cada ILoveYou abre el siguiente enlace.
     ILoveYou:
       type: open_tab
@@ -136,6 +144,17 @@ actions:
           type: tab_seek
           tab: video
           fraction: 0.7
+    # Con la IZQUIERDA sosteniendo Pointing_Up, el puno de la DERECHA silencia
+    # en vez de hacer scroll (los ticks Held resuelven menus antes que lo global).
+    # Convive con Replay (mismo modificador) porque las opciones no colisionan.
+    System:
+      hand: Left
+      modifier: Pointing_Up
+      consume_trigger: true
+      options:
+        Closed_Fist:
+          type: media_key
+          key: volume_mute
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla
