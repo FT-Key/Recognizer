@@ -7,6 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from recognizer.core.config import PeopleCounterConfig
+from recognizer.core.constants import DEFAULT_TRACKER_CONFIG
 from recognizer.core.domain.detection import (
     MAX_NORMALIZED_COORDINATE,
     MIN_NORMALIZED_COORDINATE,
@@ -14,6 +15,7 @@ from recognizer.core.domain.detection import (
     Detection,
 )
 from recognizer.core.domain.frame import Frame
+from recognizer.core.domain.tracking import TrackedDetection
 from recognizer.core.errors import DetectorError
 from recognizer.core.ports.object_detector import ObjectDetector
 
@@ -48,6 +50,8 @@ class _BoxRowLike(Protocol):
     def conf(self) -> _VectorLike: ...
     @property
     def cls(self) -> _VectorLike: ...
+    @property
+    def id(self) -> _VectorLike | None: ...
 
 
 class _BoxesLike(Protocol):
@@ -71,6 +75,16 @@ class _ModelLike(Protocol):
 
     def predict(self, source: object, *, conf: float, verbose: bool) -> list[_ResultLike]: ...
 
+    def track(
+        self,
+        source: object,
+        *,
+        conf: float,
+        persist: bool,
+        verbose: bool,
+        tracker: str,
+    ) -> list[_ResultLike]: ...
+
 
 class ObjectDetectorFacade(Protocol):
     """Contrato de la fachada que aisla Ultralytics del detector."""
@@ -86,6 +100,15 @@ class ObjectDetectorFacade(Protocol):
         min_confidence: float,
     ) -> tuple[Detection, ...]:
         """Detecta objetos en el fotograma BGR."""
+        ...
+
+    def track(
+        self,
+        *,
+        frame_bgr: NDArray[np.uint8],
+        min_confidence: float,
+    ) -> tuple[TrackedDetection, ...]:
+        """Rastrea objetos en el fotograma BGR devolviendo sus IDs de track."""
         ...
 
     def close(self) -> None:
@@ -143,6 +166,40 @@ def _map_results(*, results: list[_ResultLike], min_confidence: float) -> tuple[
     return tuple(detections)
 
 
+def _map_tracked_row(
+    *,
+    row: _BoxRowLike,
+    names: dict[int, str],
+    min_confidence: float,
+) -> TrackedDetection | None:
+    """Mapea una fila con ID de track; sin ID (aun sin confirmar) devuelve None."""
+    if row.id is None:
+        return None
+    detection = _map_row(row=row, names=names, min_confidence=min_confidence)
+    if detection is None:
+        return None
+    return TrackedDetection(track_id=int(row.id[0]), detection=detection)
+
+
+def _map_tracked_results(
+    *,
+    results: list[_ResultLike],
+    min_confidence: float,
+) -> tuple[TrackedDetection, ...]:
+    tracked: list[TrackedDetection] = []
+    for result in results:
+        boxes = result.boxes
+        if boxes is None:
+            continue
+        for index in range(len(boxes)):
+            item = _map_tracked_row(
+                row=boxes[index], names=result.names, min_confidence=min_confidence
+            )
+            if item is not None:
+                tracked.append(item)
+    return tuple(tracked)
+
+
 class UltralyticsDetectorFacade:
     """Fachada real sobre ultralytics.YOLO."""
 
@@ -189,6 +246,35 @@ class UltralyticsDetectorFacade:
             raise DetectorError(msg) from exc
         return _map_results(results=results, min_confidence=min_confidence)
 
+    def track(
+        self,
+        *,
+        frame_bgr: NDArray[np.uint8],
+        min_confidence: float,
+    ) -> tuple[TrackedDetection, ...]:
+        """Rastrea objetos en el fotograma BGR (una sola via: track incluye deteccion).
+
+        Raises:
+            DetectorError: si se llama antes de open() o si el runtime de
+                Ultralytics falla durante el tracking.
+        """
+        if self._model is None:
+            msg = "El detector YOLO no esta abierto: llama a open() antes de track()."
+            raise DetectorError(msg)
+
+        try:
+            results = self._model.track(
+                frame_bgr,
+                conf=min_confidence,
+                persist=True,
+                verbose=False,
+                tracker=DEFAULT_TRACKER_CONFIG,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            msg = "Fallo el tracking de objetos en YOLO."
+            raise DetectorError(msg) from exc
+        return _map_tracked_results(results=results, min_confidence=min_confidence)
+
     def close(self) -> None:
         """Olvida el modelo; es idempotente."""
         self._model = None
@@ -231,6 +317,18 @@ class UltralyticsDetector(ObjectDetector):
             raise DetectorError(msg)
 
         return self._facade.detect(frame_bgr=frame.data, min_confidence=self._config.min_confidence)
+
+    def track(self, frame: Frame) -> tuple[TrackedDetection, ...]:
+        """Rastrea los objetos del fotograma con IDs persistentes.
+
+        Raises:
+            DetectorError: si se llama sin haber abierto el detector.
+        """
+        if self._facade is None:
+            msg = "El detector de objetos no esta abierto: llama a open() antes de track()."
+            raise DetectorError(msg)
+
+        return self._facade.track(frame_bgr=frame.data, min_confidence=self._config.min_confidence)
 
     def close(self) -> None:
         """Cierra la fachada; es idempotente."""

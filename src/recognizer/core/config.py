@@ -13,6 +13,8 @@ from recognizer.core.constants import (
     DEFAULT_FRAME_WIDTH,
     DEFAULT_GESTURE_MODEL_PATH,
     DEFAULT_HAND_MODEL_PATH,
+    DEFAULT_LINE_CONFIRM_FRAMES,
+    DEFAULT_LINE_POSITION,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
     DEFAULT_MIN_GESTURE_CONFIDENCE,
@@ -51,6 +53,7 @@ from recognizer.core.domain.gesture import (
 )
 from recognizer.core.domain.hand import Handedness
 from recognizer.core.domain.pointer import ScrollDirection, SmoothingKind
+from recognizer.core.domain.tracking import LineAxis
 from recognizer.core.errors import ConfigError
 
 
@@ -449,14 +452,27 @@ class PointerConfig(BaseModel):
         return gesture
 
 
+class CountingLineConfig(BaseModel):
+    """Linea de conteo del contador de personas (entradas/salidas)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    axis: LineAxis = LineAxis.HORIZONTAL
+    position: float = Field(default=DEFAULT_LINE_POSITION, gt=0, lt=1)
+    invert: bool = False
+    confirm_frames: int = Field(default=DEFAULT_LINE_CONFIRM_FRAMES, ge=1)
+
+
 class PeopleCounterConfig(BaseModel):
-    """Contador de personas: modelo YOLO y umbrales de conteo."""
+    """Contador de personas: modelo YOLO, umbrales y linea de conteo."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
     min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
     target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    line: CountingLineConfig = Field(default_factory=CountingLineConfig)
 
 
 class AppsConfig(BaseModel):

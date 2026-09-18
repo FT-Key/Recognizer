@@ -148,6 +148,20 @@ vocabulario puro del dominio:
 4. **Una dependencia pesada por etapa.** Se añade `ultralytics`/`torch` solo cuando exista
    una app que lo use, y se declara en el contrato de import-linter del core.
 
+## Contador de personas con tracking (etapa 10c)
+
+La app del contador usa una sola vía de inferencia: `UltralyticsDetector.track`
+(`model.track` con `persist=True` y tracker ByteTrack) cubre detección + tracking, y
+`detect` queda como capacidad genérica del puerto `ObjectDetector`. El puerto
+`ObjectTracker` (`core/ports/object_tracker.py`) expone `open`/`track`/`close`.
+
+El conteo es dominio puro en `core/domain/tracking.py`: `TrackedDetection` (frozen)
+compone `Detection` + `track_id`; `CountingLine` (eje horizontal/vertical y `position`
+normalizada) divide el fotograma; `LineCrossingCounter` registra cruces por track con
+debounce `confirm_frames` e `invert`, sin importar infraestructura. El overlay vive en
+`adapters/overlay_people.py` (`draw_people_overlay`: cajas+ID, línea y HUD). La línea se
+configura en `people_counter.line` (`config.yaml`).
+
 ## Arquitectura dual: Web + Desktop
 
 Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
