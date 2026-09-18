@@ -36,6 +36,9 @@ for package in ("mediapipe",):
 
 hiddenimports += collect_submodules("pynput")
 hiddenimports += collect_submodules("websocket")
+# El launcher importa cada app de forma perezosa dentro de una funcion; se
+# declara el menu de forma explicita para que PyInstaller lo incluya siempre.
+hiddenimports += ["recognizer.cli.menu"]
 
 a = Analysis(  # noqa: F821
     [str(PROJECT_ROOT / "packaging" / "entrypoint.py")],
