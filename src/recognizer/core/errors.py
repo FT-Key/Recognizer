@@ -21,5 +21,9 @@ class GestureClassifierError(RecognizerError):
     """El clasificador de gestos no pudo abrirse o fallo."""
 
 
+class DetectorError(RecognizerError):
+    """El detector de objetos no pudo abrirse o fallo."""
+
+
 class ActionError(RecognizerError):
     """La accion local no pudo ejecutarse."""

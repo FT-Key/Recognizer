@@ -8,7 +8,7 @@
 apps:
   enabled:
     gestures: true
-    # people_counter: true
+    people_counter: true
     # anti_intruder: true
     # posture: true
     # ppe_detector: true
@@ -170,6 +170,14 @@ actions:
         Closed_Fist:
           type: media_key
           key: volume_mute
+
+# Contador de personas (etapa 10b): deteccion YOLO + conteo por fotograma.
+# model_path admite un .pt de Ultralytics; si no existe, se descarga solo.
+# target_label filtra la clase a contar (p. ej. "person", "car", "dog").
+people_counter:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla

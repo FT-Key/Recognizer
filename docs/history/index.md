@@ -19,7 +19,7 @@ etapa que se necesite.
 | 9b | Navegador controlado (CDP) | completada | [stage-9b-navegador-controlado.md](stage-9b-navegador-controlado.md) |
 | 9c | Scroll con gestos sostenidos | completada | [stage-9c-scroll.md](stage-9c-scroll.md) |
 | 10a | Launcher multi-app (menú) y roadmap de apps | completada | [stage-10a-app-menu.md](stage-10a-app-menu.md) |
-| 10b | Contador de personas: detección y conteo (YOLO) | pendiente | - |
+| 10b | Contador de personas: detección y conteo (YOLO) | completada | [stage-10b-people-counter.md](stage-10b-people-counter.md) |
 | 10c | Contador de personas: tracking, zona/línea y overlay | pendiente | - |
 | 11 | Anti-intrusos (zona + alerta) | pendiente | - |
 | 12 | Postura ergonómica (YOLO pose) | pendiente | - |

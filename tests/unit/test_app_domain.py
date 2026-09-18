@@ -31,10 +31,10 @@ def test_catalog_order_is_gestures_then_no_training_then_training() -> None:
     ]
 
 
-def test_only_gestures_is_implemented() -> None:
+def test_gestures_and_people_counter_are_implemented() -> None:
     implemented = [info.app_id for info in DEFAULT_APPS if info.implemented]
 
-    assert implemented == [AppId.GESTURES]
+    assert implemented == [AppId.GESTURES, AppId.PEOPLE_COUNTER]
 
 
 def test_no_training_apps_have_no_preparation() -> None:
@@ -94,7 +94,7 @@ def test_availability_coming_soon_for_unimplemented_apps() -> None:
     catalog = AppCatalog()
 
     assert (
-        catalog.availability(AppId.PEOPLE_COUNTER, enabled={AppId.PEOPLE_COUNTER: True})
+        catalog.availability(AppId.ANTI_INTRUDER, enabled={AppId.ANTI_INTRUDER: True})
         is AppAvailability.COMING_SOON
     )
 

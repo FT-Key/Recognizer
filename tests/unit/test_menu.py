@@ -48,7 +48,7 @@ def test_render_catalog_lists_apps_in_order_with_labels() -> None:
     assert body[0].startswith("  1) Reconocimiento de gestos")
     assert LABEL_AVAILABLE in body[0]
     assert body[1].startswith("  2) Contador de personas")
-    assert LABEL_COMING_SOON in body[1]
+    assert LABEL_AVAILABLE in body[1]
     assert body[-1].strip() == "0) Salir"
 
 
@@ -77,11 +77,13 @@ def test_availability_label_variants() -> None:
     )
 
 
-def test_resolve_runner_returns_gestures_runner() -> None:
+def test_resolve_runner_returns_implemented_runners() -> None:
     from recognizer.cli.app import run_gestures
+    from recognizer.cli.apps.people_counter import run_people_counter
 
     assert resolve_runner(AppId.GESTURES) is run_gestures
-    assert resolve_runner(AppId.PEOPLE_COUNTER) is None
+    assert resolve_runner(AppId.PEOPLE_COUNTER) is run_people_counter
+    assert resolve_runner(AppId.ANTI_INTRUDER) is None
 
 
 def test_run_menu_runs_selected_app_then_exits(
@@ -137,7 +139,7 @@ def test_run_menu_skips_coming_soon_without_runner(
     result = run_menu(
         request=REQUEST,
         apps_config=AppsConfig(),
-        input_fn=_scripted(["2", "0"]),
+        input_fn=_scripted(["3", "0"]),
         logger=TEST_LOGGER,
     )
 
