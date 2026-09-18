@@ -90,3 +90,16 @@ Sin commits aún: trabajo en working tree de `stage/10b-people-counter`
 - Verificar `.exe` con YOLO (torch fuera del bundle a propósito).
 - Calibrar `min_confidence` (defecto 0.5) con la cámara real.
 - 10c: tracking (`model.track`), zona/línea y overlay dedicado.
+
+## Fix post-etapa — GUI del launcher inyectable (rama `stage/10b-fix-menu-gui`)
+
+- Bloqueante del test-writer: `test_run_launcher_uses_default_config_when_missing`
+  colgaba porque `run_launcher()` con `use_gui=True` abría Tk real (`mainloop`).
+- Fix solo en `src/recognizer/cli/menu.py`: `run_launcher(*, list_only=False,
+  use_gui=True, gui_runner: GuiRunner | None = None)` donde `GuiRunner =
+  Callable[[AppRunRequest, AppsConfig, AppCatalog | None], int]`; `None`
+  delega en `_default_gui_runner` (menu gráfico real, import perezoso).
+- Decisión: `TclError`/`ImportError` caen al menú de consola tanto si los lanza
+  el runner real como un doble inyectado (contrato en el docstring).
+- `cli/app.py` sin cambios (`--no-gui` ya propaga `use_gui=False` por keyword).
+- Tests no tocados (los ajusta test-writer). Sin commits.

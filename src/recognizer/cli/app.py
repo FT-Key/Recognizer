@@ -209,6 +209,11 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Lista las aplicaciones del menu y sale (sin abrir camara).",
     )
+    parser.add_argument(
+        "--no-gui",
+        action="store_true",
+        help="Usa el menu de consola en lugar del menu grafico.",
+    )
     return parser
 
 
@@ -417,6 +422,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from recognizer.cli.menu import run_launcher
 
         return run_launcher(list_only=True)
+    if args.no_gui:
+        from recognizer.cli.menu import run_launcher
+
+        return run_launcher(use_gui=False)
 
     log_file = _configure_logging(verbose=args.verbose, log_file=args.log_file)
     _install_exception_hooks(LOGGER)

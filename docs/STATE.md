@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 10b (contador de personas) completada; siguiente: 10c
-  (tracking + zona/línea + overlay)
-- **Rama:** `stage/10b-people-counter` (10a ya mergeada a `dev` en `c8c8b9f`)
+- **Fase actual:** etapa 10b-fix (menú GUI + salida ESC/q+X) completada;
+  siguiente: 10c (tracking + zona/línea + overlay)
+- **Rama:** `stage/10b-fix-menu-gui` (10b mergeada a `dev` en `2b7a574`)
 - **Actualizado:** 2026-09-18
 
 ## Hecho
@@ -19,12 +19,13 @@
 - Etapa 9b: navegador CDP (`open_tab`/`tab_seek`/`tab_press`) + fix Chrome 152.
 - Etapa 9c: scroll con `Victory`/`Closed_Fist` sostenidos + mute en menú System.
 - Etapa 10a: launcher multi-app (menú, import perezoso, `ESC`/`q`); merge `c8c8b9f`.
-- Etapa 10b: contador YOLO (`yolo26n.pt` nano CPU, autodescarga a `models/`);
-  dominio `detection.py` + puerto `ObjectDetector` + `UltralyticsDetector`
-  (fachada inyectable) + runner con HUD `Personas: N`; conteo directo sin
-  `EventBus` (tracking en 10c); `.spec` sin bundle torch (documentado).
-- Gate 10b verde: pytest **675 passed** (96.17%), mypy strict 132 archivos,
-  ruff 156, check-arch 3/3. Reviewer: `except` genérico → específico.
+- Etapa 10b: contador YOLO (`yolo26n.pt` nano CPU); dominio + puerto +
+  `UltralyticsDetector` + runner HUD `Personas: N`; `.spec` sin torch.
+- Etapa 10b-fix: salida ESC/q+X a menú (`runtime` TOPMOST + `WND_PROP_VISIBLE`,
+  tolerante a `cv2.error`); menú tkinter/ttk perezoso (`menu_gui`, `withdraw/`
+  `deiconify`) + `--no-gui`/fallback `TclError`; `gui_runner` inyectable.
+- Gate 10b-fix verde: pytest **692 passed** (96.17%), mypy strict 134 archivos,
+  ruff 158, check-arch 3/3. Reviewer: sin bloqueantes, 4 infos pendientes.
 
 ## Siguiente (etapa 10c — tracking + zona/línea + overlay)
 - Tracking (`model.track`), zona/línea de conteo y overlay dedicado.
@@ -32,6 +33,7 @@
   Checklist de apps en `docs/WORKFLOW.md` y skill `new-app`.
 
 ## Bloqueos / notas
+- Usuario verifica manual: ESC/q+X y ventana del menú con cámara real.
 - Verificación del `.exe` con YOLO/torch pendiente (bundle ~1 GB, excluido).
 - Calibrar `min_confidence` (0.5) y `gestures.swap_handedness` con cámara real.
 - `PENDING-TESTS.md`: verificaciones manuales de etapas 0-9b las hace el usuario.

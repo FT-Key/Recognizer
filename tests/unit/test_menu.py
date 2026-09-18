@@ -1,6 +1,7 @@
 """Tests del menu de aplicaciones (launcher), sin camara ni stdin real."""
 
 import logging
+import tkinter
 from collections.abc import Callable
 from pathlib import Path
 
@@ -268,16 +269,105 @@ def test_run_launcher_uses_default_config_when_missing(
         raise ConfigError(msg)
 
     captured: dict[str, object] = {}
+    gui_calls: list[AppRunRequest] = []
 
-    def fake_menu(**kwargs: object) -> int:
-        captured.update(kwargs)
+    def fake_gui(
+        request: AppRunRequest,
+        apps_config: AppsConfig,
+        _catalog: AppCatalog | None,
+    ) -> int:
+        gui_calls.append(request)
+        captured["apps_config"] = apps_config
         return 0
+
+    def fail_menu(**kwargs: object) -> int:
+        msg = "con gui_runner inyectado no debe caer a consola"
+        raise AssertionError(msg, kwargs)
 
     monkeypatch.setattr(menu, "default_config_path", lambda: Path("no-existe.yaml"))
     monkeypatch.setattr(menu, "load_config", failing_load)
-    monkeypatch.setattr(menu, "run_menu", fake_menu)
+    monkeypatch.setattr(menu, "run_menu", fail_menu)
 
-    result = run_launcher()
+    result = run_launcher(gui_runner=fake_gui)
 
     assert result == 0
+    assert len(gui_calls) == 1
+    assert isinstance(gui_calls[0], AppRunRequest)
     assert isinstance(captured["apps_config"], AppsConfig)
+
+
+def test_run_launcher_uses_injected_gui_runner_without_console(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(menu, "default_config_path", lambda: Path("config.yaml"))
+    monkeypatch.setattr(menu, "load_config", lambda _path: AppConfig())
+    gui_calls: list[AppRunRequest] = []
+
+    def fake_gui(
+        request: AppRunRequest,
+        _apps_config: AppsConfig,
+        _catalog: AppCatalog | None,
+    ) -> int:
+        gui_calls.append(request)
+        return 0
+
+    def fail_menu(**_kwargs: object) -> int:
+        msg = "con gui_runner exitoso no debe caer a consola"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(menu, "run_menu", fail_menu)
+
+    assert run_launcher(gui_runner=fake_gui) == 0
+    assert len(gui_calls) == 1
+
+
+def test_run_launcher_gui_runner_tcl_error_falls_back_to_console(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(menu, "default_config_path", lambda: Path("config.yaml"))
+    monkeypatch.setattr(menu, "load_config", lambda _path: AppConfig())
+
+    def raising_gui(
+        _request: AppRunRequest,
+        _apps_config: AppsConfig,
+        _catalog: AppCatalog | None,
+    ) -> int:
+        msg = "sin display"
+        raise tkinter.TclError(msg)
+
+    console_calls: list[dict[str, object]] = []
+
+    def fake_menu(**kwargs: object) -> int:
+        console_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(menu, "run_menu", fake_menu)
+
+    assert run_launcher(gui_runner=raising_gui) == 0
+    assert len(console_calls) == 1
+
+
+def test_run_launcher_use_gui_false_goes_direct_to_console(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(menu, "default_config_path", lambda: Path("config.yaml"))
+    monkeypatch.setattr(menu, "load_config", lambda _path: AppConfig())
+
+    def fail_gui(
+        _request: AppRunRequest,
+        _apps_config: AppsConfig,
+        _catalog: AppCatalog | None,
+    ) -> int:
+        msg = "use_gui=False no debe invocar gui_runner"
+        raise AssertionError(msg)
+
+    console_calls: list[dict[str, object]] = []
+
+    def fake_menu(**kwargs: object) -> int:
+        console_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(menu, "run_menu", fake_menu)
+
+    assert run_launcher(use_gui=False, gui_runner=fail_gui) == 0
+    assert len(console_calls) == 1

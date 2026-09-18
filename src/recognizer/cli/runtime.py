@@ -1,5 +1,6 @@
 """Bucle de camara compartido por smoke y la app local."""
 
+import contextlib
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -11,6 +12,9 @@ from recognizer.core.constants import (
     FPS_LOG_INTERVAL,
     MAX_CONSECUTIVE_READ_FAILURES,
     MIN_ELAPSED_SECONDS,
+    WINDOW_MIN_VISIBLE_VALUE,
+    WINDOW_TOPMOST_DISABLED,
+    WINDOW_TOPMOST_ENABLED,
 )
 from recognizer.core.errors import CameraError
 from recognizer.core.pipeline.builder import Pipeline
@@ -30,6 +34,23 @@ class RuntimeCallbacks:
 
 
 DEFAULT_CALLBACKS = RuntimeCallbacks()
+
+
+def _bring_to_front(*, window_name: str) -> None:
+    """Crea la ventana y la trae al frente; ignora backends sin soporte topmost."""
+    with contextlib.suppress(cv2.error):
+        cv2.namedWindow(window_name)
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_TOPMOST, WINDOW_TOPMOST_ENABLED)
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_TOPMOST, WINDOW_TOPMOST_DISABLED)
+
+
+def _window_closed(*, window_name: str) -> bool:
+    """Indica si la ventana se cerro con la X; False si el backend no lo soporta."""
+    try:
+        visible = cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE)
+    except cv2.error:
+        return False
+    return bool(visible < WINDOW_MIN_VISIBLE_VALUE)
 
 
 def run_camera_loop(
@@ -53,6 +74,9 @@ def run_camera_loop(
     count = 0
     consecutive_failures = 0
 
+    if show_window:
+        _bring_to_front(window_name=window_name)
+
     while True:
         frame = camera.read()
         if frame is None:
@@ -74,6 +98,8 @@ def run_camera_loop(
             if callbacks.on_key is not None:
                 callbacks.on_key(pressed)
             if pressed in (ESC_KEY, QUIT_KEY):
+                break
+            if _window_closed(window_name=window_name):
                 break
 
         if count % FPS_LOG_INTERVAL == 0:
