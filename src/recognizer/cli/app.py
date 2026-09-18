@@ -10,9 +10,7 @@ Uso:
 
 import argparse
 import logging
-import os
 import sys
-import tempfile
 import threading
 from collections import Counter
 from collections.abc import Sequence
@@ -35,11 +33,21 @@ from recognizer.bootstrap import (
     build_pointer_mover,
     resolve_camera_config,
 )
-from recognizer.cli.console import log_banner, log_step
+from recognizer.cli import paths
+from recognizer.cli.console import configure_logging, log_banner, log_step
+from recognizer.cli.paths import (
+    default_config_path,
+    default_health_port,
+    default_log_file,
+    is_frozen,
+    prepare_workspace,
+    resolve_log_file,
+)
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.actions.decorators import ActionGate
 from recognizer.core.actions.dispatcher import GestureActionDispatcher
 from recognizer.core.bus import InProcessEventBus
+from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.events import (
     DomainEvent,
     GestureDetected,
@@ -56,94 +64,27 @@ from recognizer.settings import load_config
 
 LOGGER = logging.getLogger("recognizer.app")
 
-DEFAULT_CONFIG_PATH = Path("config.yaml")
+# Alias internos: mantienen el nombre historico usado por tests y por el resto
+# del modulo, delegando la implementacion en `cli/paths.py` (modulo liviano).
+_is_frozen = is_frozen
+_default_config_path = default_config_path
+_default_health_port = default_health_port
+_default_log_file = default_log_file
+_prepare_workspace = prepare_workspace
+_configure_logging = configure_logging
+_resolve_log_file = resolve_log_file
+
+# Re-export de constantes de rutas usadas historicamente por tests y el .exe.
+DEFAULT_CONFIG_PATH = paths.DEFAULT_CONFIG_PATH
+DEFAULT_HEALTH_PORT_FROZEN = paths.DEFAULT_HEALTH_PORT_FROZEN
+DEFAULT_HEALTH_PORT_SOURCE = paths.DEFAULT_HEALTH_PORT_SOURCE
+LOGS_DIRNAME = paths.LOGS_DIRNAME
+
 WINDOW_NAME = "Recognizer"
 TOGGLE_KEY = ord("a")
 NO_CONFIRMED_GESTURES = "ninguno"
 APP_NAME = "recognizer"
 APP_VERSION = "0.1.0"
-# En el .exe (frozen) el servidor de salud arranca por defecto para que la web
-# detecte la app; en desarrollo queda desactivado (0) para no abrir puertos.
-DEFAULT_HEALTH_PORT_FROZEN = 8765
-DEFAULT_HEALTH_PORT_SOURCE = 0
-# Log a archivo junto al ejecutable cuando esta empaquetado (util para depurar
-# cierres inesperados del .exe, que no dejan consola visible al usuario final).
-LOGS_DIRNAME = "logs"
-LOG_FILENAME = "recognizer.log"
-LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
-LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-
-def _is_frozen() -> bool:
-    """Indica si corremos dentro de un ejecutable empaquetado (PyInstaller)."""
-    return bool(getattr(sys, "frozen", False))
-
-
-def _default_config_path() -> Path:
-    """Resuelve config.yaml junto al ejecutable cuando esta empaquetado."""
-    if _is_frozen():
-        return Path(sys.executable).parent / DEFAULT_CONFIG_PATH
-    return DEFAULT_CONFIG_PATH
-
-
-def _default_health_port() -> int:
-    """Puerto de salud por defecto segun el modo de ejecucion."""
-    if _is_frozen():
-        return DEFAULT_HEALTH_PORT_FROZEN
-    return DEFAULT_HEALTH_PORT_SOURCE
-
-
-def _prepare_workspace(config_arg: Path) -> Path:
-    """Resuelve la ruta de config y fija el CWD para rutas relativas del YAML.
-
-    Cuando la app corre empaquetada, los recursos (config.yaml y models/) viven
-    junto al ejecutable; cambiar el CWD alli hace que ``models/*.task`` del YAML
-    se resuelvan sin tocar la configuracion.
-    """
-    base_dir = Path(sys.executable).parent if _is_frozen() else Path.cwd()
-    config_path = config_arg if config_arg.is_absolute() else base_dir / config_arg
-    if config_path.parent != Path.cwd():
-        os.chdir(config_path.parent)
-    return config_path
-
-
-def _default_log_file() -> Path | None:
-    """Ruta del log por defecto: junto al .exe si esta empaquetado, si no ninguno."""
-    if _is_frozen():
-        return Path(sys.executable).parent / LOGS_DIRNAME / LOG_FILENAME
-    return None
-
-
-def _resolve_log_file(log_file: Path) -> Path:
-    """Resuelve la ruta del log y garantiza que su carpeta exista.
-
-    Si la carpeta junto al ejecutable no es escribible (p. ej. Program Files),
-    cae al directorio temporal del sistema para no perder el diagnostico.
-    """
-    candidate = log_file if log_file.is_absolute() else Path.cwd() / log_file
-    try:
-        candidate.parent.mkdir(parents=True, exist_ok=True)
-        return candidate
-    except OSError:
-        fallback = Path(tempfile.gettempdir()) / LOGS_DIRNAME / LOG_FILENAME
-        fallback.parent.mkdir(parents=True, exist_ok=True)
-        return fallback
-
-
-def _configure_logging(*, verbose: bool, log_file: Path | None) -> Path | None:
-    """Configura logging a consola y, si se indica, a archivo. Devuelve el log usado."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(level=level, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
-
-    if log_file is None:
-        return None
-
-    resolved = _resolve_log_file(log_file)
-    handler = logging.FileHandler(resolved, encoding="utf-8")
-    handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
-    logging.getLogger().addHandler(handler)
-    return resolved
 
 
 def _install_exception_hooks(logger: logging.Logger) -> None:
@@ -263,6 +204,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=_default_log_file(),
         help="Ruta del archivo de log (por defecto: logs/recognizer.log junto al .exe).",
     )
+    parser.add_argument(
+        "--list-apps",
+        action="store_true",
+        help="Lista las aplicaciones del menu y sale (sin abrir camara).",
+    )
     return parser
 
 
@@ -282,32 +228,31 @@ def _pointer_state(enabled: bool) -> str:
     return "activado" if enabled else "desactivado"
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """Punto de entrada del comando `recognizer`."""
-    args = _build_parser().parse_args(argv)
-    log_file = _configure_logging(verbose=args.verbose, log_file=args.log_file)
-    _install_exception_hooks(LOGGER)
-    log_banner(LOGGER)
-    if log_file is not None:
-        LOGGER.info("Registrando en %s", log_file)
-    LOGGER.info(
-        "%s %s | frozen=%s | cwd=%s",
-        APP_NAME,
-        APP_VERSION,
-        _is_frozen(),
-        Path.cwd(),
-    )
-    show_window = not args.no_window
+def run_gestures(
+    request: AppRunRequest,
+    *,
+    health_port: int | None = None,
+    no_actions: bool = False,
+    no_pointer: bool = False,
+    no_browser: bool = False,
+) -> int:
+    """Ejecuta la app de reconocimiento de gestos.
+
+    Pensada para el launcher: al salir (ESC/q) devuelve el control al llamador
+    en lugar de terminar el proceso. Devuelve 0 si termino bien, 1 si fallo.
+    """
+    show_window = request.show_window
+    resolved_health_port = default_health_port() if health_port is None else health_port
 
     try:
-        if not show_window and args.frames <= 0:
+        if not show_window and request.max_frames <= 0:
             msg = "Sin ventana no hay ESC: usa --frames > 0 junto con --no-window."
             raise RecognizerError(msg)
         with log_step(LOGGER, "Cargando configuracion"):
-            config_path = _prepare_workspace(args.config)
+            config_path = _prepare_workspace(request.config_path)
             app_config = load_config(config_path)
             camera_config = resolve_camera_config(
-                app_config=app_config, device_override=args.device
+                app_config=app_config, device_override=request.device
             )
         bus = InProcessEventBus()
         stats = _Stats()
@@ -317,11 +262,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         bus.subscribe(PointerMoved, stats.handle)
 
         with log_step(LOGGER, "Preparando gestos, acciones y puntero"):
-            actions_active = not args.no_actions and bool(
+            actions_active = not no_actions and bool(
                 app_config.actions.mappings or app_config.actions.menus
             )
-            pointer_active = app_config.pointer.enabled and not args.no_pointer
-            browser_active = not args.no_browser and bool(app_config.browser.tabs)
+            pointer_active = app_config.pointer.enabled and not no_pointer
+            browser_active = not no_browser and bool(app_config.browser.tabs)
             gate: ActionGate | None = ActionGate() if (actions_active or pointer_active) else None
             bindings = ActionBindings(mapping={}, gate=gate)
             if pointer_active:
@@ -398,9 +343,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         with ExitStack() as stack:
-            if args.health_port > 0:
+            if resolved_health_port > 0:
                 health = HealthServer(
-                    port=args.health_port,
+                    port=resolved_health_port,
                     app_name=APP_NAME,
                     version=APP_VERSION,
                 )
@@ -423,7 +368,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 pipeline=pipeline,
                 window_name=WINDOW_NAME,
                 show_window=show_window,
-                max_frames=args.frames,
+                max_frames=request.max_frames,
                 callbacks=RuntimeCallbacks(
                     on_key=_on_key,
                     on_context=_on_context,
@@ -453,6 +398,50 @@ def main(argv: Sequence[str] | None = None) -> int:
         _pointer_state(pointer_active and gate is not None and gate.enabled),
     )
     return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Punto de entrada del comando `recognizer`.
+
+    Sin argumentos abre el menu de aplicaciones; con flags ejecuta la app de
+    gestos directamente (comportamiento historico).
+    """
+    resolved = list(sys.argv[1:] if argv is None else argv)
+    if not resolved:
+        from recognizer.cli.menu import run_launcher
+
+        return run_launcher()
+
+    args = _build_parser().parse_args(resolved)
+    if args.list_apps:
+        from recognizer.cli.menu import run_launcher
+
+        return run_launcher(list_only=True)
+
+    log_file = _configure_logging(verbose=args.verbose, log_file=args.log_file)
+    _install_exception_hooks(LOGGER)
+    log_banner(LOGGER)
+    if log_file is not None:
+        LOGGER.info("Registrando en %s", log_file)
+    LOGGER.info(
+        "%s %s | frozen=%s | cwd=%s",
+        APP_NAME,
+        APP_VERSION,
+        _is_frozen(),
+        Path.cwd(),
+    )
+    return run_gestures(
+        AppRunRequest(
+            config_path=args.config,
+            device=args.device,
+            max_frames=args.frames,
+            show_window=not args.no_window,
+        ),
+        health_port=args.health_port,
+        no_actions=args.no_actions,
+        no_pointer=args.no_pointer,
+        no_browser=args.no_browser,
+    )
 
 
 if __name__ == "__main__":

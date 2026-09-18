@@ -24,6 +24,11 @@ a futuro, desplegarse en web con roles y permisos.
 - Sin `print` (usa `logging`), sin `except` desnudos; errores del dominio en `core/errors.py`.
 - Todo cambio de comportamiento lleva tests. Los tests no usan hardware real
   (márcalos `@pytest.mark.integration`).
+- Launcher multi-app: cada app importa sus dependencias de forma perezosa (solo al
+  seleccionarse) y usa una sola vía de inferencia. Prohibido el doble procesamiento del
+  mismo fotograma (p. ej. MediaPipe + YOLO a la vez) y cargar modelos de apps no elegidas.
+  Toda app termina con `ESC`/`q` y vuelve al menú. Detalle: `docs/ARCHITECTURE.md` y skill
+  `new-app`.
 
 ## Gate de calidad (obligatorio antes de cerrar una etapa)
 - `uv run lint` — ruff check + format

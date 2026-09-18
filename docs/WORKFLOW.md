@@ -52,6 +52,31 @@ Regla: cada subagente hace una sola cosa. No se pide a un agente que haga tests 
    - `main` no se toca nunca localmente; el usuario mergea `dev -> main` en GitHub.
 7. **Siguiente etapa**: repetir el ciclo.
 
+## Etapas de apps del launcher (etapa 10a+)
+
+Cada app nueva se implementa como una etapa propia (y se subdivide en fases `a/b/c` si es
+grande, p. ej. `stage/10b-people-counter-deteccion`). Checklist obligatorio de una app:
+
+1. **Catalogo**: agregar/activar su `AppInfo` en `core/domain/app.py`
+   (`implemented=True` cuando exista). Mantener el orden acordado: gestos, luego las que no
+   requieren entrenamiento, luego las que sí.
+2. **Runner**: crear `cli/apps/<app>.py` con una funcion `run_<app>(request, ...) -> int`
+   que respete `AppRunRequest`. Registrar la rama en `cli/menu.resolve_runner` con **import
+   perezoso** (la app no se carga hasta que se selecciona).
+3. **Salida al menú**: `ESC`/`q` termina la app y vuelve al menú; nunca cerrar el proceso.
+4. **Modularidad**: la app importa solo sus dependencias; nada de cargar modelos de otras
+   apps. Una sola vía de inferencia por app (sin detector de respaldo que reprocese el frame).
+5. **Puertos y adaptadores**: la lógica pura va en `core` (p. ej. conteo, reglas de ángulo);
+   la inferencia y los efectos van en `adapters` (YOLO, OpenCV, red, persistencia).
+6. **Config**: umbrales y mapeos en `config.yaml` (seccion propia por app) y modelos
+   pydantic en `core/config.py`; defaults en `core/constants.py`.
+7. **Tests y gate**: tests unitarios con dobles (sin hardware) + `@pytest.mark.integration`
+   para cámara; gate completo verde y medición de FPS (`uv run smoke`) registrada en el
+   history de la etapa.
+8. **Sin entrenamiento primero**: las apps que usan modelos preentrenados (contador,
+   anti-intrusos, postura) van antes que las que requieren entrenar/enrolar (EPP,
+   inventario, reconocimiento facial).
+
 ## Plantilla de history de etapa
 
 ```md

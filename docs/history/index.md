@@ -18,4 +18,11 @@ etapa que se necesite.
 | 9 | App web (React) + empaquetado de escritorio (PyInstaller) | completada | [stage-9-web-react-y-empaquetado.md](stage-9-web-react-y-empaquetado.md) |
 | 9b | Navegador controlado (CDP) | completada | [stage-9b-navegador-controlado.md](stage-9b-navegador-controlado.md) |
 | 9c | Scroll con gestos sostenidos | completada | [stage-9c-scroll.md](stage-9c-scroll.md) |
-| 10 | Enrolamiento facial, roles y despliegue web | pendiente | - |
+| 10a | Launcher multi-app (menú) y roadmap de apps | completada | [stage-10a-app-menu.md](stage-10a-app-menu.md) |
+| 10b | Contador de personas: detección y conteo (YOLO) | pendiente | - |
+| 10c | Contador de personas: tracking, zona/línea y overlay | pendiente | - |
+| 11 | Anti-intrusos (zona + alerta) | pendiente | - |
+| 12 | Postura ergonómica (YOLO pose) | pendiente | - |
+| 13 | Detector EPP de obra (requiere entrenamiento) | pendiente | - |
+| 14 | Inventario por cámara (requiere entrenamiento) | pendiente | - |
+| 15 | Reconocimiento facial (enrolamiento, login y roles) | pendiente | - |

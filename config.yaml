@@ -1,5 +1,20 @@
 # Configuracion de Recognizer.
 # Este archivo es la unica fuente de verdad para umbrales, dispositivos y mapeos.
+
+# Launcher multi-app: al ejecutar `recognizer` sin argumentos se abre un menu.
+# `enabled` solo aplica a apps ya implementadas; las que aun no existen se
+# muestran como "proximamente". Orden del menu: gestos, luego las que no
+# requieren entrenamiento y al final las que si (entrenamiento o enrolamiento).
+apps:
+  enabled:
+    gestures: true
+    # people_counter: true
+    # anti_intruder: true
+    # posture: true
+    # ppe_detector: true
+    # inventory: true
+    # face_auth: true
+
 camera:
   device_index: 0
   width: 640

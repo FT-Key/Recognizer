@@ -9,7 +9,9 @@ import logging
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
+from recognizer.cli.paths import LOG_DATE_FORMAT, LOG_FORMAT, resolve_log_file
 from recognizer.core.constants import MILLISECONDS_PER_SECOND
 
 BANNER_WIDTH = 62
@@ -29,6 +31,22 @@ def log_banner(logger: logging.Logger) -> None:
         APP_TAGLINE.center(BANNER_WIDTH),
         BANNER_BORDER,
     )
+
+
+def configure_logging(*, verbose: bool, log_file: Path | None) -> Path | None:
+    """Configura logging a consola y, si se indica, a archivo. Devuelve el log usado."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=level, format=LOG_FORMAT, datefmt=LOG_DATE_FORMAT)
+
+    if log_file is None:
+        return None
+
+    resolved = resolve_log_file(log_file)
+    handler = logging.FileHandler(resolved, encoding="utf-8")
+    handler.setLevel(level)
+    handler.setFormatter(logging.Formatter(LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(handler)
+    return resolved
 
 
 @contextmanager

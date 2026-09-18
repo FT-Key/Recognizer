@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 9c (scroll con gestos sostenidos) completada; siguiente: etapa 10
-  (enrolamiento facial, roles/permisos, despliegue web)
-- **Rama:** `stage/9c-scroll` (sin mergear a `dev`)
+- **Fase actual:** etapa 10a (launcher multi-app) completada; siguiente: etapa 10b
+  (contador de personas, sin entrenamiento)
+- **Rama:** `stage/10a-app-menu` (sin mergear a `dev`)
 - **Actualizado:** 2026-09-18
 
 ## Hecho
@@ -94,9 +94,24 @@
   solo lectura (sin scroll fantasma). Gate verde: pytest 600 tests, 95.95%, mypy 120
   archivos, check-arch 3/3, ruff check OK. Ver
   `docs/history/stage-9c-scroll.md`.
+- Etapa 10a (launcher multi-app): `AppId`/`AppInfo`/`AppCatalog`/`AppRunRequest` en
+  `core/domain/app.py` (dominio puro) y `AppsConfig` (`apps.enabled`) en `core/config.py`;
+  `cli/menu.py` con render del menú, bucle interactivo y `resolve_runner` con **import
+  perezoso**; `cli/app.py` expone `run_gestures(request, ...)` y `main` abre el menú sin
+  args (o `--list-apps`); helpers de rutas movidos a `cli/paths.py` (sin `cv2`/`mediapipe`)
+  y `configure_logging` a `cli/console.py`. Menú: gestos `[disponible]` (1), apps sin
+  entrenamiento `[proximamente]` (2-4) y con entrenamiento/enrolamiento (5-7); `ESC`/`q`
+  vuelve al menú. Gate verde: pytest 635 tests, 96.05%, mypy 126 archivos, check-arch 3/3.
+  El **despliegue web ya estaba hecho en la etapa 9** (Vercel); el enrolamiento facial pasa
+  a ser la app de la etapa 15. Ver `docs/history/stage-10a-app-menu.md`.
 
-## Siguiente (etapa 10 — enrolamiento y despliegue)
-- Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).
+## Siguiente (etapa 10b — contador de personas)
+- App sin entrenamiento: `yolo26n.pt` (clase `person`) + conteo; luego 10c con tracking
+  (`model.track`), zona/línea y overlay. Requiere puerto `ObjectDetector` + adaptador
+  `UltralyticsDetector` y añadir `ultralytics`/`torch` al contrato de import-linter.
+- Roadmap: 11 anti-intrusos, 12 postura (YOLO pose), 13 EPP y 14 inventario (entrenar
+  modelo) y 15 reconocimiento facial (enrolamiento/login/roles). Checklist de apps en
+  `docs/WORKFLOW.md` y skill `new-app`.
 
 ## Bloqueos / notas
 - Verificaciones manuales de etapas 0-9b (gestos, acciones reales, puntero, reglas de
