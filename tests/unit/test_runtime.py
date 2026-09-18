@@ -68,6 +68,31 @@ def test_loop_processes_max_frames_and_returns_positive_fps() -> None:
     assert fps > 0
 
 
+def _patch_window(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    visible: float = 1.0,
+    error: cv2.error | None = None,
+) -> dict[str, list[object]]:
+    """Fakes de ventana OpenCV (mismo estilo que imshow/waitKey de este modulo)."""
+    calls: dict[str, list[object]] = {"named": [], "topmost": [], "visible": []}
+    monkeypatch.setattr(cv2, "namedWindow", lambda name: calls["named"].append(name))
+    monkeypatch.setattr(
+        cv2,
+        "setWindowProperty",
+        lambda name, _prop, value: calls["topmost"].append((name, value)),
+    )
+    if error is not None:
+
+        def _raise(_name: str, _prop: int) -> float:
+            raise error
+
+        monkeypatch.setattr(cv2, "getWindowProperty", _raise)
+    else:
+        monkeypatch.setattr(cv2, "getWindowProperty", lambda _name, _prop: visible)
+    return calls
+
+
 @pytest.mark.parametrize("quit_key", [ESC_KEY, QUIT_KEY])
 def test_loop_calls_callbacks_and_stops_on_quit_key(
     monkeypatch: pytest.MonkeyPatch,
@@ -79,6 +104,7 @@ def test_loop_calls_callbacks_and_stops_on_quit_key(
     pressed: list[int] = []
     monkeypatch.setattr(cv2, "imshow", lambda name, _data: shown.append(name))
     monkeypatch.setattr(cv2, "waitKey", lambda _delay: next(keys))
+    _patch_window(monkeypatch)
 
     frames, _ = run_camera_loop(
         FakeCamera([_frame(), _frame(), _frame()]),
@@ -148,3 +174,76 @@ def test_interleaved_none_reads_reset_failure_counter() -> None:
     )
 
     assert frames == 2
+
+
+def test_loop_stops_when_window_closed_via_x(monkeypatch: pytest.MonkeyPatch) -> None:
+    shown: list[str] = []
+    monkeypatch.setattr(cv2, "imshow", lambda name, _data: shown.append(name))
+    monkeypatch.setattr(cv2, "waitKey", lambda _delay: 0xFF)
+    _patch_window(monkeypatch, visible=0.0)
+
+    frames, _ = run_camera_loop(
+        FakeCamera([_frame(), _frame(), _frame()]),
+        pipeline=_pipeline(),
+        window_name="test",
+        show_window=True,
+        max_frames=0,
+    )
+
+    assert frames == 1
+    assert shown == ["test"]
+
+
+def test_loop_tolerates_window_property_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cv2, "imshow", lambda _name, _data: None)
+    monkeypatch.setattr(cv2, "waitKey", lambda _delay: 0xFF)
+    _patch_window(monkeypatch, error=cv2.error("sin backend de ventana"))
+
+    frames, _ = run_camera_loop(
+        FakeCamera([_frame(), _frame()]),
+        pipeline=_pipeline(),
+        window_name="test",
+        show_window=True,
+        max_frames=2,
+    )
+
+    assert frames == 2
+
+
+def test_loop_without_window_makes_no_window_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _fail(*_args: object, **_kwargs: object) -> None:
+        msg = "no debe tocar ventanas con show_window=False"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(cv2, "namedWindow", _fail)
+    monkeypatch.setattr(cv2, "setWindowProperty", _fail)
+    monkeypatch.setattr(cv2, "getWindowProperty", _fail)
+    monkeypatch.setattr(cv2, "imshow", _fail)
+    monkeypatch.setattr(cv2, "waitKey", _fail)
+
+    frames, _ = run_camera_loop(
+        FakeCamera([_frame(), _frame()]),
+        pipeline=_pipeline(),
+        window_name="test",
+        show_window=False,
+        max_frames=2,
+    )
+
+    assert frames == 2
+
+
+def test_loop_brings_window_to_front(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(cv2, "imshow", lambda _name, _data: None)
+    monkeypatch.setattr(cv2, "waitKey", lambda _delay: QUIT_KEY)
+    calls = _patch_window(monkeypatch)
+
+    run_camera_loop(
+        FakeCamera([_frame()]),
+        pipeline=_pipeline(),
+        window_name="test",
+        show_window=True,
+        max_frames=0,
+    )
+
+    assert calls["named"] == ["test"]
+    assert len(calls["topmost"]) == 2
