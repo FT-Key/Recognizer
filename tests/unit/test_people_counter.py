@@ -1,6 +1,6 @@
-"""Tests del contador de personas (etapa 10b), sin hardware real.
+"""Tests del contador de personas (etapa 10c), sin hardware real.
 
-Cubre el dominio de deteccion, el adaptador YOLO con fachada fake, la
+Cubre el dominio de deteccion y tracking, el adaptador YOLO con fachada fake, la
 configuracion y el runner con camara y detector fakes (bucle real).
 """
 
@@ -22,10 +22,16 @@ from recognizer.cli import menu
 from recognizer.cli.apps import people_counter as pc_module
 from recognizer.cli.apps.people_counter import run_people_counter
 from recognizer.cli.menu import resolve_runner
-from recognizer.core.config import AppConfig, CameraConfig, PeopleCounterConfig
+from recognizer.core.config import (
+    AppConfig,
+    CameraConfig,
+    CountingLineConfig,
+    PeopleCounterConfig,
+)
 from recognizer.core.constants import (
     DEFAULT_PEOPLE_CONFIDENCE,
     DEFAULT_PEOPLE_MODEL_PATH,
+    DEFAULT_TRACKER_CONFIG,
     PERSON_LABEL,
 )
 from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
@@ -36,7 +42,9 @@ from recognizer.core.domain.detection import (
     count_people,
 )
 from recognizer.core.domain.frame import Frame
+from recognizer.core.domain.tracking import CountingLine, TrackedDetection
 from recognizer.core.errors import ConfigError, DetectorError
+from recognizer.core.ports.object_tracker import ObjectTracker
 
 FRAME_SHAPE = (48, 64, 3)
 REQUEST = AppRunRequest(config_path=Path("config.yaml"))
@@ -53,6 +61,23 @@ def _bbox(
 
 def _detection(label: str = PERSON_LABEL, confidence: float = 0.9) -> Detection:
     return Detection(label=label, confidence=confidence, bbox=_bbox())
+
+
+def _bbox_at(*, y_min: float, y_max: float) -> BoundingBox:
+    return BoundingBox(x_min=0.4, y_min=y_min, x_max=0.6, y_max=y_max)
+
+
+def _tracked(
+    track_id: int = 1,
+    *,
+    bbox: BoundingBox | None = None,
+    label: str = PERSON_LABEL,
+    confidence: float = 0.9,
+) -> TrackedDetection:
+    return TrackedDetection(
+        track_id=track_id,
+        detection=Detection(label=label, confidence=confidence, bbox=bbox or _bbox()),
+    )
 
 
 def _frame() -> Frame:
@@ -170,6 +195,7 @@ class FakeFacade:
     def __init__(self, config: PeopleCounterConfig) -> None:
         self.config = config
         self.detections: tuple[Detection, ...] = ()
+        self.tracked: tuple[TrackedDetection, ...] = ()
         self.open_calls = 0
         self.close_calls = 0
         self.seen_confidences: list[float] = []
@@ -187,17 +213,31 @@ class FakeFacade:
         self.seen_confidences.append(min_confidence)
         return self.detections
 
+    def track(
+        self,
+        *,
+        frame_bgr: NDArray[np.uint8],
+        min_confidence: float,
+    ) -> tuple[TrackedDetection, ...]:
+        _ = frame_bgr
+        self.seen_confidences.append(min_confidence)
+        return self.tracked
+
     def close(self) -> None:
         self.close_calls += 1
 
 
-def _detector_with_fake(script: tuple[Detection, ...]) -> tuple[UltralyticsDetector, FakeFacade]:
+def _detector_with_fake(
+    script: tuple[Detection, ...],
+    tracked: tuple[TrackedDetection, ...] = (),
+) -> tuple[UltralyticsDetector, FakeFacade]:
     fake: FakeFacade | None = None
 
     def factory(config: PeopleCounterConfig) -> FakeFacade:
         nonlocal fake
         fake = FakeFacade(config)
         fake.detections = script
+        fake.tracked = tracked
         return fake
 
     detector = UltralyticsDetector(PeopleCounterConfig(), facade_factory=factory)
@@ -223,6 +263,31 @@ def test_detector_open_twice_raises() -> None:
 
     with pytest.raises(DetectorError, match="ya esta abierto"):
         detector.open()
+
+
+def test_detector_track_delegates_to_facade_with_config_confidence() -> None:
+    script = (_tracked(1), _tracked(2, label="car"))
+    detector, fake = _detector_with_fake((), tracked=script)
+
+    found = detector.track(_frame())
+
+    assert found == script
+    assert fake.open_calls == 1
+    assert fake.seen_confidences == [DEFAULT_PEOPLE_CONFIDENCE]
+
+
+def test_detector_track_without_open_raises() -> None:
+    detector = UltralyticsDetector(PeopleCounterConfig(), facade_factory=FakeFacade)
+
+    with pytest.raises(DetectorError, match="no esta abierto"):
+        detector.track(_frame())
+
+
+def test_ultralytics_detector_satisfies_object_tracker_protocol() -> None:
+    tracker: ObjectTracker = UltralyticsDetector(PeopleCounterConfig())
+
+    with pytest.raises(DetectorError, match="no esta abierto"):
+        tracker.track(_frame())
 
 
 def test_detector_detect_without_open_raises() -> None:
@@ -275,11 +340,16 @@ class _FakeScalar:
 
 class _FakeRow:
     def __init__(
-        self, coords: tuple[float, float, float, float], confidence: float, cls: int
+        self,
+        coords: tuple[float, float, float, float],
+        confidence: float,
+        cls: int,
+        track_id: int | None = None,
     ) -> None:
         self._coords = coords
         self._confidence = confidence
         self._cls = cls
+        self._track_id = track_id
 
     @property
     def xyxyn(self) -> list[list[_FakeScalar]]:
@@ -292,6 +362,12 @@ class _FakeRow:
     @property
     def cls(self) -> list[_FakeScalar]:
         return [_FakeScalar(float(self._cls))]
+
+    @property
+    def id(self) -> list[_FakeScalar] | None:
+        if self._track_id is None:
+            return None
+        return [_FakeScalar(float(self._track_id))]
 
 
 class _FakeBoxes:
@@ -323,10 +399,25 @@ class _FakeModel:
     def __init__(self, results: list[_FakeResult]) -> None:
         self._results = results
         self.seen_conf: list[float] = []
+        self.seen_track: list[tuple[float, bool, str]] = []
 
     def predict(self, source: object, *, conf: float, verbose: bool) -> list[_FakeResult]:
         _ = (source, verbose)
         self.seen_conf.append(conf)
+        return self._results
+
+    def track(
+        self,
+        source: object,
+        *,
+        conf: float,
+        persist: bool,
+        verbose: bool,
+        tracker: str,
+    ) -> list[_FakeResult]:
+        _ = (source, verbose)
+        self.seen_conf.append(conf)
+        self.seen_track.append((conf, persist, tracker))
         return self._results
 
 
@@ -373,6 +464,70 @@ def test_facade_detect_without_open_raises() -> None:
 
     with pytest.raises(DetectorError, match="no esta abierto"):
         facade.detect(frame_bgr=_frame().data, min_confidence=0.5)
+
+
+def test_facade_track_maps_ids_filters_rows_and_passes_kwargs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = {0: PERSON_LABEL, 1: "car"}
+    results = [
+        _FakeResult(
+            _FakeBoxes(
+                [
+                    _FakeRow((0.1, 0.2, 0.4, 0.8), 0.9, 0, track_id=3),
+                    _FakeRow((0.0, 0.0, 0.5, 0.5), 0.9, 0),
+                    _FakeRow((0.0, 0.0, 0.5, 0.5), 0.1, 0, track_id=4),
+                    _FakeRow((0.0, 0.0, 0.5, 0.5), 0.9, 7, track_id=5),
+                    _FakeRow((0.5, 0.5, 0.9, 0.9), 0.7, 1, track_id=6),
+                ]
+            ),
+            names,
+        ),
+        _FakeResult(None, names),
+    ]
+    facade, model = _facade_with_model(monkeypatch, results)
+
+    found = facade.track(frame_bgr=_frame().data, min_confidence=0.5)
+
+    assert [(item.track_id, item.label, item.confidence) for item in found] == [
+        (3, PERSON_LABEL, 0.9),
+        (6, "car", 0.7),
+    ]
+    assert model.seen_conf == [0.5]
+    assert model.seen_track == [(0.5, True, DEFAULT_TRACKER_CONFIG)]
+
+
+def test_facade_track_without_open_raises() -> None:
+    facade = UltralyticsDetectorFacade(PeopleCounterConfig())
+
+    with pytest.raises(DetectorError, match="no esta abierto"):
+        facade.track(frame_bgr=_frame().data, min_confidence=0.5)
+
+
+def test_facade_track_failure_wraps_detector_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _BrokenTrackModel(_FakeModel):
+        def track(
+            self,
+            source: object,
+            *,
+            conf: float,
+            persist: bool,
+            verbose: bool,
+            tracker: str,
+        ) -> list[_FakeResult]:
+            _ = (source, conf, persist, verbose, tracker)
+            raise RuntimeError(" exploto el tracker")
+
+    monkeypatch.setattr(
+        detector_module,
+        "_create_model",
+        lambda *, model_path: _BrokenTrackModel([]),  # noqa: ARG005
+    )
+    facade = UltralyticsDetectorFacade(PeopleCounterConfig())
+    facade.open()
+
+    with pytest.raises(DetectorError, match="Fallo el tracking"):
+        facade.track(frame_bgr=_frame().data, min_confidence=0.5)
 
 
 def test_facade_open_twice_raises(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -474,10 +629,14 @@ class _FakeCamera:
 class _FakeDetectorCM:
     """Detector fake con guion por fotograma y protocolo de contexto."""
 
-    def __init__(self, config: PeopleCounterConfig, script: list[tuple[Detection, ...]]) -> None:
+    def __init__(
+        self,
+        config: PeopleCounterConfig,
+        script: list[tuple[TrackedDetection, ...]],
+    ) -> None:
         self.config = config
         self._script = script
-        self.detect_calls = 0
+        self.track_calls = 0
 
     def __enter__(self) -> "_FakeDetectorCM":
         return self
@@ -485,9 +644,9 @@ class _FakeDetectorCM:
     def __exit__(self, *exc_info: object) -> None:
         return None
 
-    def detect(self, frame: Frame) -> tuple[Detection, ...]:
+    def track(self, frame: Frame) -> tuple[TrackedDetection, ...]:
         _ = frame
-        self.detect_calls += 1
+        self.track_calls += 1
         if self._script:
             return self._script.pop(0)
         return ()
@@ -497,7 +656,7 @@ def _patch_runner_env(
     monkeypatch: pytest.MonkeyPatch,
     *,
     frames: list[Frame],
-    script: list[tuple[Detection, ...]],
+    script: list[tuple[TrackedDetection, ...]],
     app_config: AppConfig | None = None,
 ) -> _FakeDetectorCM:
     resolved = app_config if app_config is not None else AppConfig()
@@ -522,18 +681,47 @@ def _patch_runner_env(
     return detector
 
 
+def _app_config_with_line(*, enabled: bool, confirm_frames: int = 1) -> AppConfig:
+    return AppConfig(
+        people_counter=PeopleCounterConfig(
+            line=CountingLineConfig(enabled=enabled, confirm_frames=confirm_frames)
+        )
+    )
+
+
+def _record_overlay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[int, int, int]]:
+    calls: list[tuple[int, int, int]] = []
+
+    def fake_draw(
+        image: NDArray[np.uint8],
+        *,
+        tracked: tuple[TrackedDetection, ...],
+        current: int,
+        entries: int,
+        exits: int,
+        line: CountingLine | None,
+    ) -> None:
+        _ = (image, tracked, line)
+        calls.append((current, entries, exits))
+
+    monkeypatch.setattr(pc_module, "draw_people_overlay", fake_draw)
+    return calls
+
+
 def test_runner_counts_and_draws_hud_headless(monkeypatch: pytest.MonkeyPatch) -> None:
     frames = [_frame(), _frame()]
-    script: list[tuple[Detection, ...]] = [
-        (_detection(), _detection(confidence=0.8)),
-        (_detection(label="car"),),
+    script: list[tuple[TrackedDetection, ...]] = [
+        (_tracked(1), _tracked(2, confidence=0.8)),
+        (_tracked(3, label="car"),),
     ]
     detector = _patch_runner_env(monkeypatch, frames=frames, script=script)
 
     request = AppRunRequest(config_path=Path("config.yaml"), show_window=False, max_frames=2)
     assert run_people_counter(request) == 0
 
-    assert detector.detect_calls == 2
+    assert detector.track_calls == 2
     for frame in frames:
         assert np.any(frame.data != 0)
 
@@ -542,7 +730,11 @@ def test_runner_stops_on_quit_key_and_returns_to_menu(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     frames = [_frame(), _frame(), _frame()]
-    script: list[tuple[Detection, ...]] = [(_detection(),), (_detection(),), (_detection(),)]
+    script: list[tuple[TrackedDetection, ...]] = [
+        (_tracked(1),),
+        (_tracked(1),),
+        (_tracked(1),),
+    ]
     detector = _patch_runner_env(monkeypatch, frames=frames, script=script)
     keys = iter([0, ord("q")])
     shown: list[str] = []
@@ -552,8 +744,48 @@ def test_runner_stops_on_quit_key_and_returns_to_menu(
     request = AppRunRequest(config_path=Path("config.yaml"), show_window=True, max_frames=0)
     assert run_people_counter(request) == 0
 
-    assert detector.detect_calls == 2
+    assert detector.track_calls == 2
     assert shown == [pc_module.WINDOW_NAME, pc_module.WINDOW_NAME]
+
+
+def test_runner_with_line_disabled_keeps_counts_at_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    script: list[tuple[TrackedDetection, ...]] = [
+        (_tracked(1, bbox=_bbox_at(y_min=0.1, y_max=0.3)),),
+        (_tracked(1, bbox=_bbox_at(y_min=0.7, y_max=0.9)),),
+    ]
+    _patch_runner_env(
+        monkeypatch,
+        frames=[_frame(), _frame()],
+        script=script,
+        app_config=_app_config_with_line(enabled=False),
+    )
+    calls = _record_overlay(monkeypatch)
+
+    request = AppRunRequest(config_path=Path("config.yaml"), show_window=False, max_frames=2)
+    assert run_people_counter(request) == 0
+
+    assert calls == [(1, 0, 0), (1, 0, 0)]
+
+
+def test_runner_with_line_enabled_accumulates_crossing_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    script: list[tuple[TrackedDetection, ...]] = [
+        (_tracked(1, bbox=_bbox_at(y_min=0.1, y_max=0.3)),),
+        (_tracked(1, bbox=_bbox_at(y_min=0.7, y_max=0.9)),),
+    ]
+    _patch_runner_env(
+        monkeypatch,
+        frames=[_frame(), _frame()],
+        script=script,
+        app_config=_app_config_with_line(enabled=True, confirm_frames=1),
+    )
+    calls = _record_overlay(monkeypatch)
+
+    request = AppRunRequest(config_path=Path("config.yaml"), show_window=False, max_frames=2)
+    assert run_people_counter(request) == 0
+
+    assert calls == [(1, 0, 0), (1, 1, 0)]
 
 
 def test_runner_rejects_headless_without_frames() -> None:
