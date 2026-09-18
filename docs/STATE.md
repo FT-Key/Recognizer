@@ -1,123 +1,38 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 10a (launcher multi-app) completada; siguiente: etapa 10b
-  (contador de personas, sin entrenamiento)
-- **Rama:** `stage/10a-app-menu` (sin mergear a `dev`)
+- **Fase actual:** etapa 10b (contador de personas) completada; siguiente: 10c
+  (tracking + zona/línea + overlay)
+- **Rama:** `stage/10b-people-counter` (10a ya mergeada a `dev` en `c8c8b9f`)
 - **Actualizado:** 2026-09-18
 
 ## Hecho
-- Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
-- uv + Python 3.12.14; dependencias runtime y dev instaladas (mediapipe 1.0.1, opencv 5,
-  pydantic 2.13, pynput, pytest, ruff, mypy, import-linter).
-- Core base: `Frame`, puerto `FrameSource`, `AppConfig`/`CameraConfig`, errores del dominio.
-- Adaptador `OpenCVCamera` (inyectable, testeable), CLI `smoke` y modelos en `models/`.
-- Etapa 0 con gate verde: pytest 21 tests, 98% cobertura y smoke real a 29.3 FPS.
-- Etapa 1 (manos): puerto `HandTracker` + `MediaPipeHandTracker`, `EventBus` tipado +
-  `HandsDetected`, `PipelineBuilder` + `HandDetectionProcessor` y overlay OpenCV.
-- Etapa 2 (gestos): `GestureRecognizer` de MediaPipe, puerto `GestureClassifier`,
-  `GestureDetectionProcessor` + `GestureStabilizerProcessor` (N=5/M=5), eventos
-  `GestureDetected`/`GestureReleased` y `GestureOverlay`.
-- Etapa 3 (acciones locales): `Action`/`MediaKey`/`ActionContext`, puertos `KeySender` y
-  `CommandRunner`, acciones media key/hotkey/command/no-op con
-  `Gated(Debounced(Logged(...)))`, dispatcher con fallback no-op, `ActionsConfig` en
-  `config.yaml`, adaptadores pynput/subprocess y entrypoint `recognizer` con HUD (tecla `a`).
-- Etapa 4 (puntero virtual): `PointerPosition`/`PointerCalibration` y evento
-  `PointerMoved`; `PointerDetectionProcessor` (landmark 8 con gesto estable) y
-  `PointerMover` con gate compartido; Strategy de suavizado `none`/`ema` (alpha 0.35);
-  puerto `MouseController` + `PynputMouseController`; `PointerConfig`/`ActiveZoneConfig`
-  en `config.yaml` (zona 0.2-0.8, `mirror_x`), `PointerOverlay` y flag `--no-pointer`.
-- Gate de etapa 4 en verde: lint (109 archivos), mypy strict (83), pytest (290 tests,
-  98.61%), check-arch 3/3 y smoke real OK (30 fotogramas, 4.6 FPS con CPU cargada).
-- Etapa 5 (gestos personalizados): vocabulario abierto (`GestureId` + `GestureCatalog`)
-  en vez del enum cerrado; reglas geométricas de landmarks en `config.yaml`
-  (`gestures.rules`, `rules_priority`, `rule_thresholds`) con `LandmarkRuleProcessor`;
-  `gestures.custom_labels` para modelos MediaPipe custom; `config.yaml` con ejemplos
-  comentados. Gate verde: pytest 342 tests, 98.72%, mypy 87, check-arch 3/3, smoke 13.7 FPS.
-- Etapa 6 (acciones script): puerto `ScriptRunner` + `SubprocessScriptRunner` (intérprete
-  por formato `.py/.ps1/.bat/.cmd/.sh`, bloqueante/no bloqueante, `timeout_seconds`
-  obligatorio si bloqueante, contexto `RECOGNIZER_*` opt-in) y acción `script` en
-  `config.yaml`. Gate verde: pytest 378 tests, 98.81%, mypy 92, check-arch 3/3, smoke 11.5 FPS.
-- Etapa 7 (abrir enlaces): puerto `LinkOpener` + `ChromeLinkOpener` (autodetección de
-  Chrome; `chrome.exe <url>` abre pestaña o lanza el navegador) y acción `open_links` con
-  playlist secuencial rotatoria; `ILoveYou` mapeado a un enlace de YouTube. Ejemplo de
-  script de usuario en `scripts/actions/log_gesture.py`. Gate verde: pytest 399 tests,
-  98.86%, mypy 97, check-arch 3/3, smoke 17.1 FPS.
-- Etapa 8 (gestos compuestos): menús por mano (`actions.menus`) con `HandGestureTracker` y
-  resolución en el dispatcher (consume trigger, anti-repetición), puntero desactivado con
-  2 manos, `gestures.swap_handedness`, `MenuOverlay` y script `scripts/actions/video_start.ps1`
-  (vuelve el video de Chrome al inicio). Gate verde: pytest 442 tests, 98.94%, mypy 99,
-  check-arch 3/3, smoke 13.3 FPS.
-- Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7), etapa 6 (1e5f36e),
-  etapa 7 (656478a) y etapa 9 (ver historial).
-- Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
-  2 skills y 4 comandos.
-- Etapa 9 (web React + empaquetado): app web en `web/` migrada a React 19 + Vite con
-  MediaPipe en **Web Worker** (fallback GPU→CPU), lógica pura en `src/lib`, hooks y
-  componentes; tema claro/oscuro persistente; **banner dinámico** que detecta la app de
-  escritorio vía `http://127.0.0.1:8765/health`; gestos personalizados con
-  `scripts/train_gesture_model.py` (Model Maker). Escritorio empaquetado con PyInstaller
-  (`packaging/recognizer.spec` onedir + `scripts/build_exe.py` → `dist/Recognizer/`),
-  servidor de salud local (`adapters/health_server.py`) y resolución de rutas junto al
-  `.exe`. Gate verde: pytest 492 tests, 98.38%, mypy 107 archivos, check-arch 3/3;
-  `npm run build` OK; `.exe` verificado (`--help`, frames headless y `GET /health`).
-  El `.exe` escribe `logs/recognizer.log` junto al ejecutable (config, pantalla, modelo y
-  crashes). Bug del puntero en el `.exe` corregido: faltaba `tkinter` en el bundle (lo usa
-  `pynput_mouse` para el tamaño de pantalla) y los fallos inesperados de acción/puntero ya
-  no tumban la app. Web desplegada en Vercel y corregida: shim de `importScripts` para
-  MediaPipe en Web Worker, estabilizador con transición entre gestos, overlay espejado y
-  textos con escapes `\uXXXX`. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
-  `docs/WEB-PLAN.md` y `docs/DESKTOP-APP-PLAN.md`.
-- Etapa 9b (navegador controlado via CDP): puerto `BrowserTabs` con `ensure`,
-  `seek_media` y `press_keys`; `CdpClient` (transporte HTTP + WebSocket
-  `UrllibCdpTransport`/`WebsocketCdpTransport`); `ChromiumCdpBrowser` implementa
-  `BrowserTabs` sobre Chromium (auto-deteccion de Chrome/Edge/Brave/Vivaldi/Opera,
-  perfil aislado `browser-profile/`, lanzamiento automatico con `--remote-debugging-port`).
-  Acciones `open_tab` (playlist rotatoria via `TabKey`), `tab_seek` (fraccion 0..1) y
-  `tab_press` (teclas via CDP `Input.dispatchKeyEvent`). Config `browser.tabs` en
-  `config.yaml`; `ILoveYou` ahora usa `open_tab` en vez de `open_links`. Menus Replay
-  migrados de script PowerShell a `tab_seek`. Gate verde: pytest 575 tests (575 passed),
-  mypy strict, check-arch 3/3.
-- Fix CDP para Chrome 152 (post-etapa 9b, commit `dcd64b0`): el `--user-data-dir` del
-  perfil aislado se resuelve a **ruta absoluta** (Chrome ignora rutas relativas: no abría
-  CDP y cada gesto relanzaba el navegador), se eliminó el doble anidado
-  `browser-profile/<familia>/browser-profile/<familia>` en `bootstrap`, `create_target()`
-  crea `about:blank` y `ensure()` navega con `Page.navigate` (Chrome >= 152 ignora el
-  parámetro `url` de `/json/new`) y el transporte HTTP tolera respuestas texto plano
-  (`/json/activate`). Gate verde: pytest 579 tests, 95.68%, check-arch 3/3.
-- Etapa 9c (scroll con gestos sostenidos): `Victory` sostenido = scroll arriba,
-  `Closed_Fist` sostenido = scroll abajo (ticks `GestureHeld` + repeat, como volumen);
-  mute reubicado al menú compuesto `System` (izq `Pointing_Up` + der `Closed_Fist`).
-  Nuevo `ScrollAction` (`core/actions/scroll.py`), `ScrollDirection` en el dominio,
-  `scroll_by` en `MouseController`/`PynputMouseController`, `ScrollActionConfig` y
-  cooldown por acción con `None`-check en `bootstrap`; `GestureHeld` resuelve menús en
-  solo lectura (sin scroll fantasma). Gate verde: pytest 600 tests, 95.95%, mypy 120
-  archivos, check-arch 3/3, ruff check OK. Ver
-  `docs/history/stage-9c-scroll.md`.
-- Etapa 10a (launcher multi-app): `AppId`/`AppInfo`/`AppCatalog`/`AppRunRequest` en
-  `core/domain/app.py` (dominio puro) y `AppsConfig` (`apps.enabled`) en `core/config.py`;
-  `cli/menu.py` con render del menú, bucle interactivo y `resolve_runner` con **import
-  perezoso**; `cli/app.py` expone `run_gestures(request, ...)` y `main` abre el menú sin
-  args (o `--list-apps`); helpers de rutas movidos a `cli/paths.py` (sin `cv2`/`mediapipe`)
-  y `configure_logging` a `cli/console.py`. Menú: gestos `[disponible]` (1), apps sin
-  entrenamiento `[proximamente]` (2-4) y con entrenamiento/enrolamiento (5-7); `ESC`/`q`
-  vuelve al menú. Gate verde: pytest 635 tests, 96.05%, mypy 126 archivos, check-arch 3/3.
-  El **despliegue web ya estaba hecho en la etapa 9** (Vercel); el enrolamiento facial pasa
-  a ser la app de la etapa 15. Ver `docs/history/stage-10a-app-menu.md`.
+- Repo `FT-Key/Recognizer` (`main`/`dev`); uv + Python 3.12; deps (+`ultralytics`).
+- Core base (`Frame`, puertos, config, errores), `OpenCVCamera`, CLI `smoke`.
+- Etapas 1-2: manos (MediaPipe + `EventBus`) y gestos + estabilizador + overlay.
+- Etapa 3: acciones locales (media/hotkey/command/script) con dispatcher + HUD.
+- Etapa 4: puntero virtual (suavizado ema, zona 0.2-0.8, `MouseController`).
+- Etapa 5: gestos personalizados (reglas de landmarks en `config.yaml`).
+- Etapa 6: acciones script (`.py/.ps1/.bat/.cmd/.sh`, `RECOGNIZER_*` opt-in).
+- Etapa 7: `open_links` + ejemplo `scripts/actions/log_gesture.py`.
+- Etapa 8: menús compuestos por mano + `gestures.swap_handedness`.
+- Etapa 9: web React 19 + Vite (Vercel) y `.exe` PyInstaller + `/health`.
+- Etapa 9b: navegador CDP (`open_tab`/`tab_seek`/`tab_press`) + fix Chrome 152.
+- Etapa 9c: scroll con `Victory`/`Closed_Fist` sostenidos + mute en menú System.
+- Etapa 10a: launcher multi-app (menú, import perezoso, `ESC`/`q`); merge `c8c8b9f`.
+- Etapa 10b: contador YOLO (`yolo26n.pt` nano CPU, autodescarga a `models/`);
+  dominio `detection.py` + puerto `ObjectDetector` + `UltralyticsDetector`
+  (fachada inyectable) + runner con HUD `Personas: N`; conteo directo sin
+  `EventBus` (tracking en 10c); `.spec` sin bundle torch (documentado).
+- Gate 10b verde: pytest **675 passed** (96.17%), mypy strict 132 archivos,
+  ruff 156, check-arch 3/3. Reviewer: `except` genérico → específico.
 
-## Siguiente (etapa 10b — contador de personas)
-- App sin entrenamiento: `yolo26n.pt` (clase `person`) + conteo; luego 10c con tracking
-  (`model.track`), zona/línea y overlay. Requiere puerto `ObjectDetector` + adaptador
-  `UltralyticsDetector` y añadir `ultralytics`/`torch` al contrato de import-linter.
-- Roadmap: 11 anti-intrusos, 12 postura (YOLO pose), 13 EPP y 14 inventario (entrenar
-  modelo) y 15 reconocimiento facial (enrolamiento/login/roles). Checklist de apps en
-  `docs/WORKFLOW.md` y skill `new-app`.
+## Siguiente (etapa 10c — tracking + zona/línea + overlay)
+- Tracking (`model.track`), zona/línea de conteo y overlay dedicado.
+- Roadmap: 11 anti-intrusos, 12 postura, 13 EPP, 14 inventario, 15 facial.
+  Checklist de apps en `docs/WORKFLOW.md` y skill `new-app`.
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-9b (gestos, acciones reales, puntero, reglas de
-  landmarks, scripts, enlaces, menús compuestos, FPS y navegador CDP) consolidadas en
-  `docs/PENDING-TESTS.md`; las ejecuta el usuario cuando pueda.
-- Calibrar `gestures.swap_handedness` con la cámara real (izquierda/derecha).
-- Pendiente decidir la nueva funcionalidad de los gestos `Pointing_Up` y `Victory`.
-- Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
-- `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.
+- Verificación del `.exe` con YOLO/torch pendiente (bundle ~1 GB, excluido).
+- Calibrar `min_confidence` (0.5) y `gestures.swap_handedness` con cámara real.
+- `PENDING-TESTS.md`: verificaciones manuales de etapas 0-9b las hace el usuario.
+- Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.
