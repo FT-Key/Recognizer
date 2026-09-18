@@ -37,6 +37,7 @@ from recognizer.core.constants import (
     URL_PREFIXES,
 )
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
+from recognizer.core.domain.app import AppId
 from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     GESTURE_POINTING_UP,
@@ -445,6 +446,22 @@ class PointerConfig(BaseModel):
         return gesture
 
 
+class AppsConfig(BaseModel):
+    """Habilitacion de apps del launcher (override sobre el catalogo).
+
+    Solo afecta a apps implementadas: las que aun no existen se muestran como
+    "proximamente" independientemente de este valor.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: dict[AppId, bool] = Field(default_factory=dict)
+
+    def is_enabled(self, app_id: AppId) -> bool:
+        """Indica si la app esta habilitada; por defecto, si."""
+        return self.enabled.get(app_id, True)
+
+
 class AppConfig(BaseModel):
     """Configuracion raiz de la aplicacion."""
 
@@ -456,6 +473,7 @@ class AppConfig(BaseModel):
     pointer: PointerConfig = Field(default_factory=PointerConfig)
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:
         """Reconstruye el catalogo de gestos declarado por la configuracion."""
