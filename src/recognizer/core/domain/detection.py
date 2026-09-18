@@ -47,6 +47,16 @@ class BoundingBox:
         """Alto normalizado de la caja."""
         return self.y_max - self.y_min
 
+    @property
+    def center_x(self) -> float:
+        """Coordenada X normalizada del centro de la caja."""
+        return (self.x_min + self.x_max) / 2
+
+    @property
+    def center_y(self) -> float:
+        """Coordenada Y normalizada del centro de la caja."""
+        return (self.y_min + self.y_max) / 2
+
 
 @dataclass(frozen=True, slots=True)
 class Detection:

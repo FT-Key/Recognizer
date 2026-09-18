@@ -171,13 +171,24 @@ actions:
           type: media_key
           key: volume_mute
 
-# Contador de personas (etapa 10b): deteccion YOLO + conteo por fotograma.
+# Contador de personas (etapa 10c): tracking YOLO + conteo de cruces de linea.
 # model_path admite un .pt de Ultralytics; si no existe, se descarga solo.
 # target_label filtra la clase a contar (p. ej. "person", "car", "dog").
+# line: divide el fotograma y cuenta entradas/salidas al cruzarla.
+#   axis: horizontal (arriba/abajo) | vertical (izquierda/derecha).
+#   position: coordenada 0..1 de la linea en su eje.
+#   invert: intercambia entradas/salidas (positivo = abajo/derecha por defecto).
+#   confirm_frames: fotogramas consecutivos al otro lado para confirmar el cruce.
 people_counter:
   model_path: models/yolo26n.pt
   min_confidence: 0.5
   target_label: person
+  line:
+    enabled: true
+    axis: horizontal
+    position: 0.5
+    invert: false
+    confirm_frames: 2
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla

@@ -1,77 +1,42 @@
-"""App Contador de personas: deteccion YOLO + conteo (sin tracking).
+"""App Contador de personas: tracking YOLO + conteo de cruces de linea.
 
-El tracking, la zona/linea y su overlay llegan en la etapa 10c; aqui solo se
-detecta y se cuenta por fotograma.
+Usa una sola via de inferencia (`model.track`, que ya incluye la deteccion) y
+cuenta entradas/salidas al cruzar una linea configurable.
 """
 
 import logging
 from contextlib import ExitStack
+from dataclasses import dataclass
 
 import cv2
-import numpy as np
-from numpy.typing import NDArray
 
 from recognizer.adapters.camera_opencv import OpenCVCamera
+from recognizer.adapters.overlay_people import draw_people_overlay
 from recognizer.adapters.ultralytics_detector import UltralyticsDetector
 from recognizer.bootstrap import resolve_camera_config
 from recognizer.cli.console import log_step
 from recognizer.cli.paths import prepare_workspace
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.domain.app import AppRunRequest
-from recognizer.core.domain.detection import Detection, count_people
+from recognizer.core.domain.tracking import CountingLine, LineCrossingCounter
 from recognizer.core.errors import RecognizerError
 from recognizer.core.pipeline.builder import PipelineBuilder
 from recognizer.core.pipeline.context import FrameContext
+from recognizer.core.ports.object_tracker import ObjectTracker
 from recognizer.settings import load_config
 
 LOGGER = logging.getLogger("recognizer.people_counter")
 
 WINDOW_NAME = "Contador de personas"
-HUD_POSITION = (10, 30)
-HUD_FONT = cv2.FONT_HERSHEY_SIMPLEX
-HUD_SCALE = 0.9
-HUD_THICKNESS = 2
-HUD_COLOR_BGR = (0, 200, 0)
-BOX_COLOR_BGR = (0, 200, 0)
-BOX_THICKNESS = 2
-BOX_LABEL_SCALE = 0.6
-BOX_LABEL_THICKNESS = 1
-BOX_LABEL_MARGIN_PX = 6
 
 
-def _draw_overlay(
-    image: NDArray[np.uint8],
-    *,
-    detections: tuple[Detection, ...],
-    total: int,
-    width: int,
-    height: int,
-) -> None:
-    """Dibuja las cajas detectadas y el HUD con el conteo (en su sitio)."""
-    for detection in detections:
-        x_min = int(detection.bbox.x_min * width)
-        y_min = int(detection.bbox.y_min * height)
-        x_max = int(detection.bbox.x_max * width)
-        y_max = int(detection.bbox.y_max * height)
-        cv2.rectangle(image, (x_min, y_min), (x_max, y_max), BOX_COLOR_BGR, BOX_THICKNESS)
-        cv2.putText(
-            image,
-            f"{detection.label} {detection.confidence:.2f}",
-            (x_min, max(y_min - BOX_LABEL_MARGIN_PX, 0)),
-            HUD_FONT,
-            BOX_LABEL_SCALE,
-            BOX_COLOR_BGR,
-            BOX_LABEL_THICKNESS,
-        )
-    cv2.putText(
-        image,
-        f"Personas: {total}",
-        HUD_POSITION,
-        HUD_FONT,
-        HUD_SCALE,
-        HUD_COLOR_BGR,
-        HUD_THICKNESS,
-    )
+@dataclass
+class _HudState:
+    """Estado mutable compartido por los callbacks del bucle de camara."""
+
+    current: int = 0
+    entries: int = 0
+    exits: int = 0
 
 
 def run_people_counter(request: AppRunRequest) -> int:
@@ -93,28 +58,51 @@ def run_people_counter(request: AppRunRequest) -> int:
                 app_config=app_config, device_override=request.device
             )
             people_config = app_config.people_counter
+        line_config = people_config.line
+        line_obj = (
+            CountingLine(axis=line_config.axis, position=line_config.position)
+            if line_config.enabled
+            else None
+        )
+        counter = (
+            LineCrossingCounter(
+                line=line_obj,
+                invert=line_config.invert,
+                confirm_frames=line_config.confirm_frames,
+            )
+            if line_obj is not None
+            else None
+        )
         pipeline = PipelineBuilder().build()
         detector = UltralyticsDetector(people_config)
-        state = {"count": 0}
+        tracker: ObjectTracker = detector
+        state = _HudState()
 
         def _on_context(context: FrameContext) -> None:
-            detections = detector.detect(context.frame)
-            total = count_people(detections, label=people_config.target_label)
-            state["count"] = total
-            _draw_overlay(
+            tracked = tracker.track(context.frame)
+            people = tuple(item for item in tracked if item.label == people_config.target_label)
+            state.current = len(people)
+            if counter is not None:
+                snapshot = counter.update(people)
+                state.entries = snapshot.entries
+                state.exits = snapshot.exits
+            draw_people_overlay(
                 context.frame.data,
-                detections=detections,
-                total=total,
-                width=context.frame.width,
-                height=context.frame.height,
+                tracked=people,
+                current=state.current,
+                entries=state.entries,
+                exits=state.exits,
+                line=line_obj,
             )
 
         def _on_progress(count: int, fps: float) -> None:
             LOGGER.info(
-                "Fotogramas: %d | FPS medio: %.1f | Personas: %d",
+                "Fotogramas: %d | FPS medio: %.1f | Personas: %d | Entradas: %d | Salidas: %d",
                 count,
                 fps,
-                state["count"],
+                state.current,
+                state.entries,
+                state.exits,
             )
 
         with ExitStack() as stack:
@@ -145,9 +133,11 @@ def run_people_counter(request: AppRunRequest) -> int:
             cv2.destroyAllWindows()
 
     LOGGER.info(
-        "App OK: %d fotogramas, %.1f FPS medio, personas en el ultimo fotograma: %d.",
+        "App OK: %d fotogramas, %.1f FPS medio, personas: %d, entradas: %d, salidas: %d.",
         frames,
         fps,
-        state["count"],
+        state.current,
+        state.entries,
+        state.exits,
     )
     return 0
