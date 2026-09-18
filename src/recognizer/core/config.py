@@ -18,6 +18,8 @@ from recognizer.core.constants import (
     DEFAULT_MIN_GESTURE_CONFIDENCE,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
+    DEFAULT_PEOPLE_CONFIDENCE,
+    DEFAULT_PEOPLE_MODEL_PATH,
     DEFAULT_POINTER_ACTIVE_ZONE_MAX,
     DEFAULT_POINTER_ACTIVE_ZONE_MIN,
     DEFAULT_POINTER_ENABLED,
@@ -34,6 +36,7 @@ from recognizer.core.constants import (
     DEFAULT_THUMB_OPEN_THRESHOLD,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
+    PERSON_LABEL,
     URL_PREFIXES,
 )
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
@@ -446,6 +449,16 @@ class PointerConfig(BaseModel):
         return gesture
 
 
+class PeopleCounterConfig(BaseModel):
+    """Contador de personas: modelo YOLO y umbrales de conteo."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+
+
 class AppsConfig(BaseModel):
     """Habilitacion de apps del launcher (override sobre el catalogo).
 
@@ -473,6 +486,7 @@ class AppConfig(BaseModel):
     pointer: PointerConfig = Field(default_factory=PointerConfig)
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:

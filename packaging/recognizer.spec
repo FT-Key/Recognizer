@@ -38,7 +38,9 @@ hiddenimports += collect_submodules("pynput")
 hiddenimports += collect_submodules("websocket")
 # El launcher importa cada app de forma perezosa dentro de una funcion; se
 # declara el menu de forma explicita para que PyInstaller lo incluya siempre.
-hiddenimports += ["recognizer.cli.menu"]
+hiddenimports += ["recognizer.cli.menu", "recognizer.cli.apps.people_counter"]
+# Ultralytics/torch NO se recolectan aqui: el bundle seria enorme (~1 GB) y la
+# verificacion del .exe con YOLO queda pendiente (ver history de la etapa 10b).
 
 a = Analysis(  # noqa: F821
     [str(PROJECT_ROOT / "packaging" / "entrypoint.py")],
