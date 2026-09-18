@@ -74,6 +74,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.PEOPLE_COUNTER,
         title="Contador de personas",
         description="Cuenta personas en camara con YOLO; no requiere entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.ANTI_INTRUDER,

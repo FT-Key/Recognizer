@@ -49,6 +49,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.app import run_gestures
 
             return run_gestures
+        case AppId.PEOPLE_COUNTER:
+            from recognizer.cli.apps.people_counter import run_people_counter
+
+            return run_people_counter
         case _:
             return None
 
