@@ -271,6 +271,20 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] `.exe`: pendiente de regenerar con `assets`/icono; verificar que el contador arranca
   (torch/YOLO siguen excluidos del bundle, bundle ~1 GB).
 
+### Etapa 10c — contador con tracking y línea
+
+- [ ] `uv run recognizer`, elegir `2`: se dibujan cajas con `#id`, la línea amarilla
+  horizontal (por defecto `position: 0.5`) y el HUD `Personas` / `Entradas` / `Salidas`.
+- [ ] Cruzar la línea de arriba abajo: aumenta `Entradas`; de abajo arriba: `Salidas`.
+  Con `people_counter.line.invert: true` se intercambian. Probar `axis: vertical`.
+- [ ] Anti-jitter: quedarse justo sobre la línea no debe sumar; `confirm_frames: 2`
+  exige 2 fotogramas consecutivos al otro lado. Ajustar si hay doble conteo o cruces
+  perdidos.
+- [ ] `ESC`/`q`/`X` vuelve al menú; el resumen final reporta personas, entradas y
+  salidas. Anotar FPS con 0/1/2 personas.
+- [ ] Nota: durante el warm-up del tracker el HUD puede mostrar `Personas: 0` hasta
+  que YOLO asigna IDs.
+
 ### Etapa 10b-fix — salida a menú y menú GUI
 
 - [ ] Dentro de cualquier app (`1` gestos, `2` contador), `ESC`/`q` vuelve al menú **con la
