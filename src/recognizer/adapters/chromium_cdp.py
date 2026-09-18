@@ -99,9 +99,14 @@ class ChromiumCdpBrowser:
                         await_promise=False,
                     )
         else:
-            target_id = self._client.create_target()
-            self._client.navigate(target_id, url)
-            self._client.activate_target(target_id)
+            blank = self._find_blank_target()
+            if blank is not None:
+                self._client.navigate(blank.id, url)
+                self._client.activate_target(blank.id)
+            else:
+                target_id = self._client.create_target()
+                self._client.navigate(target_id, url)
+                self._client.activate_target(target_id)
 
     def seek_media(self, *, tab: TabKey, fraction: float) -> None:
         """Posiciona el <video> de la pestana en fraction (0.0..1.0)."""
@@ -238,6 +243,20 @@ class ChromiumCdpBrowser:
                         if paused is False:
                             playing = target
         return playing or fallback
+
+    def _find_blank_target(self) -> CdpTarget | None:
+        """Devuelve la pestana vacia inicial (about:blank/newtab), si existe.
+
+        Chromium abre una pestana inicial al lanzarse; reutilizarla evita
+        dejar una pestana vacia de mas al crear el target de la cancion.
+        """
+        for target in self._client.list_targets():
+            url = target.url.strip().lower()
+            if url in ("", "about:blank"):
+                return target
+            if "newtab" in url or "new-tab" in url:
+                return target
+        return None
 
     def _resolve_profile_dir(self, base_dir: Path) -> Path:
         """Resuelve el directorio del perfil (absoluto) con fallback a tmp.

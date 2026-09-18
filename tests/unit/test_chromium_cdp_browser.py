@@ -150,6 +150,31 @@ class TestEnsure:
         assert client.navigate_calls == [("new-1", "https://youtube.com/watch?v=abc")]
         assert client.activate_calls == ["new-1"]
 
+    def test_reuses_blank_target_if_exists(self) -> None:
+        blank = _target(target_id="blank", url="about:blank")
+        client = FakeCdpClient(available=True, targets=[blank])
+        browser, _ = _browser(client=client)
+        browser.ensure(tab=TabKey("video"), url="https://youtube.com/watch?v=abc")
+        assert client.create_target_calls == 0
+        assert client.navigate_calls == [("blank", "https://youtube.com/watch?v=abc")]
+        assert client.activate_calls == ["blank"]
+
+    def test_reuses_newtab_target_if_exists(self) -> None:
+        blank = _target(target_id="ntp", url="chrome://newtab/")
+        client = FakeCdpClient(available=True, targets=[blank])
+        browser, _ = _browser(client=client)
+        browser.ensure(tab=TabKey("video"), url="https://youtube.com/watch?v=abc")
+        assert client.create_target_calls == 0
+        assert client.navigate_calls == [("ntp", "https://youtube.com/watch?v=abc")]
+
+    def test_creates_target_if_only_unrelated_exists(self) -> None:
+        other = _target(target_id="other", url="https://other.com")
+        client = FakeCdpClient(available=True, targets=[other])
+        browser, _ = _browser(client=client)
+        browser.ensure(tab=TabKey("video"), url="https://youtube.com/watch?v=abc")
+        assert client.create_target_calls == 1
+        assert client.navigate_calls == [("new-1", "https://youtube.com/watch?v=abc")]
+
     def test_navigates_if_url_differs(self) -> None:
         existing = _target(url="https://youtube.com/watch?v=old")
         client = FakeCdpClient(available=True, targets=[existing])
