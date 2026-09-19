@@ -15,6 +15,7 @@ from recognizer.cli import menu
 from recognizer.core.config import FaceAuthConfig
 from recognizer.core.constants import (
     DEFAULT_FACE_DET_SIZE,
+    DEFAULT_FACE_MAX_INFERENCE_FPS,
     DEFAULT_FACE_PROCESS_EVERY_N_FRAMES,
     FACE_AUTH_MODEL_PATH,
 )
@@ -68,6 +69,7 @@ def test_face_auth_config_defaults() -> None:
     assert config.enrollment_samples >= 1
     assert config.det_size == DEFAULT_FACE_DET_SIZE
     assert config.process_every_n_frames == DEFAULT_FACE_PROCESS_EVERY_N_FRAMES
+    assert config.max_inference_fps == DEFAULT_FACE_MAX_INFERENCE_FPS
 
 
 def test_face_auth_config_rejects_invalid_latency_tuning() -> None:
@@ -75,6 +77,8 @@ def test_face_auth_config_rejects_invalid_latency_tuning() -> None:
         FaceAuthConfig(det_size=64)
     with pytest.raises(ValueError, match="process_every_n_frames"):
         FaceAuthConfig(process_every_n_frames=0)
+    with pytest.raises(ValueError, match="max_inference_fps"):
+        FaceAuthConfig(max_inference_fps=-1)
 
 
 def test_load_config_reads_face_auth_section(tmp_path: Path) -> None:

@@ -222,8 +222,10 @@ Solución en la app facial (solo ella, por ahora):
 2. `cli/apps/face_auth.py` (`_RecognitionWorker`): hilo que reconoce el último fotograma y
    actualiza el estado (enrolamiento/login) bajo lock. El bucle principal **solo dibuja**,
    así que la vista va a ritmo de cámara aunque la inferencia tarde.
-3. `face_auth.det_size` (320 por defecto) y `face_auth.process_every_n_frames` bajan el costo
-   de CPU de la inferencia.
+3. Costo de CPU acotado: `allowed_modules=["detection", "recognition"]` (se descartan
+   `landmark_2d_106`, `landmark_3d_68` y `genderage`, que se ejecutaban por cara y causaban el
+   pico al aparecer un rostro), `face_auth.det_size` (320), `face_auth.max_inference_fps`
+   (tope de 5 FPS; `0` = sin tope) y `face_auth.process_every_n_frames`.
 
 **Cuándo aplicar el mismo patrón a otras apps:** cuando la inferencia de una app sea más
 lenta que la cámara (FPS de inferencia < FPS de captura) o la cámara sea de red y aparezca

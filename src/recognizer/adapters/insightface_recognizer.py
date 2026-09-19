@@ -18,6 +18,9 @@ from recognizer.core.ports.face_recognizer import FaceRecognizer, FaceRecognizer
 LOGGER = logging.getLogger("recognizer.face")
 
 CPU_PROVIDER = "CPUExecutionProvider"
+# Solo deteccion + reconocimiento: landmarks (2d106/3d68) y genero/edad no se
+# usan y se ejecutan por cara, encareciendo mucho el frame cuando hay rostro.
+FACE_ANALYSIS_MODULES = ("detection", "recognition")
 MIN_BOX_SIDE_PX = 1
 LAPLACIAN_DEPTH = cv2.CV_64F
 
@@ -87,7 +90,12 @@ def _create_analysis(*, model_path: str) -> _AnalysisLike:
     from insightface.app import FaceAnalysis
 
     root, name = _split_model_path(model_path)
-    analysis = FaceAnalysis(name=name, root=root, providers=[CPU_PROVIDER])
+    analysis = FaceAnalysis(
+        name=name,
+        root=root,
+        providers=[CPU_PROVIDER],
+        allowed_modules=list(FACE_ANALYSIS_MODULES),
+    )
     return cast("_AnalysisLike", analysis)
 
 
