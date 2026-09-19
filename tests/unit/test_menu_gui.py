@@ -430,11 +430,11 @@ def test_run_gui_menu_badges_use_contrast_foreground(monkeypatch: pytest.MonkeyP
     )
 
     training_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.TRAINING.value}"
-    enrollment_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.ENROLLMENT.value}"
     badges = {label.text: label for label in FakeLabel.instances}
     assert badges[LABEL_AVAILABLE].fg == DEFAULT_THEME.primary_contrast
     assert badges[training_label].fg == DEFAULT_THEME.text
-    assert badges[enrollment_label].fg == DEFAULT_THEME.text
+    # FACE_AUTH (enrolamiento) ya está implementada: usa badge disponible.
+    assert f"{LABEL_COMING_SOON} - requiere {AppPreparation.ENROLLMENT.value}" not in badges
     assert badges[LABEL_DISABLED].fg == DEFAULT_THEME.text
 
 

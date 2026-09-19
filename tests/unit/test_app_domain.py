@@ -39,6 +39,7 @@ def test_implemented_apps_are_in_order() -> None:
         AppId.PEOPLE_COUNTER,
         AppId.ANTI_INTRUDER,
         AppId.POSTURE,
+        AppId.FACE_AUTH,
     ]
 
 
