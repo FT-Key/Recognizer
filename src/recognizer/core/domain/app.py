@@ -86,6 +86,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.POSTURE,
         title="Postura ergonomica",
         description="Avisa de mala postura con pose de cuerpo completo; no requiere entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.PPE_DETECTOR,

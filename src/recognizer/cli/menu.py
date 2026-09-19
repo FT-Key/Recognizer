@@ -69,6 +69,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.anti_intruder import run_anti_intruder
 
             return run_anti_intruder
+        case AppId.POSTURE:
+            from recognizer.cli.apps.posture import run_posture
+
+            return run_posture
         case _:
             return None
 

@@ -10,15 +10,18 @@ apps:
     gestures: true
     people_counter: true
     anti_intruder: true
-    # posture: true
+    posture: true
     # ppe_detector: true
     # inventory: true
     # face_auth: true
 
+# La ventana de cada app muestra el fotograma a su resolucion nativa: sube
+# width/height para una imagen mas grande (la inferencia sera mas lenta).
+# Valores habituales de webcam: 640x480, 1280x720 (HD) y 1920x1080 (Full HD).
 camera:
   device_index: 0
-  width: 640
-  height: 480
+  width: 1280
+  height: 720
   target_fps: 30
 
 # Deteccion de manos con MediaPipe Tasks (HandLandmarker en modo VIDEO).
@@ -211,6 +214,36 @@ anti_intruder:
     y_max: 0.9
     confirm_frames: 3
     release_frames: 5
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Postura ergonomica (etapa 12): estima la pose con YOLO pose y avisa de malos
+# habitos frente a la camara. model_path admite un .pt de Ultralytics; si no
+# existe, se descarga solo (yolo26n-pose.pt).
+# Los umbrales se miden en relacion al ancho de hombros (invariante a la
+# distancia): sube/baja cada ratio si el aviso no dispara o dispara de mas.
+#   max_head_offset_ratio: desvio horizontal de la nariz respecto al centro de
+#     los hombros -> "cabeza adelante".
+#   min_head_height_ratio: altura de la nariz sobre los hombros -> "cabeza baja".
+#   max_torso_angle_deg: inclinacion de la linea hombros-caderas -> "espalda
+#     inclinada".
+#   max_shoulder_tilt_ratio: desnivel vertical entre hombros -> "hombros
+#     desnivelados".
+#   min_keypoint_confidence: confianza minima de cada punto clave para evaluar.
+#   confirm_frames/release_frames: debounce del aviso.
+# alert: alerta sonora del sistema (winsound en Windows); repeat_seconds = 0
+#   suena una sola vez por aviso.
+posture:
+  model_path: models/yolo26n-pose.pt
+  min_confidence: 0.5
+  min_keypoint_confidence: 0.5
+  max_head_offset_ratio: 0.35
+  min_head_height_ratio: 0.4
+  max_torso_angle_deg: 20.0
+  max_shoulder_tilt_ratio: 0.2
+  confirm_frames: 5
+  release_frames: 10
   alert:
     enabled: true
     repeat_seconds: 2.0
