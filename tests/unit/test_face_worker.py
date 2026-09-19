@@ -81,7 +81,7 @@ def test_worker_processes_latest_frame_and_stops() -> None:
         worker = _RecognitionWorker(
             source=source,
             recognizer=recognizer,  # type: ignore[arg-type]
-            process=lambda observations: processed.append(len(observations)),
+            process=lambda _frame, observations: processed.append(len(observations)),
             process_every_n_frames=1,
             logger=TEST_LOGGER,
         )
@@ -103,7 +103,7 @@ def test_worker_throttles_inference_rate() -> None:
         worker = _RecognitionWorker(
             source=source,
             recognizer=recognizer,  # type: ignore[arg-type]
-            process=lambda observations: processed.append(len(observations)),
+            process=lambda _frame, observations: processed.append(len(observations)),
             process_every_n_frames=1,
             logger=TEST_LOGGER,
             max_inference_fps=1.0,
@@ -127,7 +127,7 @@ def test_worker_captures_inference_error() -> None:
         worker = _RecognitionWorker(
             source=source,
             recognizer=recognizer,  # type: ignore[arg-type]
-            process=lambda _observations: None,
+            process=lambda _frame, _observations: None,
             process_every_n_frames=1,
             logger=TEST_LOGGER,
         )

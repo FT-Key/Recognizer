@@ -126,9 +126,13 @@ class _WidgetBase:
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
         self.bindings: dict[str, Callable[..., object]] = {}
+        self.packed = False
 
     def pack(self, *_args: object, **_kwargs: object) -> None:
-        pass
+        self.packed = True
+
+    def pack_forget(self) -> None:
+        self.packed = False
 
     def bind(self, sequence: str, func: Callable[..., object]) -> None:
         self.bindings[sequence] = func
@@ -235,6 +239,70 @@ class FakeScrollbar(_WidgetBase):
         pass
 
 
+class FakeTreeview(_WidgetBase):
+    """Doble de tkinter.ttk.Treeview (filas en memoria)."""
+
+    instances: ClassVar[list[FakeTreeview]] = []
+
+    def __init__(self, *args: object, columns: tuple[str, ...] = (), **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.columns = tuple(columns)
+        self.rows: dict[str, tuple[object, ...]] = {}
+        self._selection: list[str] = []
+        FakeTreeview.instances.append(self)
+
+    def heading(self, *_args: object, **_kwargs: object) -> None:
+        pass
+
+    def column(self, *_args: object, **_kwargs: object) -> None:
+        pass
+
+    def insert(self, _parent: str, _index: str, *, iid: str, values: object) -> None:
+        self.rows[iid] = tuple(values)  # type: ignore[arg-type]
+
+    def get_children(self) -> tuple[str, ...]:
+        return tuple(self.rows)
+
+    def delete(self, item: str) -> None:
+        self.rows.pop(item, None)
+
+    def selection(self) -> tuple[str, ...]:
+        return tuple(self._selection)
+
+    def yview(self, *_args: object) -> None:
+        pass
+
+
+class FakeTtkScrollbar(_WidgetBase):
+    """Doble de tkinter.ttk.Scrollbar."""
+
+    instances: ClassVar[list[FakeTtkScrollbar]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakeTtkScrollbar.instances.append(self)
+
+    def set(self, *_args: object) -> None:
+        pass
+
+
+class FakeTtk:
+    """Doble del submodulo tkinter.ttk."""
+
+    Treeview = FakeTreeview
+    Scrollbar = FakeTtkScrollbar
+
+
+class FakeMessagebox:
+    """Doble de tkinter.messagebox con respuesta programable."""
+
+    answer: ClassVar[bool] = True
+
+    @classmethod
+    def askyesno(cls, _title: str, _message: str, **_kwargs: object) -> bool:
+        return cls.answer
+
+
 def _install_tk_fakes(monkeypatch: pytest.MonkeyPatch) -> type[FakeRoot]:
     """Limpia los fakes de Tk y los instala en tkinter (sin display)."""
     FakeRoot.on_mainloop = None
@@ -248,12 +316,17 @@ def _install_tk_fakes(monkeypatch: pytest.MonkeyPatch) -> type[FakeRoot]:
     FakePhotoImage.instances.clear()
     FakeCanvas.instances.clear()
     FakeScrollbar.instances.clear()
+    FakeTreeview.instances.clear()
+    FakeTtkScrollbar.instances.clear()
+    FakeMessagebox.answer = True
     monkeypatch.setattr(tkinter, "Frame", FakeFrame)
     monkeypatch.setattr(tkinter, "Label", FakeLabel)
     monkeypatch.setattr(tkinter, "Button", FakeButton)
     monkeypatch.setattr(tkinter, "PhotoImage", FakePhotoImage)
     monkeypatch.setattr(tkinter, "Canvas", FakeCanvas)
     monkeypatch.setattr(tkinter, "Scrollbar", FakeScrollbar)
+    monkeypatch.setattr(tkinter, "ttk", FakeTtk, raising=False)
+    monkeypatch.setattr(tkinter, "messagebox", FakeMessagebox, raising=False)
     monkeypatch.setattr(menu_gui, "display_font_paths", lambda: ())
     monkeypatch.setattr(menu_gui, "desktop_icon_path", lambda: None)
     monkeypatch.setattr(menu_gui, "desktop_logo_path", lambda: None)

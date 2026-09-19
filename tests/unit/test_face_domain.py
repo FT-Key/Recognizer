@@ -8,6 +8,7 @@ import math
 import pytest
 
 from recognizer.core.constants import FACE_MAX_COSINE_DISTANCE
+from recognizer.core.domain.access import AccessEvent
 from recognizer.core.domain.face import (
     ENROLLMENT_STEPS,
     CaptureGuidance,
@@ -26,6 +27,7 @@ from recognizer.core.domain.face import (
     mean_embedding,
     next_face_id,
 )
+from recognizer.core.domain.identity import Role
 from recognizer.core.errors import ConfigError
 
 UNIT_X: FaceEmbedding = (1.0, 0.0)
@@ -304,3 +306,39 @@ def test_login_debouncer_reset_clears_identity() -> None:
     debouncer.reset()
     missed = FaceMatch(face=None, distance=FACE_MAX_COSINE_DISTANCE, accepted=False)
     assert debouncer.update(missed) is None
+
+
+def test_access_event_defaults_image_to_empty() -> None:
+    event = AccessEvent(
+        face_id="F-0001",
+        name="Ada",
+        role=Role.OPERATOR,
+        timestamp="2026-09-19T12:00:00+00:00",
+    )
+
+    assert event.image == ""
+
+
+def test_access_event_keeps_explicit_image() -> None:
+    event = AccessEvent(
+        face_id="F-0001",
+        name="Ada",
+        role=Role.ADMIN,
+        timestamp="2026-09-19T12:00:00+00:00",
+        image="2026-09-19T12_00_00_00_00_F-0001.png",
+    )
+
+    assert event.image == "2026-09-19T12_00_00_00_00_F-0001.png"
+    assert event.role is Role.ADMIN
+
+
+def test_access_event_is_frozen() -> None:
+    event = AccessEvent(
+        face_id="F-0001",
+        name="Ada",
+        role=Role.OPERATOR,
+        timestamp="2026-09-19T12:00:00+00:00",
+    )
+
+    with pytest.raises(AttributeError):
+        setattr(event, "name", "Bo")  # noqa: B010 - ejerce el frozen a proposito
