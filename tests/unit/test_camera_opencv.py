@@ -1,17 +1,19 @@
 """Tests del adaptador de camara OpenCV con un doble de VideoCapture."""
 
+import cv2
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.core.config import CameraConfig
+from recognizer.core.constants import DEFAULT_CAPTURE_BUFFER_SIZE
 from recognizer.core.errors import CameraError
 
 FRAME_SHAPE = (4, 6, 3)
 FRAME_WIDTH = 6
 FRAME_HEIGHT = 4
-EXPECTED_SET_CALLS = 3
+EXPECTED_SET_CALLS = 4
 
 
 class FakeCapture:
@@ -58,6 +60,15 @@ def test_open_configures_capture_and_reads_frames() -> None:
     assert (first.width, first.height) == (FRAME_WIDTH, FRAME_HEIGHT)
     assert fake.released
     assert len(fake.set_calls) == EXPECTED_SET_CALLS
+
+
+def test_open_sets_minimal_capture_buffer_to_avoid_latency() -> None:
+    fake = FakeCapture()
+    camera = _camera(fake)
+    camera.open()
+    camera.release()
+
+    assert (cv2.CAP_PROP_BUFFERSIZE, float(DEFAULT_CAPTURE_BUFFER_SIZE)) in fake.set_calls
 
 
 def test_open_fails_when_device_is_not_available() -> None:

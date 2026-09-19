@@ -36,3 +36,4 @@ etapa que se necesite.
 | 15b-ux | Fix facial: submenú gráfico + selector cámara + marco objetivo | completada | [stage-15b-fix-face-ux.md](stage-15b-fix-face-ux.md) |
 | 15b-ux2 | Fix facial: contraste del overlay + cierre del submenú | completada | [stage-15b-fix2-face-ux.md](stage-15b-fix2-face-ux.md) |
 | 15b-ux3 | Fix facial: `session.json` interpretado como rostro | completada | [stage-15b-fix3-face-store.md](stage-15b-fix3-face-store.md) |
+| 15b-lat | Fix facial: latencia con cámara del teléfono | completada | [stage-15b-fix4-face-latency.md](stage-15b-fix4-face-latency.md) |

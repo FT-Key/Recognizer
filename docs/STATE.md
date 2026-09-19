@@ -39,7 +39,9 @@
 - Fix 15b-ux2: overlay facial legible (paneles oscuros + texto claro) y cierre del submenú con `Toplevel.wait_window()` (antes `mainloop()` anidado dejaba el proceso colgado sin interfaz).
 - Gate fix 15b-ux2 verde: lint OK, mypy strict 183, pytest **1119 passed** (94.67%), check-arch 3/3.
 - Fix 15b-ux3: `FileFaceRepository._known_ids` ignora JSON que no son ids `F-0001` (`session.json` del login rompía `list_all` al reabrir la app).
-- Gate fix 15b-ux3 verde: lint OK, mypy strict 183, pytest **1121 passed** (94.60%), check-arch 3/3. Commits pendientes `git-ops`.
+- Gate fix 15b-ux3 verde: lint OK, mypy strict 183, pytest **1121 passed** (94.60%), check-arch 3/3.
+- Fix 15b-lat: búfer de captura mínimo (`CAP_PROP_BUFFERSIZE=1`) + `face_auth.det_size` y `process_every_n_frames` (frame skipping reutilizando la última detección) para cámaras lentas (teléfono/enlace móvil).
+- Gate fix 15b-lat verde: lint OK, mypy strict 183, pytest **1123 passed** (94.68%), check-arch 3/3. Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).

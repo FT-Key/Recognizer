@@ -9,12 +9,15 @@ from recognizer.core.domain.frame import Frame
 class FaceRecognizerConfig(Protocol):
     """Parametros minimos que necesita un reconocedor facial.
 
-    Es estructural: cualquier modelo de configuracion con ``model_path`` y
-    ``min_confidence`` sirve, sin acoplar el adaptador a una app concreta.
+    Es estructural: cualquier modelo de configuracion con ``model_path``,
+    ``min_confidence`` y ``det_size`` sirve, sin acoplar el adaptador a una app
+    concreta. ``det_size`` es el lado de entrada del detector (menor = más
+    rápido en CPU, útil con cámaras de red o del teléfono).
     """
 
     model_path: str
     min_confidence: float
+    det_size: int
 
 
 class FaceRecognizer(Protocol):
