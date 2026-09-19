@@ -5,6 +5,7 @@ from numpy.typing import NDArray
 
 from recognizer.adapters.overlay_posture import (
     BANNER_COLOR_BGR,
+    CALIBRATION_COLOR_BGR,
     HUD_BAD_COLOR_BGR,
     HUD_COLOR_BGR,
     SKELETON_BAD_COLOR_BGR,
@@ -47,6 +48,7 @@ def _draw(
     poses: tuple[Pose, ...] = (),
     active: bool = False,
     issues: tuple[PostureIssue, ...] = (),
+    calibrating: bool = False,
 ) -> None:
     draw_posture_overlay(
         image,
@@ -54,6 +56,7 @@ def _draw(
         active=active,
         issues=issues,
         min_keypoint_confidence=MIN_KEYPOINT_CONFIDENCE,
+        calibrating=calibrating,
     )
 
 
@@ -135,3 +138,37 @@ def test_draw_overlay_handles_edges_with_missing_keypoint() -> None:
     _draw(image, poses=(partial,))
 
     assert _color_mask(image, SKELETON_COLOR_BGR).any()
+
+
+def test_draw_overlay_calibrating_draws_calibration_text_without_hud() -> None:
+    image = _image()
+
+    _draw(image, calibrating=True)
+
+    assert _color_mask(image, CALIBRATION_COLOR_BGR).any()
+    assert not _color_mask(image, HUD_COLOR_BGR).any()
+    assert not _color_mask(image, HUD_BAD_COLOR_BGR).any()
+    assert not _color_mask(image, BANNER_COLOR_BGR).any()
+
+
+def test_draw_overlay_calibrating_hides_active_banner() -> None:
+    image = _image()
+
+    _draw(
+        image,
+        active=True,
+        issues=(PostureIssue.HEAD_FORWARD,),
+        calibrating=True,
+    )
+
+    assert _color_mask(image, CALIBRATION_COLOR_BGR).any()
+    assert not _color_mask(image, BANNER_COLOR_BGR).any()
+    assert not _color_mask(image, HUD_BAD_COLOR_BGR).any()
+
+
+def test_draw_overlay_without_calibration_has_no_calibration_text() -> None:
+    image = _image()
+
+    _draw(image, poses=(_full_pose(),))
+
+    assert not _color_mask(image, CALIBRATION_COLOR_BGR).any()

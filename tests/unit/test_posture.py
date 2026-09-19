@@ -6,6 +6,7 @@ camara; no se abre hardware ni se importan ultralytics/torch.
 
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import cv2
@@ -18,9 +19,16 @@ from recognizer.cli import menu
 from recognizer.cli.apps import posture as posture_module
 from recognizer.cli.apps.posture import run_posture
 from recognizer.cli.menu import resolve_runner
-from recognizer.core.config import AppConfig, CameraConfig, PostureAlertConfig, PostureConfig
+from recognizer.core.config import (
+    AppConfig,
+    CameraConfig,
+    PostureAlertConfig,
+    PostureConfig,
+    PostureTolerancesConfig,
+)
 from recognizer.core.constants import (
     DEFAULT_PEOPLE_CONFIDENCE,
+    DEFAULT_POSTURE_CALIBRATION_FRAMES,
     DEFAULT_POSTURE_CONFIRM_FRAMES,
     DEFAULT_POSTURE_KEYPOINT_CONFIDENCE,
     DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO,
@@ -29,11 +37,16 @@ from recognizer.core.constants import (
     DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO,
     DEFAULT_POSTURE_MODEL_PATH,
     DEFAULT_POSTURE_RELEASE_FRAMES,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET,
+    DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT,
+    DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
 )
 from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.pose import Keypoint, Pose, PoseKeypoint
 from recognizer.core.domain.posture import PostureIssue
+from recognizer.settings import load_config
 
 FRAME_SHAPE = (48, 64, 3)
 MIN_KEYPOINT_CONFIDENCE = 0.5
@@ -49,7 +62,7 @@ def _frame() -> Frame:
 
 def _points() -> dict[PoseKeypoint, tuple[float, float]]:
     return {
-        PoseKeypoint.NOSE: (0.5, 0.25),
+        PoseKeypoint.NOSE: (0.5, 0.2),
         PoseKeypoint.LEFT_SHOULDER: (0.3, 0.5),
         PoseKeypoint.RIGHT_SHOULDER: (0.7, 0.5),
         PoseKeypoint.LEFT_HIP: (0.35, 0.85),
@@ -72,7 +85,7 @@ def _good_pose() -> Pose:
 
 def _bad_pose() -> Pose:
     points = _points()
-    points[PoseKeypoint.NOSE] = (0.7, 0.25)
+    points[PoseKeypoint.NOSE] = (0.7, 0.2)
     return _pose(points)
 
 
@@ -85,6 +98,8 @@ def test_posture_config_defaults() -> None:
     assert config.model_path == DEFAULT_POSTURE_MODEL_PATH
     assert config.min_confidence == DEFAULT_PEOPLE_CONFIDENCE
     assert config.min_keypoint_confidence == DEFAULT_POSTURE_KEYPOINT_CONFIDENCE
+    assert config.calibration_frames == DEFAULT_POSTURE_CALIBRATION_FRAMES
+    assert config.tolerances == PostureTolerancesConfig()
     assert config.max_head_offset_ratio == DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO
     assert config.min_head_height_ratio == DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO
     assert config.max_torso_angle_deg == DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG
@@ -92,6 +107,57 @@ def test_posture_config_defaults() -> None:
     assert config.confirm_frames == DEFAULT_POSTURE_CONFIRM_FRAMES
     assert config.release_frames == DEFAULT_POSTURE_RELEASE_FRAMES
     assert config.alert == PostureAlertConfig()
+
+
+def test_posture_tolerances_config_defaults() -> None:
+    tolerances = PostureTolerancesConfig()
+
+    assert tolerances.head_offset == DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET
+    assert tolerances.head_height == DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT
+    assert tolerances.torso_angle_deg == DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG
+    assert tolerances.shoulder_tilt == DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["head_offset", "head_height", "torso_angle_deg", "shoulder_tilt"],
+)
+def test_posture_tolerances_config_rejects_negative(field: str) -> None:
+    with pytest.raises(ValidationError):
+        PostureTolerancesConfig.model_validate({field: -0.1})
+
+
+def test_posture_tolerances_config_rejects_torso_angle_out_of_range() -> None:
+    with pytest.raises(ValidationError):
+        PostureTolerancesConfig.model_validate({"torso_angle_deg": 180.1})
+
+
+@pytest.mark.parametrize("value", [-1, -10])
+def test_posture_config_rejects_negative_calibration_frames(value: int) -> None:
+    with pytest.raises(ValidationError):
+        PostureConfig.model_validate({"calibration_frames": value})
+
+
+def test_posture_config_parses_from_yaml(tmp_path: Path) -> None:
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        "posture:\n"
+        "  calibration_frames: 12\n"
+        "  tolerances:\n"
+        "    head_offset: 0.2\n"
+        "    head_height: 0.25\n"
+        "    torso_angle_deg: 10.0\n"
+        "    shoulder_tilt: 0.05\n",
+        encoding="utf-8",
+    )
+
+    config = load_config(path)
+
+    assert config.posture.calibration_frames == 12
+    assert config.posture.tolerances.head_offset == 0.2
+    assert config.posture.tolerances.head_height == 0.25
+    assert config.posture.tolerances.torso_angle_deg == 10.0
+    assert config.posture.tolerances.shoulder_tilt == 0.05
 
 
 @pytest.mark.parametrize("field", ["min_confidence", "min_keypoint_confidence"])
@@ -283,20 +349,27 @@ def _app_config(
     repeat_seconds: float = 0.0,
     confirm_frames: int = 1,
     release_frames: int = 1,
+    calibration_frames: int = 0,
 ) -> AppConfig:
     return AppConfig(
         posture=PostureConfig(
             confirm_frames=confirm_frames,
             release_frames=release_frames,
+            calibration_frames=calibration_frames,
             alert=PostureAlertConfig(enabled=alert_enabled, repeat_seconds=repeat_seconds),
         )
     )
 
 
-def _record_overlay(
-    monkeypatch: pytest.MonkeyPatch,
-) -> list[tuple[bool, tuple[PostureIssue, ...]]]:
-    calls: list[tuple[bool, tuple[PostureIssue, ...]]] = []
+@dataclass(frozen=True)
+class _OverlayCall:
+    active: bool
+    issues: tuple[PostureIssue, ...]
+    calibrating: bool
+
+
+def _record_overlay(monkeypatch: pytest.MonkeyPatch) -> list[_OverlayCall]:
+    calls: list[_OverlayCall] = []
 
     def fake_draw(
         image: NDArray[np.uint8],
@@ -305,9 +378,10 @@ def _record_overlay(
         active: bool,
         issues: tuple[PostureIssue, ...],
         min_keypoint_confidence: float,
+        calibrating: bool = False,
     ) -> None:
         _ = (image, poses, min_keypoint_confidence)
-        calls.append((active, issues))
+        calls.append(_OverlayCall(active=active, issues=issues, calibrating=calibrating))
 
     monkeypatch.setattr(posture_module, "draw_posture_overlay", fake_draw)
     return calls
@@ -333,8 +407,9 @@ def test_runner_confirms_bad_posture_and_notifies(monkeypatch: pytest.MonkeyPatc
 
     assert estimator.estimate_calls == 1
     assert sound.notify_calls == 1
-    assert calls[0][0] is True
-    assert calls[0][1] == (PostureIssue.HEAD_FORWARD,)
+    assert calls[0].active is True
+    assert calls[0].issues == (PostureIssue.HEAD_FORWARD,)
+    assert calls[0].calibrating is False
 
 
 def test_runner_good_posture_does_not_notify(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -351,7 +426,44 @@ def test_runner_good_posture_does_not_notify(monkeypatch: pytest.MonkeyPatch) ->
 
     assert estimator.estimate_calls == 1
     assert sound.notify_calls == 0
-    assert calls[0] == (False, ())
+    assert calls[0] == _OverlayCall(active=False, issues=(), calibrating=False)
+
+
+def test_runner_does_not_alert_while_calibrating(monkeypatch: pytest.MonkeyPatch) -> None:
+    _estimator, sound, _silent = _patch_runner_env(
+        monkeypatch,
+        frames=[_frame(), _frame()],
+        script=[(_bad_pose(),), (_bad_pose(),)],
+        app_config=_app_config(calibration_frames=2),
+    )
+    calls = _record_overlay(monkeypatch)
+
+    request = AppRunRequest(config_path=Path("config.yaml"), show_window=False, max_frames=2)
+    assert run_posture(request) == 0
+
+    assert sound.notify_calls == 0
+    assert len(calls) == 2
+    assert all(call.calibrating is True for call in calls)
+    assert all(call.active is False for call in calls)
+
+
+def test_runner_alerts_after_calibration_on_deviation(monkeypatch: pytest.MonkeyPatch) -> None:
+    _estimator, sound, _silent = _patch_runner_env(
+        monkeypatch,
+        frames=[_frame(), _frame()],
+        script=[(_good_pose(),), (_bad_pose(),)],
+        app_config=_app_config(calibration_frames=1),
+    )
+    calls = _record_overlay(monkeypatch)
+
+    request = AppRunRequest(config_path=Path("config.yaml"), show_window=False, max_frames=2)
+    assert run_posture(request) == 0
+
+    assert sound.notify_calls == 1
+    assert calls[0].calibrating is True
+    assert calls[1].calibrating is False
+    assert calls[1].active is True
+    assert calls[1].issues == (PostureIssue.HEAD_FORWARD,)
 
 
 def test_runner_repeats_alert_while_active(monkeypatch: pytest.MonkeyPatch) -> None:

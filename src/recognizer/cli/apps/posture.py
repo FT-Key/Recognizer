@@ -26,6 +26,7 @@ from recognizer.core.domain.posture import (
     PostureMonitor,
     PostureSnapshot,
     PostureThresholds,
+    PostureTolerances,
 )
 from recognizer.core.errors import RecognizerError
 from recognizer.core.pipeline.builder import PipelineBuilder
@@ -44,6 +45,7 @@ class _PostureState:
 
     issues: tuple[str, ...] = ()
     active: bool = False
+    calibrating: bool = False
     last_notified: float = 0.0
 
 
@@ -95,11 +97,19 @@ def run_posture(request: AppRunRequest) -> int:
             max_torso_angle_deg=posture_config.max_torso_angle_deg,
             max_shoulder_tilt_ratio=posture_config.max_shoulder_tilt_ratio,
         )
+        tolerances = PostureTolerances(
+            head_offset=posture_config.tolerances.head_offset,
+            head_height=posture_config.tolerances.head_height,
+            torso_angle_deg=posture_config.tolerances.torso_angle_deg,
+            shoulder_tilt=posture_config.tolerances.shoulder_tilt,
+        )
         monitor = PostureMonitor(
             thresholds=thresholds,
             min_keypoint_confidence=posture_config.min_keypoint_confidence,
             confirm_frames=posture_config.confirm_frames,
             release_frames=posture_config.release_frames,
+            calibration_frames=posture_config.calibration_frames,
+            tolerances=tolerances,
         )
         pipeline = PipelineBuilder().build()
         estimator = UltralyticsPoseEstimator(posture_config)
@@ -109,23 +119,36 @@ def run_posture(request: AppRunRequest) -> int:
         def _on_context(context: FrameContext) -> None:
             poses = estimator.estimate(context.frame)
             snapshot = monitor.update(poses)
-            state.issues = tuple(issue.value for issue in snapshot.issues)
-            _apply_alert(
-                snapshot=snapshot,
-                alert=alert,
-                config=posture_config.alert,
-                state=state,
-                now=time.monotonic(),
-            )
+            state.calibrating = snapshot.calibrating
+            if snapshot.calibrating:
+                state.active = False
+                state.issues = ()
+            else:
+                state.issues = tuple(issue.value for issue in snapshot.issues)
+                _apply_alert(
+                    snapshot=snapshot,
+                    alert=alert,
+                    config=posture_config.alert,
+                    state=state,
+                    now=time.monotonic(),
+                )
             draw_posture_overlay(
                 context.frame.data,
                 poses=poses,
                 active=state.active,
                 issues=snapshot.issues,
                 min_keypoint_confidence=posture_config.min_keypoint_confidence,
+                calibrating=state.calibrating,
             )
 
         def _on_progress(count: int, fps: float) -> None:
+            if state.calibrating:
+                LOGGER.info(
+                    "Fotogramas: %d | FPS medio: %.1f | Calibrando (sientate derecho)...",
+                    count,
+                    fps,
+                )
+                return
             LOGGER.info(
                 "Fotogramas: %d | FPS medio: %.1f | Postura: %s | Aviso: %s",
                 count,
