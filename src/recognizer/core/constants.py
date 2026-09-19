@@ -13,6 +13,15 @@ DEFAULT_TARGET_FPS = 30
 # inferencia es más lenta que la cámara (retraso creciente en cámaras de red o
 # del teléfono). 1 = procesar siempre el fotograma más reciente.
 DEFAULT_CAPTURE_BUFFER_SIZE = 1
+# Captura asíncrona (`LatestFrameSource`): un hilo drena la cámara y el bucle
+# de dibujo espera al siguiente fotograma nuevo. Evita que la inferencia lenta
+# (facial) frene la lectura y sature el stream de red.
+LATEST_FRAME_READ_TIMEOUT_SECONDS = 1.0
+LATEST_FRAME_JOIN_TIMEOUT_SECONDS = 2.0
+LATEST_FRAME_FAILURE_SLEEP_SECONDS = 0.01
+# Worker de inferencia facial: espera a un fotograma nuevo y se detiene limpio.
+FACE_WORKER_WAIT_TIMEOUT_SECONDS = 0.2
+FACE_WORKER_JOIN_TIMEOUT_SECONDS = 2.0
 
 DEFAULT_HAND_MODEL_PATH = "models/hand_landmarker.task"
 DEFAULT_MAX_HANDS = 2

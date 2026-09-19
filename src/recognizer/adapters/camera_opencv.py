@@ -1,5 +1,6 @@
 """Adaptador de camara basado en OpenCV."""
 
+import threading
 from collections.abc import Callable
 from time import perf_counter
 from typing import Protocol, cast
@@ -57,6 +58,9 @@ class OpenCVCamera(FrameSource):
         self._config = config
         self._capture_factory = capture_factory or _default_capture_factory
         self._capture: CaptureDevice | None = None
+        # Serializa read/release: con captura asincrona (`LatestFrameSource`) un
+        # hilo puede estar leyendo mientras el principal libera la camara.
+        self._lock = threading.Lock()
 
     def open(self) -> None:
         """Abre el dispositivo y aplica resolucion y fps configurados.
@@ -91,20 +95,23 @@ class OpenCVCamera(FrameSource):
         Raises:
             CameraError: si se intenta leer sin haber abierto la camara.
         """
-        if self._capture is None:
-            msg = "La camara no esta abierta: llama a open() antes de read()."
-            raise CameraError(msg)
-
-        ok, data = self._capture.read()
+        with self._lock:
+            capture = self._capture
+            if capture is None:
+                msg = "La camara no esta abierta: llama a open() antes de read()."
+                raise CameraError(msg)
+            ok, data = capture.read()
         if not ok or data is None:
             return None
         return Frame(data=data, timestamp=perf_counter())
 
     def release(self) -> None:
-        """Libera el dispositivo si esta abierto."""
-        if self._capture is not None:
-            self._capture.release()
-            self._capture = None
+        """Libera el dispositivo si esta abierto (espera a un read en curso)."""
+        with self._lock:
+            capture = self._capture
+            if capture is not None:
+                capture.release()
+                self._capture = None
 
     @property
     def is_open(self) -> bool:
