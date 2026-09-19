@@ -153,6 +153,8 @@ ANCHOR_NORTH_WEST: Final = "nw"
 EVENT_CONFIGURE: Final = "<Configure>"
 EVENT_CLOSE_WINDOW: Final = "WM_DELETE_WINDOW"
 EVENT_ESCAPE: Final = "<Escape>"
+EVENT_KEY_Q: Final = "<q>"
+EVENT_KEY_Q_UPPER: Final = "<Q>"
 EVENT_RETURN: Final = "<Return>"
 EVENT_SPACE: Final = "<space>"
 EVENT_UP: Final = "<Up>"
@@ -601,6 +603,21 @@ def run_gui_menu(
                     fresh.role.value,
                 )
                 return
+        if row.app_id is AppId.FACE_AUTH:
+            from recognizer.cli.face_menu_gui import run_face_submenu
+
+            logger.info("Abriendo '%s'... (ESC para volver al menu)", row.title)
+            root.withdraw()
+            try:
+                run_face_submenu(
+                    effective_request(),
+                    identity_provider=identity_provider,
+                    logger=logger,
+                )
+            finally:
+                root.deiconify()
+            logger.info("Volviendo al menu principal.")
+            return
         runner = resolve_runner(row.app_id)
         if runner is None:
             logger.error("No hay runner para '%s'.", row.app_id.value)
