@@ -25,5 +25,9 @@ class DetectorError(RecognizerError):
     """El detector de objetos no pudo abrirse o fallo."""
 
 
+class PoseEstimatorError(RecognizerError):
+    """El estimador de pose no pudo abrirse o fallo."""
+
+
 class ActionError(RecognizerError):
     """La accion local no pudo ejecutarse."""

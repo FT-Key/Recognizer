@@ -38,7 +38,13 @@ hiddenimports += collect_submodules("pynput")
 hiddenimports += collect_submodules("websocket")
 # El launcher importa cada app de forma perezosa dentro de una funcion; se
 # declara el menu de forma explicita para que PyInstaller lo incluya siempre.
-hiddenimports += ["recognizer.cli.menu", "recognizer.cli.menu_gui", "recognizer.cli.apps.people_counter"]
+hiddenimports += [
+    "recognizer.cli.menu",
+    "recognizer.cli.menu_gui",
+    "recognizer.cli.apps.people_counter",
+    "recognizer.cli.apps.anti_intruder",
+    "recognizer.cli.apps.posture",
+]
 # Assets de escritorio (icono .ico, logo .png y fuente pixel Silkscreen) que el
 # menu resuelve en tiempo de ejecucion via `recognizer.cli.paths.assets_dir()`
 # (`_MEIPASS/assets`). El icono del EXE se declara abajo con `icon=`.

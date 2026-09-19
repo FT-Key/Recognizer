@@ -34,6 +34,14 @@ from recognizer.core.constants import (
     DEFAULT_POINTER_ENABLED,
     DEFAULT_POINTER_MIRROR_X,
     DEFAULT_POINTER_SMOOTHING_ALPHA,
+    DEFAULT_POSTURE_CONFIRM_FRAMES,
+    DEFAULT_POSTURE_KEYPOINT_CONFIDENCE,
+    DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO,
+    DEFAULT_POSTURE_MAX_SHOULDER_TILT_RATIO,
+    DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG,
+    DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO,
+    DEFAULT_POSTURE_MODEL_PATH,
+    DEFAULT_POSTURE_RELEASE_FRAMES,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
@@ -527,6 +535,38 @@ class AntiIntruderConfig(BaseModel):
     alert: IntrusionAlertConfig = Field(default_factory=IntrusionAlertConfig)
 
 
+class PostureAlertConfig(BaseModel):
+    """Alerta sonora de postura: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class PostureConfig(BaseModel):
+    """Postura ergonomica: modelo YOLO pose, umbrales y debounce del aviso.
+
+    Los umbrales se expresan en relacion al ancho de hombros (normalizado), de
+    modo que son invariantes a la distancia a la camara.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_POSTURE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    min_keypoint_confidence: float = Field(default=DEFAULT_POSTURE_KEYPOINT_CONFIDENCE, ge=0, le=1)
+    max_head_offset_ratio: float = Field(default=DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO, gt=0)
+    min_head_height_ratio: float = Field(default=DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO, ge=0)
+    max_torso_angle_deg: float = Field(
+        default=DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG, ge=MIN_ANGLE_DEG, le=MAX_ANGLE_DEG
+    )
+    max_shoulder_tilt_ratio: float = Field(default=DEFAULT_POSTURE_MAX_SHOULDER_TILT_RATIO, gt=0)
+    confirm_frames: int = Field(default=DEFAULT_POSTURE_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_POSTURE_RELEASE_FRAMES, ge=1)
+    alert: PostureAlertConfig = Field(default_factory=PostureAlertConfig)
+
+
 class AppsConfig(BaseModel):
     """Habilitacion de apps del launcher (override sobre el catalogo).
 
@@ -556,6 +596,7 @@ class AppConfig(BaseModel):
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
     anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
+    posture: PostureConfig = Field(default_factory=PostureConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:
