@@ -17,7 +17,8 @@ from typing import ClassVar, cast
 import pytest
 
 from recognizer.cli import face_menu_gui, menu, menu_gui
-from recognizer.cli.face_menu_gui import _allowed_roles, run_face_submenu
+from recognizer.cli.face_adapters import allowed_roles
+from recognizer.cli.face_menu_gui import run_face_submenu
 from recognizer.core.config import AppsConfig
 from recognizer.core.domain.app import AppCatalog, AppId, AppRunRequest
 from recognizer.core.domain.camera import CameraInfo
@@ -339,17 +340,17 @@ def _tk_factory() -> Callable[[], tkinter.Toplevel]:
 
 
 def test_allowed_roles_filters_by_operator() -> None:
-    assert _allowed_roles(is_first=True, role=Role.VIEWER) == (Role.ADMIN,)
-    assert _allowed_roles(is_first=False, role=Role.ADMIN) == (
+    assert allowed_roles(is_first=True, role=Role.VIEWER) == (Role.ADMIN,)
+    assert allowed_roles(is_first=False, role=Role.ADMIN) == (
         Role.ADMIN,
         Role.OPERATOR,
         Role.VIEWER,
     )
-    assert _allowed_roles(is_first=False, role=Role.OPERATOR) == (Role.OPERATOR, Role.VIEWER)
-    assert _allowed_roles(is_first=False, role=Role.VIEWER) == ()
+    assert allowed_roles(is_first=False, role=Role.OPERATOR) == (Role.OPERATOR, Role.VIEWER)
+    assert allowed_roles(is_first=False, role=Role.VIEWER) == ()
 
 
-def test_face_submenu_shows_title_and_role_options(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_face_submenu_shows_title_and_waits(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_face_fakes(monkeypatch)
 
     assert (
@@ -366,64 +367,38 @@ def test_face_submenu_shows_title_and_role_options(monkeypatch: pytest.MonkeyPat
     assert window.titles == [face_menu_gui.FACE_SUBMENU_TITLE]
     assert window.wait_window_calls == 1
     assert window.mainloop_calls == 0
-    assert FakeOptionMenu.instances[0].options == ("admin", "operator", "viewer")
-
-
-def test_face_submenu_operator_only_sees_two_roles(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_face_fakes(monkeypatch)
-
-    assert (
-        run_face_submenu(
-            REQUEST,
-            tk_factory=_tk_factory(),
-            identity_provider=cast("IdentityProvider", FakeProvider(Role.OPERATOR)),
-            logger=TEST_LOGGER,
-        )
-        == 0
-    )
-
-    assert FakeOptionMenu.instances[0].options == ("operator", "viewer")
-
-
-def test_face_submenu_viewer_gets_warning_without_options(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _install_face_fakes(monkeypatch)
-
-    assert (
-        run_face_submenu(
-            REQUEST,
-            tk_factory=_tk_factory(),
-            identity_provider=cast("IdentityProvider", FakeProvider(Role.VIEWER)),
-            logger=TEST_LOGGER,
-        )
-        == 0
-    )
-
+    # El formulario inline ya no vive en el submenu.
     assert FakeOptionMenu.instances == []
-    warnings = [label.text for label in FakeLabel.instances]
-    assert face_menu_gui.FACE_NO_PERMISSION_TEXT in warnings
 
 
-def test_face_submenu_hides_enroll_form_without_permission(
+def test_face_submenu_does_not_open_enroll_form_until_pressed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_face_fakes(monkeypatch)
+    from recognizer.cli import face_enroll_gui
+
+    calls: list[int] = []
+
+    def fake_form(_request: AppRunRequest, **_kwargs: object) -> int:
+        calls.append(1)
+        return 0
+
+    monkeypatch.setattr(face_enroll_gui, "run_enroll_form", fake_form)
 
     run_face_submenu(
         REQUEST,
         tk_factory=_tk_factory(),
-        identity_provider=cast("IdentityProvider", FakeProvider(Role.VIEWER)),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.ADMIN)),
         logger=TEST_LOGGER,
     )
 
-    labels = {label.text: label for label in FakeLabel.instances}
-    assert not labels[face_menu_gui.FACE_NAME_LABEL].packed
-    assert not labels[face_menu_gui.FACE_ROLE_LABEL].packed
-    assert labels[face_menu_gui.FACE_NO_PERMISSION_TEXT].packed
+    # Abrir el submenu no debe abrir el formulario; solo al pulsar Enrolar.
+    assert calls == []
 
 
-def test_face_submenu_shows_enroll_form_for_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_face_submenu_session_line_uses_single_session_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     _install_face_fakes(monkeypatch)
 
     run_face_submenu(
@@ -433,15 +408,25 @@ def test_face_submenu_shows_enroll_form_for_admin(monkeypatch: pytest.MonkeyPatc
         logger=TEST_LOGGER,
     )
 
-    labels = {label.text: label for label in FakeLabel.instances}
-    assert labels[face_menu_gui.FACE_NAME_LABEL].packed
-    assert labels[face_menu_gui.FACE_ROLE_LABEL].packed
-    assert not labels[face_menu_gui.FACE_NO_PERMISSION_TEXT].packed
+    texts = [label.text for label in FakeLabel.instances]
+    assert face_menu_gui.FACE_SESSION_TEMPLATE.format(name="Ada", role="admin") in texts
 
 
-def test_face_submenu_anonymous_gets_warning_without_options(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_face_submenu_viewer_hides_enroll(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.VIEWER)),
+        logger=TEST_LOGGER,
+    )
+
+    assert _button_with_text(face_menu_gui.FACE_ENROLL_TEXT).packed is False
+    assert _button_with_text(face_menu_gui.FACE_MY_ACCESS_TEXT).packed is True
+
+
+def test_face_submenu_anonymous_shows_login_card(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_face_fakes(monkeypatch)
 
     class _AnonymousProvider:
@@ -464,20 +449,26 @@ def test_face_submenu_anonymous_gets_warning_without_options(
         == 0
     )
 
-    assert FakeOptionMenu.instances == []
-    warnings = [label.text for label in FakeLabel.instances]
-    assert face_menu_gui.FACE_NO_PERMISSION_TEXT in warnings
+    assert _button_with_text(face_menu_gui.FACE_ENROLL_TEXT).packed is False
+    assert _button_with_text(face_menu_gui.FACE_LOGIN_TEXT).packed is True
+    texts = [label.text for label in FakeLabel.instances]
+    assert face_menu_gui.FACE_LOGIN_PROMPT in texts
 
 
-def test_face_submenu_enroll_passes_name_and_role_in_order(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_face_submenu_enroll_opens_form(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_face_fakes(monkeypatch)
-    seen: list[tuple[AppRunRequest, list[str]]] = []
+    from recognizer.cli import face_enroll_gui
+
+    calls: list[dict[str, object]] = []
+
+    def fake_form(_request: AppRunRequest, **kwargs: object) -> int:
+        calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(face_enroll_gui, "run_enroll_form", fake_form)
 
     def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
-        assert reader is not None
-        seen.append((request, [reader("nombre"), reader("rol")]))
+        del request, reader
         return 0
 
     run_face_submenu(
@@ -488,12 +479,11 @@ def test_face_submenu_enroll_passes_name_and_role_in_order(
         logger=TEST_LOGGER,
     )
 
-    FakeEntry.instances[0].insert_text("Ada")
-    FakeStringVar.instances[0].set("operator")
     _press(_button_with_text(face_menu_gui.FACE_ENROLL_TEXT).command)
 
+    assert len(calls) == 1
+    assert calls[0]["enroll_runner"] is not None
     window = FakeToplevel.instances[0]
-    assert seen[0][1] == ["Ada", "operator"]
     assert window.withdraw_calls == 1
     assert window.deiconify_calls == 1
 
@@ -573,29 +563,6 @@ def test_face_submenu_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -
     window.bindings[menu_gui.EVENT_ESCAPE](None)
     _press(_button_with_text(face_menu_gui.FACE_BACK_TEXT).command)
     assert window.destroy_calls == 3
-
-
-def test_first_face_limits_roles_to_admin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from recognizer.adapters.file_face_repository import FileFaceRepository
-    from recognizer.adapters.file_identity_provider import FileIdentityProvider
-
-    _install_face_fakes(monkeypatch)
-    store = tmp_path / "faces"
-    provider = FileIdentityProvider(store, FileFaceRepository(store))
-
-    assert (
-        run_face_submenu(
-            REQUEST,
-            tk_factory=_tk_factory(),
-            identity_provider=provider,
-            logger=TEST_LOGGER,
-        )
-        == 0
-    )
-
-    assert FakeOptionMenu.instances[0].options == ("admin",)
-    notes = [label.text for label in FakeLabel.instances]
-    assert face_menu_gui.FACE_FIRST_NOTE_TEXT in notes
 
 
 def test_face_submenu_visibility_follows_role_and_session(
