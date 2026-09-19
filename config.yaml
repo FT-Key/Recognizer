@@ -306,6 +306,9 @@ face_auth:
   max_face_width_ratio: 0.55
   min_sharpness: 80.0
   enrollment_samples: 5
+  # min_password_length: longitud minima de la clave de respaldo por usuario
+  #   (login sin camara). Se asigna en el enrolamiento con confirmacion.
+  min_password_length: 4
   match_threshold: 0.45
   # login_photo_threshold: distancia coseno maxima para guardar la foto del
   #   login (mas estricta que match_threshold: menor = mejor coincidencia).

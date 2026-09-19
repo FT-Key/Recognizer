@@ -78,6 +78,15 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "N802", "S101", "PT011"]
 "scripts/**" = ["T20"]
+# S105 (hardcoded password): falsos positivos en etiquetas, prompts y claves de
+# diccionario de la UI/almacen facial; no hay secretos embebidos.
+"src/recognizer/adapters/file_face_repository.py" = ["S105"]
+"src/recognizer/cli/face_enroll_gui.py" = ["S105"]
+"src/recognizer/cli/face_menu_gui.py" = ["S105"]
+"src/recognizer/cli/face_password_gui.py" = ["S105"]
+"src/recognizer/cli/face_users_gui.py" = ["S105"]
+"src/recognizer/cli/menu_gui.py" = ["S105"]
+"src/recognizer/core/constants.py" = ["S105"]
 
 [tool.mypy]
 python_version = "3.12"

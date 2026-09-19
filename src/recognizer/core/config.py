@@ -42,6 +42,7 @@ from recognizer.core.constants import (
     DEFAULT_MIN_FACE_SHARPNESS,
     DEFAULT_MIN_FACE_WIDTH_RATIO,
     DEFAULT_MIN_GESTURE_CONFIDENCE,
+    DEFAULT_MIN_PASSWORD_LENGTH,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
     DEFAULT_PEOPLE_CONFIDENCE,
@@ -637,6 +638,8 @@ class FaceAuthConfig(BaseModel):
     ``login_photo_threshold`` es la distancia coseno maxima para elegir la foto
     del login: mas estricta que ``match_threshold`` (menor distancia = mejor),
     de modo que solo se guarda una imagen cuando la coincidencia es clara.
+    ``min_password_length`` es la longitud minima de la clave de respaldo que se
+    asigna en el enrolamiento y sirve para el login sin camara.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -650,6 +653,7 @@ class FaceAuthConfig(BaseModel):
     max_face_width_ratio: float = Field(default=DEFAULT_MAX_FACE_WIDTH_RATIO, ge=0, le=1)
     min_sharpness: float = Field(default=DEFAULT_MIN_FACE_SHARPNESS, ge=0)
     enrollment_samples: int = Field(default=DEFAULT_ENROLLMENT_SAMPLES, ge=1)
+    min_password_length: int = Field(default=DEFAULT_MIN_PASSWORD_LENGTH, ge=1)
     match_threshold: float = Field(default=DEFAULT_FACE_MATCH_THRESHOLD, ge=0)
     login_photo_threshold: float = Field(default=DEFAULT_LOGIN_PHOTO_THRESHOLD, ge=0)
     login_redirect_seconds: int = Field(default=DEFAULT_LOGIN_REDIRECT_SECONDS, ge=0)

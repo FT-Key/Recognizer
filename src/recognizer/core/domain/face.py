@@ -115,10 +115,13 @@ class FaceObservation:
 class EnrolledFace:
     """Rostro enrolado: identidad, embedding promedio, muestras, rol y foto.
 
-    ``role`` y ``preview`` van al final con default para migrar: los enrolados
-    antes de la etapa 15b se leen como operator y los anteriores a la 15c sin
-    foto. ``preview`` es el nombre de archivo de la foto de enrolamiento
+    ``role``, ``preview`` y ``password_hash`` van al final con default para
+    migrar: los enrolados antes de la etapa 15b se leen como operator, los
+    anteriores a la 15c sin foto y los anteriores a la 15d sin clave de
+    respaldo. ``preview`` es el nombre de archivo de la foto de enrolamiento
     (``F-0001.png``) dentro del almacen; ``""`` si no hay foto.
+    ``password_hash`` es el hash PBKDF2 de la clave de respaldo (login sin
+    camara) o ``""`` si el rostro no tiene clave.
     """
 
     face_id: str
@@ -128,6 +131,7 @@ class EnrolledFace:
     created_at: str
     role: Role = Role.OPERATOR
     preview: str = ""
+    password_hash: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -301,8 +305,18 @@ class EnrollmentBuilder:
             case _:
                 return guidance
 
-    def build(self, face_id: str, name: str, *, role: Role = Role.OPERATOR) -> EnrolledFace:
+    def build(
+        self,
+        face_id: str,
+        name: str,
+        *,
+        role: Role = Role.OPERATOR,
+        password_hash: str = "",
+    ) -> EnrolledFace:
         """Construye el rostro enrolado con el promedio de las muestras.
+
+        ``password_hash`` es el hash de la clave de respaldo (``""`` si no se
+        asigna, p. ej. al re-enrolar conservando la clave actual).
 
         Raises:
             ValueError: si faltan muestras o el nombre esta vacio.
@@ -322,6 +336,7 @@ class EnrollmentBuilder:
             samples=len(self._samples),
             created_at=created_at,
             role=role,
+            password_hash=password_hash,
         )
 
 
