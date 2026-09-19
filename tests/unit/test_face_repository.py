@@ -23,6 +23,7 @@ def _face(
     *,
     role: Role = Role.OPERATOR,
     preview: str = "",
+    password_hash: str = "",
 ) -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
@@ -32,6 +33,7 @@ def _face(
         created_at=CREATED_AT,
         role=role,
         preview=preview,
+        password_hash=password_hash,
     )
 
 
@@ -189,6 +191,42 @@ def test_preview_roundtrip_persists_field(tmp_path: Path) -> None:
 
     assert found is not None
     assert found.preview == PREVIEW_NAME
+
+
+def test_password_hash_roundtrip_persists_field(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    encoded = "pbkdf2_sha256$1000$c2FsdA==$aGFzaA=="
+    FileFaceRepository(store).save(_face(password_hash=encoded))
+
+    found = FileFaceRepository(store).find_by_id("F-0001")
+
+    assert found is not None
+    assert found.password_hash == encoded
+
+
+def test_legacy_face_without_password_reads_empty(tmp_path: Path) -> None:
+    import json
+
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "F-0001.json").write_text(
+        json.dumps(
+            {
+                "face_id": "F-0001",
+                "name": "Ada",
+                "embedding": [1.0, 0.0],
+                "samples": 5,
+                "created_at": CREATED_AT,
+                "role": "operator",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    found = repo.find_by_id("F-0001")
+
+    assert found is not None
+    assert found.password_hash == ""
 
 
 def test_update_changes_name_role_and_preview(tmp_path: Path) -> None:

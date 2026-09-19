@@ -7,6 +7,7 @@ from recognizer.core.config import (
     ActiveZoneConfig,
     AppConfig,
     CameraConfig,
+    FaceAuthConfig,
     GestureConfig,
     HandsConfig,
     PointerConfig,
@@ -20,6 +21,7 @@ from recognizer.core.constants import (
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
     DEFAULT_MIN_GESTURE_CONFIDENCE,
+    DEFAULT_MIN_PASSWORD_LENGTH,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
     DEFAULT_POINTER_ACTIVE_ZONE_MAX,
@@ -216,3 +218,12 @@ def test_pointer_rejects_none_gesture() -> None:
 def test_pointer_rejects_extra_fields() -> None:
     with pytest.raises(ValidationError):
         PointerConfig.model_validate({"pointer": True})
+
+
+def test_face_auth_min_password_length_default() -> None:
+    assert FaceAuthConfig().min_password_length == DEFAULT_MIN_PASSWORD_LENGTH
+
+
+def test_face_auth_rejects_invalid_min_password_length() -> None:
+    with pytest.raises(ValidationError, match="min_password_length"):
+        FaceAuthConfig(min_password_length=0)

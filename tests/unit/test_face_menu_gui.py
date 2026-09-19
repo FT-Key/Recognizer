@@ -286,6 +286,19 @@ class FakeProvider:
         return self._identity
 
 
+class FakeAnonymousProvider:
+    """Doble de IdentityProvider sin sesion (identidad invitada)."""
+
+    def current_identity(self) -> Identity:
+        return anonymous_identity()
+
+    def require_role(self, *_roles: Role) -> Identity:
+        return anonymous_identity()
+
+    def refresh(self) -> Identity:
+        return anonymous_identity()
+
+
 class FakeEnumerator:
     """Doble de CameraEnumerator con dos camaras (indices 0 y 2)."""
 
@@ -453,6 +466,49 @@ def test_face_submenu_anonymous_shows_login_card(monkeypatch: pytest.MonkeyPatch
     assert _button_with_text(face_menu_gui.FACE_LOGIN_TEXT).packed is True
     texts = [label.text for label in FakeLabel.instances]
     assert face_menu_gui.FACE_LOGIN_PROMPT in texts
+
+
+def test_face_submenu_password_button_visible_without_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+    calls: list[AppRunRequest] = []
+
+    def fake_form(request: AppRunRequest) -> int:
+        calls.append(request)
+        return 0
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        password_login_form=fake_form,
+        identity_provider=cast("IdentityProvider", FakeAnonymousProvider()),
+        logger=TEST_LOGGER,
+    )
+
+    password_button = _button_with_text(face_menu_gui.FACE_PASSWORD_LOGIN_TEXT)
+    assert password_button.packed is True
+    _press(password_button.command)
+
+    assert len(calls) == 1
+    window = FakeToplevel.instances[0]
+    assert window.withdraw_calls == 1
+    assert window.deiconify_calls == 1
+
+
+def test_face_submenu_password_button_hidden_with_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.ADMIN)),
+        logger=TEST_LOGGER,
+    )
+
+    assert _button_with_text(face_menu_gui.FACE_PASSWORD_LOGIN_TEXT).packed is False
 
 
 def test_face_submenu_enroll_opens_form(monkeypatch: pytest.MonkeyPatch) -> None:
