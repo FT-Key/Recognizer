@@ -5,17 +5,18 @@ Se abre desde el menu grafico cuando se elige ``FACE_AUTH``; la consola
 ``--no-gui``. ``tkinter`` y los runners de vision se importan dentro de las
 funciones para no cargar modelos al abrir el menu.
 
+El formulario de enrolamiento vive en ``face_enroll_gui`` y se abre con import
+perezoso desde el boton ``Enrolar``; aqui solo queda la tarjeta de sesion y los
+botones de accion.
+
 Testabilidad (fakes necesarios)
--------------------------------
+------------------------------
 Los tests inyectan ``tk_factory`` (fabrica del ``Toplevel``) y parchean
-``tkinter.Frame/Label/Button/Entry/OptionMenu/StringVar``:
+``tkinter.Frame/Label/Button/StringVar``:
 
 - ``Toplevel`` (via ``tk_factory``): doble con ``title``, ``configure``,
   ``protocol``, ``bind``, ``withdraw``, ``deiconify``, ``destroy`` y
-  ``mainloop``.
-- ``Entry``: doble con ``get``, ``pack`` y ``focus_set``.
-- ``StringVar``: doble con ``get`` y ``set``.
-- ``OptionMenu``: doble no-op con ``pack``.
+  ``wait_window``.
 - ``Frame``/``Label``/``Button``: como en ``menu_gui`` (``Button`` registra
   su ``command`` y expone ``pack``/``pack_forget`` para alternar visibilidad).
 """
@@ -28,45 +29,40 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Protocol
 
 from recognizer.cli import menu_gui
+from recognizer.cli.face_adapters import allowed_roles, store_is_empty
 from recognizer.core.domain.app import AppRunRequest
-from recognizer.core.domain.identity import Role
+from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.ports.identity_provider import IdentityProvider
 
 if TYPE_CHECKING:
     import tkinter
+
+    from recognizer.cli.face_enroll_gui import EnrollRunner
 
 LOGGER = logging.getLogger("recognizer.menu.face")
 
 FACE_SUBMENU_TITLE = "Reconocimiento facial"
 FACE_HEADER_TITLE = "RECONOCIMIENTO FACIAL"
 FACE_HEADER_SUBTITLE = "enrola tu cara o inicia sesion"
-FACE_NAME_LABEL = "Nombre"
-FACE_ROLE_LABEL = "Rol"
+FACE_SESSION_TEMPLATE = "Sesión: {name} ({role})"
+FACE_GUEST_NAME = "invitado"
+FACE_GUEST_ID = "sin sesión"
+FACE_SESSION_DETAIL_TEMPLATE = "Rol: {role} · ID: {face_id}"
+FACE_LOGIN_PROMPT = "Inicia sesión con tu rostro"
 FACE_ENROLL_TEXT = "Enrolar"
-FACE_LOGIN_TEXT = "Login"
+FACE_LOGIN_TEXT = "Iniciar sesión"
 FACE_LOGOUT_TEXT = "Cerrar sesión"
 FACE_USERS_TEXT = "Usuarios"
 FACE_ACCESS_TEXT = "Accesos"
 FACE_MY_ACCESS_TEXT = "Mis accesos"
 FACE_BACK_TEXT = "Volver"
-FACE_FIRST_NOTE_TEXT = "nota: el primer rostro = admin"
-FACE_NO_PERMISSION_TEXT = "sin permiso: se requiere operator o admin"
 FACE_FOOTER_HINT = "Enter: activar · ESC: volver"
-FACE_EMPTY_NAME_MESSAGE = "Enrolamiento cancelado: escribe un nombre primero."
-FACE_CURRENT_ROLE_TEMPLATE = "Sesión: {name} ({role})"
-FACE_ENROLL_DENIED_TEMPLATE = "Enrolar oculto: sin permiso (tu rol: {role})."
+FACE_UNKNOWN_ROLE = "?"
+FACE_ENROLL_DENIED_TEMPLATE = "Enrolar sin permiso (tu rol: {role})."
+FACE_ENROLL_LOG = "Abriendo formulario de enrolamiento... (ESC/q para volver)"
 FACE_USERS_LOG = "Abriendo panel de usuarios... (ESC/q para volver)"
 FACE_ACCESS_LOG = "Abriendo panel de accesos... (ESC/q para volver)"
-
-QueueReader = Callable[[str], str]
-
-
-class EnrollRunner(Protocol):
-    """Runner de enrolamiento con lector inyectable (cola nombre+rol en GUI)."""
-
-    def __call__(self, request: AppRunRequest, *, reader: QueueReader | None = ...) -> int:
-        """Enrola un rostro; devuelve 0 si termino bien."""
-        ...
+FACE_SESSION_REFRESH_ERROR = "No se pudo refrescar la sesion visible (%s)."
 
 
 class FaceActionRunner(Protocol):
@@ -77,58 +73,11 @@ class FaceActionRunner(Protocol):
         ...
 
 
-def _allowed_roles(*, is_first: bool, role: Role) -> tuple[Role, ...]:
-    """Roles enrolables segun el almacen y el rol del operador actual."""
-    if is_first:
-        return (Role.ADMIN,)
-    match role:
-        case Role.ADMIN:
-            return (Role.ADMIN, Role.OPERATOR, Role.VIEWER)
-        case Role.OPERATOR:
-            return (Role.OPERATOR, Role.VIEWER)
-        case _:
-            return ()
-
-
 def _default_provider(request: AppRunRequest, *, logger: logging.Logger) -> IdentityProvider:
     """Proveedor de sesion liviano (solo stdlib+json, sin modelos de vision)."""
     from recognizer.cli.face_adapters import default_identity_provider
 
     return default_identity_provider(request, logger=logger)
-
-
-def _default_role(
-    request: AppRunRequest, allowed: tuple[Role, ...], *, logger: logging.Logger
-) -> Role:
-    """Rol preseleccionado al enrolar: el de config si esta permitido.
-
-    Evita que un admin quede seleccionado por defecto (el nuevo usuario saldria
-    admin); se usa ``face_auth.default_role`` (operator) salvo que no se permita.
-    """
-    from recognizer.cli.face_adapters import load_face_config
-
-    config = load_face_config(request, logger=logger)
-    if config is not None and config.default_role in allowed:
-        return config.default_role
-    return allowed[0]
-
-
-def _store_is_empty(provider: IdentityProvider) -> bool:
-    """Indica si el almacen facial esta vacio (primer rostro = admin)."""
-    from recognizer.adapters.file_face_repository import FileFaceRepository
-    from recognizer.adapters.file_identity_provider import FileIdentityProvider
-    from recognizer.core.errors import RecognizerError
-
-    if not isinstance(provider, FileIdentityProvider):
-        return False
-    try:
-        repository = FileFaceRepository(provider.store_dir)
-    except (OSError, RecognizerError):
-        return False
-    try:
-        return len(repository.list_all()) == 0
-    except (OSError, RecognizerError):
-        return False
 
 
 def _default_enroll_runner() -> EnrollRunner:
@@ -152,6 +101,16 @@ def _default_logout_runner() -> FaceActionRunner:
     return run_face_logout
 
 
+def _session_text(identity: Identity) -> str:
+    """Linea unica de sesion para el header (nombre y rol reales).
+
+    Para el invitado usa el nombre "invitado" pero el rol vigente de la
+    identidad, de modo que el header y la tarjeta de sesion nunca difieran.
+    """
+    name = identity.name if identity.authenticated_at else FACE_GUEST_NAME
+    return FACE_SESSION_TEMPLATE.format(name=name, role=identity.role.value)
+
+
 def run_face_submenu(
     request: AppRunRequest,
     *,
@@ -164,11 +123,10 @@ def run_face_submenu(
 ) -> int:
     """Muestra el submenu facial vintage y devuelve 0 al cerrarlo.
 
-    ``Enrolar`` oculta la ventana, corre el runner con un lector en cola que
-    devuelve ``[nombre, rol]`` en orden y al terminar re-muestra la ventana y
-    refresca el rol visible. ``Login``/``Logout`` igual sin lector. ``Usuarios``
-    (admin) y ``Accesos``/``Mis accesos`` abren sus paneles de forma perezosa
-    ocultando la ventana. ``Volver``/X/ESC destruye la ventana y devuelve 0.
+    ``Enrolar`` abre el formulario ``run_enroll_form`` (import perezoso) con el
+    runner inyectado. ``Login``/``Logout`` ocultan la ventana y corren su runner.
+    ``Usuarios`` (admin) y ``Accesos``/``Mis accesos`` abren sus paneles tambien
+    de forma perezosa. ``Volver``/X/ESC destruye la ventana y devuelve 0.
     """
     import tkinter
 
@@ -184,11 +142,8 @@ def run_face_submenu(
     state["name"] = current.name
     state["logged_in"] = bool(current.authenticated_at)
     state["is_admin"] = current.role is Role.ADMIN
-    state["is_first"] = _store_is_empty(provider)
-    state["allowed"] = _allowed_roles(is_first=bool(state["is_first"]), role=current.role)
-    raw_allowed = state["allowed"]
-    allowed = raw_allowed if isinstance(raw_allowed, tuple) else ()
-    is_first = bool(state["is_first"])
+    state["is_first"] = store_is_empty(provider)
+    state["allowed"] = allowed_roles(is_first=bool(state["is_first"]), role=current.role)
 
     tk_cls = tk_factory if tk_factory is not None else tkinter.Toplevel
     window = tk_cls()
@@ -250,15 +205,15 @@ def run_face_submenu(
         bg=theme.primary,
         anchor=menu_gui.ANCHOR_WEST,
     ).pack(fill=menu_gui.FILL_X)
-    role_label = tkinter.Label(
+    session_label = tkinter.Label(
         header,
-        text=FACE_CURRENT_ROLE_TEMPLATE.format(name=current.name, role=current.role.value),
-        font=(body_family, theme.size_body_small),
+        text=_session_text(current),
+        font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
         fg=theme.primary_contrast,
         bg=theme.primary,
         anchor=menu_gui.ANCHOR_WEST,
     )
-    role_label.pack(fill=menu_gui.FILL_X)
+    session_label.pack(fill=menu_gui.FILL_X)
 
     body = tkinter.Frame(window, bg=theme.surface)
     body.pack(
@@ -268,176 +223,76 @@ def run_face_submenu(
         padx=theme.pad_body,
         pady=theme.space_4,
     )
-    # Formulario de enrolamiento (nombre + rol). Solo tiene sentido cuando el
-    # usuario puede enrolar; si no, se oculta por completo (los datos no sirven).
-    enroll_form = tkinter.Frame(body, bg=theme.surface)
-    enroll_form.pack(fill=menu_gui.FILL_X)
-    name_label = tkinter.Label(
-        enroll_form,
-        text=FACE_NAME_LABEL,
+
+    # Tarjeta de sesion: nombre, rol e ID (o invitado) en una superficie elevada.
+    session_card = tkinter.Frame(
+        body,
+        bg=theme.surface_alt,
+        relief=menu_gui.RELIEF_RAISED,
+        bd=menu_gui.BUTTON_BORDER_WIDTH,
+    )
+    session_card.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_3))
+    session_name_label = tkinter.Label(
+        session_card,
+        text=FACE_GUEST_NAME,
         font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
         fg=theme.text,
-        bg=theme.surface,
+        bg=theme.surface_alt,
         anchor=menu_gui.ANCHOR_WEST,
     )
-    name_entry = tkinter.Entry(enroll_form)
-    role_label = tkinter.Label(
-        enroll_form,
-        text=FACE_ROLE_LABEL,
-        font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
-        fg=theme.text,
-        bg=theme.surface,
-        anchor=menu_gui.ANCHOR_WEST,
+    session_name_label.pack(
+        fill=menu_gui.FILL_X, padx=theme.space_3, pady=(theme.space_2, menu_gui.BORDER_NONE)
     )
-    role_var = tkinter.StringVar()
-    role_option: tkinter.OptionMenu | None = None
-    role_option_values: tuple[str, ...] = ()
-    first_note = tkinter.Label(
-        enroll_form,
-        text=FACE_FIRST_NOTE_TEXT,
-        font=(body_family, theme.size_body_small),
-        fg=theme.text_muted,
-        bg=theme.surface,
-        anchor=menu_gui.ANCHOR_WEST,
-    )
-    no_permission_label = tkinter.Label(
-        enroll_form,
-        text=FACE_NO_PERMISSION_TEXT,
-        font=(body_family, theme.size_body_small),
-        fg=theme.text_muted,
-        bg=theme.surface,
-        anchor=menu_gui.ANCHOR_WEST,
-    )
-
-    def _build_role_option(roles: tuple[Role, ...]) -> tkinter.OptionMenu:
-        """Crea (o recrea) el selector de rol con las opciones permitidas."""
-        role_var.set(_default_role(request, roles, logger=logger).value)
-        option = tkinter.OptionMenu(enroll_form, role_var, *(role.value for role in roles))
-        # El __init__ de OptionMenu en typeshed no declara los kwargs del
-        # Menubutton; se aplican con `configure`, que si los acepta.
-        option.configure(
-            relief=menu_gui.RELIEF_RAISED,
-            bd=menu_gui.BUTTON_BORDER_WIDTH,
-            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
-            bg=theme.surface_alt,
-            fg=theme.text,
-            activebackground=theme.primary_soft,
-            activeforeground=theme.text,
-            cursor=menu_gui.CURSOR_HAND,
-            highlightthickness=menu_gui.FOCUS_HIGHLIGHT_WIDTH,
-            highlightbackground=theme.surface,
-            highlightcolor=theme.primary_strong,
-            anchor=menu_gui.ANCHOR_WEST,
-        )
-        option.pack(fill=menu_gui.FILL_X)
-        return option
-
-    def _sync_enroll_form(roles: tuple[Role, ...], *, first: bool) -> None:
-        """Muestra el formulario solo si hay permiso; ajusta el selector de rol."""
-        nonlocal role_option, role_option_values
-        wanted = tuple(role.value for role in roles)
-        if roles:
-            name_label.pack(fill=menu_gui.FILL_X)
-            name_entry.pack(fill=menu_gui.FILL_X)
-            role_label.pack(fill=menu_gui.FILL_X)
-            if role_option is None or role_option_values != wanted:
-                if role_option is not None:
-                    role_option.pack_forget()
-                    role_option.destroy()
-                role_option = _build_role_option(roles)
-                role_option_values = wanted
-            no_permission_label.pack_forget()
-            if first:
-                first_note.pack(fill=menu_gui.FILL_X)
-            else:
-                first_note.pack_forget()
-            try:
-                name_entry.focus_set()
-            except Exception as exc:  # los fakes o Tk sin display pueden no enfocar
-                logger.debug("Sin foco inicial del nombre (%s).", exc)
-        else:
-            name_label.pack_forget()
-            name_entry.pack_forget()
-            role_label.pack_forget()
-            if role_option is not None:
-                role_option.pack_forget()
-                role_option.destroy()
-                role_option = None
-                role_option_values = ()
-            first_note.pack_forget()
-            no_permission_label.pack(fill=menu_gui.FILL_X)
-
-    _sync_enroll_form(allowed, first=is_first)
-
-    footer = tkinter.Frame(window, bg=theme.surface_alt)
-    footer.pack(side=menu_gui.SIDE_BOTTOM, fill=menu_gui.FILL_X)
-    tkinter.Label(
-        footer,
-        text=FACE_FOOTER_HINT,
+    session_role_label = tkinter.Label(
+        session_card,
+        text=FACE_SESSION_DETAIL_TEMPLATE.format(role=Role.VIEWER.value, face_id=FACE_GUEST_ID),
         font=(body_family, theme.size_body_small),
         fg=theme.text_muted,
         bg=theme.surface_alt,
         anchor=menu_gui.ANCHOR_WEST,
-    ).pack(side=menu_gui.SIDE_LEFT, padx=theme.pad_footer, pady=theme.pad_footer)
+    )
+    session_role_label.pack(fill=menu_gui.FILL_X, padx=theme.space_3)
+    login_prompt_label = tkinter.Label(
+        session_card,
+        text=FACE_LOGIN_PROMPT,
+        font=(body_family, theme.size_body),
+        fg=theme.text,
+        bg=theme.surface_alt,
+        anchor=menu_gui.ANCHOR_WEST,
+    )
 
-    def refresh_permissions() -> tuple[Role, ...]:
-        """Relee la sesion y recalcula permisos; el gate siempre usa datos frescos."""
-        fresh = provider.refresh()
-        fresh_first = _store_is_empty(provider)
-        fresh_allowed = _allowed_roles(is_first=fresh_first, role=fresh.role)
-        state["role"] = fresh.role
-        state["name"] = fresh.name
-        state["logged_in"] = bool(fresh.authenticated_at)
-        state["is_admin"] = fresh.role is Role.ADMIN
-        state["is_first"] = fresh_first
-        state["allowed"] = fresh_allowed
-        try:
-            role_label.configure(
-                text=FACE_CURRENT_ROLE_TEMPLATE.format(name=fresh.name, role=fresh.role.value)
-            )
-        except Exception as exc:  # el refresco jamas tumba el submenu
-            logger.debug("No se pudo refrescar el rol visible (%s).", exc)
-        if fresh_allowed:
-            try:
-                if role_var.get().strip().lower() not in {role.value for role in fresh_allowed}:
-                    role_var.set(fresh_allowed[0].value)
-            except Exception as exc:
-                logger.debug("No se pudo ajustar el rol elegido (%s).", exc)
-        return fresh_allowed
+    # Botones de accion agrupados; se muestran u ocultan segun sesion y rol.
+    actions = tkinter.Frame(body, bg=theme.surface)
+    actions.pack(fill=menu_gui.FILL_X)
+
+    def _show(button: tkinter.Button) -> None:
+        button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1, pady=theme.space_1)
+
+    def _hide(button: tkinter.Button) -> None:
+        button.pack_forget()
+
+    def close() -> None:
+        window.destroy()
 
     def do_enroll() -> None:
         fresh_allowed = refresh_permissions()
         if not fresh_allowed:
             current_role = state["role"]
-            role_name = current_role.value if isinstance(current_role, Role) else "?"
-            logger.warning("Sin permiso para enrolar (tu rol: %s).", role_name)
+            role_name = current_role.value if isinstance(current_role, Role) else FACE_UNKNOWN_ROLE
+            logger.warning(FACE_ENROLL_DENIED_TEMPLATE.format(role=role_name))
             return
-        try:
-            name = name_entry.get().strip()
-        except Exception as exc:
-            logger.warning("No se pudo leer el nombre (%s).", exc)
-            return
-        if not name:
-            logger.error(FACE_EMPTY_NAME_MESSAGE)
-            return
-        try:
-            role_text = role_var.get().strip().lower()
-        except Exception as exc:
-            logger.debug("Sin rol elegido (%s); se usa el primero permitido.", exc)
-            role_text = fresh_allowed[0].value
-        if role_text not in {role.value for role in fresh_allowed}:
-            logger.warning("Rol no permitido %r; se usa %s.", role_text, fresh_allowed[0].value)
-            role_text = fresh_allowed[0].value
-        queue: list[str] = [name, role_text]
-
-        def queue_reader(_prompt: str) -> str:
-            return queue.pop(0) if queue else ""
+        from recognizer.cli.face_enroll_gui import run_enroll_form
 
         runner = enroll_runner if enroll_runner is not None else _default_enroll_runner()
-        logger.info("Enrolando '%s'... (ESC/q para volver)", name)
+        logger.info(FACE_ENROLL_LOG)
         window.withdraw()
         try:
-            runner(replace(request), reader=queue_reader)
+            run_enroll_form(
+                replace(request),
+                identity_provider=provider,
+                enroll_runner=runner,
+                logger=logger,
+            )
         finally:
             window.deiconify()
         refresh_session()
@@ -504,50 +359,94 @@ def run_face_submenu(
             window.deiconify()
         refresh_session()
 
-    def close() -> None:
-        window.destroy()
+    enroll_button = _make_button(actions, FACE_ENROLL_TEXT, do_enroll, primary=True)
+    users_button = _make_button(actions, FACE_USERS_TEXT, do_users, primary=False)
+    access_button = _make_button(actions, FACE_ACCESS_TEXT, do_access, primary=False)
+    my_access_button = _make_button(actions, FACE_MY_ACCESS_TEXT, do_my_access, primary=False)
+    logout_button = _make_button(actions, FACE_LOGOUT_TEXT, do_logout, primary=False)
+    login_button = _make_button(session_card, FACE_LOGIN_TEXT, do_login, primary=True)
 
-    def _show(button: tkinter.Button) -> None:
-        button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1, pady=theme.space_2)
-
-    def _hide(button: tkinter.Button) -> None:
-        button.pack_forget()
-
-    enroll_button = _make_button(body, FACE_ENROLL_TEXT, do_enroll, primary=True)
-    login_button = _make_button(body, FACE_LOGIN_TEXT, do_login, primary=False)
-    logout_button = _make_button(body, FACE_LOGOUT_TEXT, do_logout, primary=False)
-    users_button = _make_button(body, FACE_USERS_TEXT, do_users, primary=False)
-    access_button = _make_button(body, FACE_ACCESS_TEXT, do_access, primary=False)
-    my_access_button = _make_button(body, FACE_MY_ACCESS_TEXT, do_my_access, primary=False)
+    footer = tkinter.Frame(window, bg=theme.surface_alt)
+    footer.pack(side=menu_gui.SIDE_BOTTOM, fill=menu_gui.FILL_X)
+    tkinter.Label(
+        footer,
+        text=FACE_FOOTER_HINT,
+        font=(body_family, theme.size_body_small),
+        fg=theme.text_muted,
+        bg=theme.surface_alt,
+        anchor=menu_gui.ANCHOR_WEST,
+    ).pack(side=menu_gui.SIDE_LEFT, padx=theme.pad_footer, pady=theme.pad_footer)
     back_button = _make_button(footer, FACE_BACK_TEXT, close, primary=False)
     back_button.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
 
+    def _render_session(identity: Identity) -> None:
+        """Pinta la tarjeta de sesion y el boton de login segun haya login."""
+        logged_in = bool(identity.authenticated_at)
+        name = identity.name if logged_in else FACE_GUEST_NAME
+        face_id = identity.face_id if logged_in else FACE_GUEST_ID
+        try:
+            session_name_label.configure(text=name)
+            session_role_label.configure(
+                text=FACE_SESSION_DETAIL_TEMPLATE.format(role=identity.role.value, face_id=face_id)
+            )
+            if logged_in:
+                login_prompt_label.pack_forget()
+                login_button.pack_forget()
+            else:
+                login_prompt_label.pack(
+                    fill=menu_gui.FILL_X,
+                    padx=theme.space_3,
+                    pady=(theme.space_1, menu_gui.BORDER_NONE),
+                )
+                login_button.pack(fill=menu_gui.FILL_X, padx=theme.space_3, pady=theme.space_2)
+        except Exception as exc:  # el refresco jamas tumba el submenu
+            logger.debug(FACE_SESSION_REFRESH_ERROR, exc)
+
+    def refresh_permissions() -> tuple[Role, ...]:
+        """Relee la sesion y recalcula permisos; el gate usa datos frescos."""
+        fresh = provider.refresh()
+        fresh_first = store_is_empty(provider)
+        fresh_allowed = allowed_roles(is_first=fresh_first, role=fresh.role)
+        state["role"] = fresh.role
+        state["name"] = fresh.name
+        state["logged_in"] = bool(fresh.authenticated_at)
+        state["is_admin"] = fresh.role is Role.ADMIN
+        state["is_first"] = fresh_first
+        state["allowed"] = fresh_allowed
+        state["identity"] = fresh
+        try:
+            session_label.configure(text=_session_text(fresh))
+        except Exception as exc:  # el refresco jamas tumba el submenu
+            logger.debug(FACE_SESSION_REFRESH_ERROR, exc)
+        return fresh_allowed
+
     def refresh_session_ui() -> None:
-        """Muestra u oculta los botones segun la sesion y el rol vigentes.
+        """Muestra u oculta botones y tarjeta segun la sesion y el rol vigentes.
 
         Se crean siempre todos los botones y aqui se alterna su visibilidad con
         ``pack``/``pack_forget``: asi el usuario solo ve las acciones que puede
         hacer (Enrolar con permiso, Login sin sesion, Logout con sesion,
         Usuarios/Accesos solo admin, Mis accesos solo no-admin autenticado).
         """
-        fresh = provider.current_identity()
+        # Usa la misma identidad que calculo `refresh_permissions` (evita que el
+        # header y la tarjeta de sesion muestren datos distintos).
+        stored = state.get("identity")
+        fresh = stored if isinstance(stored, Identity) else provider.current_identity()
         logged_in = bool(fresh.authenticated_at)
         is_admin = fresh.role is Role.ADMIN
         state["logged_in"] = logged_in
         state["is_admin"] = is_admin
+        _render_session(fresh)
         raw_allowed = state["allowed"]
         allowed_now = raw_allowed if isinstance(raw_allowed, tuple) else ()
-        _sync_enroll_form(allowed_now, first=bool(state["is_first"]))
         if allowed_now:
             _show(enroll_button)
         else:
             _hide(enroll_button)
             logger.warning(FACE_ENROLL_DENIED_TEMPLATE.format(role=fresh.role.value))
         if logged_in:
-            _hide(login_button)
             _show(logout_button)
         else:
-            _show(login_button)
             _hide(logout_button)
         if is_admin:
             _show(users_button)
@@ -566,7 +465,7 @@ def run_face_submenu(
         refresh_permissions()
         refresh_session_ui()
 
-    refresh_session_ui()
+    refresh_session()
     for button, action in (
         (enroll_button, do_enroll),
         (login_button, do_login),
