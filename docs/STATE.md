@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** fix 15b-cost (modelos faciales extra + tope de FPS) completado; siguiente: 13 (EPP) o 15c (DB distribuida)
-- **Rama:** `stage/15b-fix7-face-infer-cost`
+- **Fase actual:** release **v0.2.0** publicada (launcher + YOLO + facial/roles); siguiente: 13 (EPP) o 15c (DB distribuida)
+- **Rama:** `dev`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -47,7 +47,8 @@
 - Fix 15b-open: el runner facial entraba la cámara al stack y `LatestFrameSource` la abría otra vez (`CameraError: La camara ya esta abierta`); ahora solo `LatestFrameSource` abre/libera.
 - Gate fix 15b-open verde: lint OK, mypy strict 186, pytest **1130 passed** (94.69%), check-arch 3/3.
 - Fix 15b-cost: `allowed_modules=["detection","recognition"]` (se descartan landmarks/género-edad que corrían por cara) + `face_auth.max_inference_fps` (5 FPS) en el worker.
-- Gate fix 15b-cost verde: lint OK, mypy strict 187, pytest **1133 passed** (94.88%), check-arch 3/3. Commits pendientes `git-ops`.
+- Gate fix 15b-cost verde: lint OK, mypy strict 187, pytest **1133 passed** (94.88%), check-arch 3/3.
+- Release **v0.2.0** publicada en GitHub (launcher multi-app + contador/anti-intrusos/postura + facial con roles). El `.exe` ahora incluye YOLO/torch e InsightFace; descripción en `docs/RELEASE-v0.2.0.md`; `recognizer.spec` con `ultralytics`/`torch`/`torchvision` y `hiddenimports` de `face_menu_gui`/`camera_discovery`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
@@ -55,6 +56,6 @@
 ## Bloqueos / notas
 - Usuario verifica manual: ESC/q+X, ventana del menú con cámara real y aspecto visual 10d.
 - Calibrar con cámara real: `face_auth.min_face_width_ratio` y `match_threshold`; probar selector con 2 cámaras; `posture.*`, `anti_intruder.zone`, `people_counter.line`, `min_confidence`, `swap_handedness`.
-- Verificación del `.exe` con YOLO/torch, YOLO pose e insightface/onnxruntime pendiente; regenerar `.exe` para assets/icono.
+- Verificación manual del `.exe` v0.2.0 (YOLO, YOLO pose, facial y selector de cámara) pendiente del usuario.
 - "Cabeza adelante" solo mide desvío horizontal en 2D (limitación conocida).
 - Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.

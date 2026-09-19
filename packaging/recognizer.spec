@@ -45,6 +45,17 @@ for package in ("insightface", "onnxruntime"):
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
 
+# YOLO (contador de personas, anti-intrusos y postura): ultralytics + torch.
+# Es el bundle mas pesado (~1 GB); si no estan en el entorno se omiten.
+for package in ("ultralytics", "torch", "torchvision"):
+    try:
+        pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
+    except Exception:
+        continue
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hiddenimports += pkg_hidden
+
 hiddenimports += collect_submodules("pynput")
 hiddenimports += collect_submodules("websocket")
 # El launcher importa cada app de forma perezosa dentro de una funcion; se
@@ -52,17 +63,17 @@ hiddenimports += collect_submodules("websocket")
 hiddenimports += [
     "recognizer.cli.menu",
     "recognizer.cli.menu_gui",
+    "recognizer.cli.face_menu_gui",
     "recognizer.cli.apps.people_counter",
     "recognizer.cli.apps.anti_intruder",
     "recognizer.cli.apps.posture",
     "recognizer.cli.apps.face_auth",
+    "recognizer.adapters.camera_discovery",
 ]
 # Assets de escritorio (icono .ico, logo .png y fuente pixel Silkscreen) que el
 # menu resuelve en tiempo de ejecucion via `recognizer.cli.paths.assets_dir()`
 # (`_MEIPASS/assets`). El icono del EXE se declara abajo con `icon=`.
 datas += [(str(PROJECT_ROOT / "assets"), "assets")]
-# Ultralytics/torch NO se recolectan aqui: el bundle seria enorme (~1 GB) y la
-# verificacion del .exe con YOLO queda pendiente (ver history de la etapa 10b).
 
 a = Analysis(  # noqa: F821
     [str(PROJECT_ROOT / "packaging" / "entrypoint.py")],

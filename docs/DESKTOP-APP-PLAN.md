@@ -28,9 +28,10 @@ dist/Recognizer/
                           # NO tocar
 ```
 
-**Tamaño aproximado:** ~280-350 MB (MediaPipe + OpenCV + matplotlib + numpy).
-Se distribuye comprimiendo `dist/Recognizer/` en un `.zip`; el usuario final
-descomprime y ejecuta `Recognizer.exe` (no necesita Python ni `uv`).
+**Tamaño aproximado:** ~1,4 GB descomprimido / ~550 MB comprimido con el bundle completo
+(MediaPipe + OpenCV + matplotlib + numpy + YOLO/Ultralytics/torch + InsightFace/onnxruntime).
+Sin YOLO ni facial serían ~280-350 MB. Se distribuye comprimiendo `dist/Recognizer/` en un
+`.zip`; el usuario final descomprime y ejecuta `Recognizer.exe` (no necesita Python ni `uv`).
 
 ---
 
@@ -45,11 +46,12 @@ uv run python scripts/build_exe.py
 
 # 2. Sacar la carpeta logs (la crea el .exe al correr) y comprimir
 Remove-Item -Recurse -Force dist\Recognizer\logs -ErrorAction SilentlyContinue
-Compress-Archive -Path dist\Recognizer -DestinationPath dist\Recognizer-v0.1.0-win64.zip
+Compress-Archive -Path dist\Recognizer -DestinationPath dist\Recognizer-v0.2.0-win64.zip
 ```
 
 3. En GitHub: **Releases → Draft a new release**.
-   - Tag: `v0.1.0` (crear el tag nuevo).
+   - Tag: `v0.2.0` (crear el tag nuevo).
+   - Descripción: pegar `docs/RELEASE-v0.2.0.md`.
    - Target: `main` (o `dev` si todavía no se mergeó).
    - Título y descripción (usar el Markdown con el logo del repo).
    - **Attach binaries**: subir el `.zip`.
