@@ -94,6 +94,31 @@ def test_worker_processes_latest_frame_and_stops() -> None:
     assert recognizer.calls >= 1
 
 
+def test_worker_throttles_inference_rate() -> None:
+    fake = FakeSource()
+    source = LatestFrameSource(fake, read_timeout=0.5, join_timeout=1.0, failure_sleep=0.001)
+    recognizer = FakeRecognizer()
+    processed: list[int] = []
+    with source:
+        worker = _RecognitionWorker(
+            source=source,
+            recognizer=recognizer,  # type: ignore[arg-type]
+            process=lambda observations: processed.append(len(observations)),
+            process_every_n_frames=1,
+            logger=TEST_LOGGER,
+            max_inference_fps=1.0,
+        )
+        with worker:
+            fake.push(1)
+            assert _wait_until(lambda: bool(processed))
+            for value in range(2, 8):
+                fake.push(value)
+            time.sleep(0.15)
+        assert worker.error is None
+
+    assert len(processed) == 1
+
+
 def test_worker_captures_inference_error() -> None:
     fake = FakeSource()
     source = LatestFrameSource(fake, read_timeout=0.5, join_timeout=1.0, failure_sleep=0.001)
