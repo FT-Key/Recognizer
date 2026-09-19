@@ -32,6 +32,7 @@ from recognizer.core.domain.face import (
     FaceBox,
     FaceMatch,
     FaceMatcher,
+    FaceObservation,
     LoginDebouncer,
     assess_capture,
 )
@@ -200,17 +201,24 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
             role.value,
         )
 
+        frame_count = 0
+        last_observations: tuple[FaceObservation, ...] = ()
+
         def _on_context(context: FrameContext) -> None:
-            observations = recognizer.recognize(context.frame)
-            if not observations:
-                state.guidance = CaptureGuidance.CENTER_FACE
-                state.boxes = ()
-            else:
-                observation = observations[0]
-                state.boxes = (observation.box,)
-                result = builder.add(observation)
-                state.guidance = result
-                state.accepted = builder.accepted
+            nonlocal frame_count, last_observations
+            frame_count += 1
+            fresh = frame_count % face_config.process_every_n_frames == 0 or not last_observations
+            if fresh:
+                last_observations = recognizer.recognize(context.frame)
+                if not last_observations:
+                    state.guidance = CaptureGuidance.CENTER_FACE
+                    state.boxes = ()
+                else:
+                    observation = last_observations[0]
+                    state.boxes = (observation.box,)
+                    result = builder.add(observation)
+                    state.guidance = result
+                    state.accepted = builder.accepted
             step = builder.current_step()
             progress = (
                 f"{name}: {state.accepted}/{state.required} - {step.prompt}"
@@ -310,41 +318,48 @@ def run_face_login(request: AppRunRequest) -> int:
         enrolled_tuple = tuple(enrolled)
         LOGGER.info("Login facial: %d rostro(s) conocido(s).", len(enrolled_tuple))
 
+        frame_count = 0
+        last_observations: tuple[FaceObservation, ...] = ()
+
         def _on_context(context: FrameContext) -> None:
-            observations = recognizer.recognize(context.frame)
-            if not observations:
-                state.boxes = ()
-                state.guidance = None
-                identity = debouncer.update(
-                    FaceMatch(face=None, distance=NO_FACE_DISTANCE, accepted=False)
-                )
-            else:
-                observation = observations[0]
-                state.boxes = (observation.box,)
-                state.guidance = assess_capture(
-                    observation.box,
-                    observation.sharpness,
-                    min_width=face_config.min_face_width_ratio,
-                    max_width=face_config.max_face_width_ratio,
-                    min_sharpness=face_config.min_sharpness,
-                )
-                match = matcher.identify(observation.embedding, enrolled_tuple)
-                identity = debouncer.update(match)
-                if not match.accepted:
-                    state.login_text = UNKNOWN_TEXT
-                elif identity is None:
-                    state.login_text = "Reconociendo..."
-            if identity is not None:
-                state.highlight_ok = True
-                state.login_text = f"Bienvenido {identity.name} {identity.face_id}"
-                if state.greeted_id != identity.face_id:
-                    state.greeted_id = identity.face_id
-                    _write_login_session(session_provider, identity)
-            elif not observations:
-                state.highlight_ok = False
-                state.login_text = ""
-            else:
-                state.highlight_ok = False
+            nonlocal frame_count, last_observations
+            frame_count += 1
+            fresh = frame_count % face_config.process_every_n_frames == 0 or not last_observations
+            if fresh:
+                last_observations = recognizer.recognize(context.frame)
+                if not last_observations:
+                    state.boxes = ()
+                    state.guidance = None
+                    identity = debouncer.update(
+                        FaceMatch(face=None, distance=NO_FACE_DISTANCE, accepted=False)
+                    )
+                else:
+                    observation = last_observations[0]
+                    state.boxes = (observation.box,)
+                    state.guidance = assess_capture(
+                        observation.box,
+                        observation.sharpness,
+                        min_width=face_config.min_face_width_ratio,
+                        max_width=face_config.max_face_width_ratio,
+                        min_sharpness=face_config.min_sharpness,
+                    )
+                    match = matcher.identify(observation.embedding, enrolled_tuple)
+                    identity = debouncer.update(match)
+                    if not match.accepted:
+                        state.login_text = UNKNOWN_TEXT
+                    elif identity is None:
+                        state.login_text = "Reconociendo..."
+                if identity is not None:
+                    state.highlight_ok = True
+                    state.login_text = f"Bienvenido {identity.name} {identity.face_id}"
+                    if state.greeted_id != identity.face_id:
+                        state.greeted_id = identity.face_id
+                        _write_login_session(session_provider, identity)
+                elif not last_observations:
+                    state.highlight_ok = False
+                    state.login_text = ""
+                else:
+                    state.highlight_ok = False
             draw_face_overlay(
                 context.frame.data,
                 boxes=state.boxes,
