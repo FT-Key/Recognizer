@@ -7,10 +7,12 @@ Salir de una app (ESC/q) devuelve el control al menu, no cierra el programa.
 
 import logging
 from collections.abc import Callable
+from pathlib import Path
 
 from recognizer.cli.console import BANNER_BORDER, BANNER_WIDTH, configure_logging, log_banner
 from recognizer.cli.paths import default_config_path, default_log_file
-from recognizer.core.config import AppConfig, AppsConfig
+from recognizer.core.config import AppConfig, AppsConfig, FaceAuthConfig
+from recognizer.core.constants import ANONYMOUS_FACE_ID
 from recognizer.core.domain.app import (
     AppAvailability,
     AppCatalog,
@@ -18,7 +20,17 @@ from recognizer.core.domain.app import (
     AppInfo,
     AppRunRequest,
 )
+from recognizer.core.domain.identity import DEFAULT_PERMISSIONS as DEFAULT_ROLE_PERMISSIONS
+from recognizer.core.domain.identity import (
+    AllowAllPolicy,
+    AppPolicy,
+    Identity,
+    PolicyEngine,
+    anonymous_identity,
+    normalize_overrides,
+)
 from recognizer.core.errors import ConfigError
+from recognizer.core.ports.identity_provider import IdentityProvider
 from recognizer.settings import load_config
 
 LOGGER = logging.getLogger("recognizer.menu")
@@ -33,9 +45,56 @@ TITLE_COLUMN = 32
 LABEL_AVAILABLE = "[disponible]"
 LABEL_DISABLED = "[deshabilitada]"
 LABEL_COMING_SOON = "[proximamente]"
+LABEL_NO_PERMISSION = "[sin permiso]"
 
 AppRunner = Callable[[AppRunRequest], int]
 GuiRunner = Callable[[AppRunRequest, AppsConfig, AppCatalog | None], int]
+
+
+def _build_policy(face_config: FaceAuthConfig) -> PolicyEngine:
+    """Motor de permisos: matriz por defecto + override ``face_auth.permissions``."""
+    merged = dict(DEFAULT_ROLE_PERMISSIONS)
+    merged.update(normalize_overrides(face_config.permissions))
+    return PolicyEngine(permissions=merged)
+
+
+def _identity_from_config(app_config: AppConfig) -> tuple[IdentityProvider, AppPolicy]:
+    """Proveedor de sesion y politica desde la config ya cargada.
+
+    En modo abierto (``require_login: false``) y sin sesion devuelve la
+    politica ``AllowAllPolicy`` para no romper los flujos sin enrolar. Solo
+    lee JSON del disco (liviano): no carga modelos de vision.
+    """
+    from recognizer.adapters.file_face_repository import FileFaceRepository
+    from recognizer.adapters.file_identity_provider import (
+        AllowAllIdentityProvider,
+        FileIdentityProvider,
+    )
+
+    try:
+        repository = FileFaceRepository(app_config.face_auth.store_dir)
+    except OSError as exc:
+        LOGGER.warning("Almacen facial no disponible (%s); modo abierto.", exc)
+        return AllowAllIdentityProvider(), AllowAllPolicy()
+    provider: IdentityProvider = FileIdentityProvider(
+        app_config.face_auth.store_dir,
+        repository,
+        session_timeout_seconds=app_config.face_auth.session_timeout_seconds,
+    )
+    identity = provider.current_identity()
+    if not app_config.face_auth.require_login and identity.face_id == ANONYMOUS_FACE_ID:
+        return provider, AllowAllPolicy()
+    return provider, _build_policy(app_config.face_auth)
+
+
+def resolve_launcher_identity(config_path: Path) -> tuple[IdentityProvider, AppPolicy]:
+    """Carga la config y resuelve (proveedor, politica) del launcher.
+
+    Raises:
+        ConfigError: si la configuracion es invalida.
+        OSError: si el almacen no se puede preparar.
+    """
+    return _identity_from_config(load_config(config_path))
 
 
 def _default_gui_runner(
@@ -46,7 +105,18 @@ def _default_gui_runner(
     """GuiRunner real: delega en el menu grafico (import perezoso)."""
     from recognizer.cli.menu_gui import run_gui_menu
 
-    return run_gui_menu(request=request, apps_config=apps_config, catalog=catalog)
+    try:
+        provider, policy = resolve_launcher_identity(request.config_path)
+    except (ConfigError, OSError) as exc:
+        LOGGER.info("sin identidad; usando menu sin filtro de permisos (%s)", exc)
+        return run_gui_menu(request=request, apps_config=apps_config, catalog=catalog)
+    return run_gui_menu(
+        request=request,
+        apps_config=apps_config,
+        catalog=catalog,
+        identity_provider=provider,
+        policy=policy,
+    )
 
 
 def resolve_runner(app_id: AppId) -> AppRunner | None:
@@ -92,8 +162,18 @@ def availability_label(info: AppInfo, availability: AppAvailability) -> str:
     return LABEL_COMING_SOON
 
 
-def render_catalog(catalog: AppCatalog, apps_config: AppsConfig) -> str:
-    """Construye el texto multilinea del menu con todas las apps y su estado."""
+def render_catalog(
+    catalog: AppCatalog,
+    apps_config: AppsConfig,
+    *,
+    identity: Identity | None = None,
+    policy: AppPolicy | None = None,
+) -> str:
+    """Construye el texto multilinea del menu con todas las apps y su estado.
+
+    Con ``identity`` y ``policy`` las apps no permitidas se marcan con
+    ``[sin permiso]``; sin ambas, el render es el historico (sin filtro).
+    """
     lines = [
         BANNER_BORDER,
         MENU_TITLE.center(BANNER_WIDTH),
@@ -103,6 +183,12 @@ def render_catalog(catalog: AppCatalog, apps_config: AppsConfig) -> str:
     for number, info in enumerate(catalog.apps, start=1):
         availability = catalog.availability(info.app_id, enabled=apps_config.enabled)
         label = availability_label(info, availability)
+        if (
+            policy is not None
+            and identity is not None
+            and not policy.can_launch(identity, app_id=info.app_id)
+        ):
+            label = f"{label} {LABEL_NO_PERMISSION}"
         lines.append(f"  {number}) {info.title:<{TITLE_COLUMN}} {label}")
     lines.append(EXIT_LINE)
     return "\n".join(lines)
@@ -115,17 +201,39 @@ def run_menu(
     catalog: AppCatalog | None = None,
     input_fn: Callable[[str], str] | None = None,
     logger: logging.Logger = LOGGER,
+    identity_provider: IdentityProvider | None = None,
+    policy: AppPolicy | None = None,
 ) -> int:
     """Muestra el menu en bucle hasta que el usuario sale.
 
     Cada app se ejecuta de forma sincrona; al terminar (ESC/q) se vuelve a
-    mostrar el menu. Devuelve 0 al salir.
+    mostrar el menu. Devuelve 0 al salir. Con ``identity_provider`` y
+    ``policy`` las apps sin permiso se marcan y su lanzamiento se bloquea;
+    sin ambas, el menu es el historico (sin filtro, para tests y modo abierto).
     """
     resolved_catalog = catalog if catalog is not None else AppCatalog()
     reader = input_fn if input_fn is not None else input
+    engine = policy
+    if identity_provider is None and engine is None:
+        current: Identity | None = None
+    else:
+        if engine is None:
+            engine = AllowAllPolicy()
+        current = None  # se resuelve en cada vuelta (la sesion puede cambiar)
 
     while True:
-        logger.info("\n%s", render_catalog(resolved_catalog, apps_config))
+        if engine is not None:
+            current = (
+                identity_provider.current_identity()
+                if identity_provider is not None
+                else anonymous_identity()
+            )
+            logger.info(
+                "\n%s",
+                render_catalog(resolved_catalog, apps_config, identity=current, policy=engine),
+            )
+        else:
+            logger.info("\n%s", render_catalog(resolved_catalog, apps_config))
         try:
             raw = reader(PROMPT)
         except EOFError:
@@ -155,6 +263,17 @@ def run_menu(
         if availability is AppAvailability.DISABLED:
             logger.info("'%s' esta deshabilitada en config.yaml (apps.enabled).", info.title)
             continue
+        if (
+            engine is not None
+            and current is not None
+            and not engine.can_launch(current, app_id=info.app_id)
+        ):
+            logger.warning(
+                "'%s' requiere un rol con permiso (tu rol: %s).",
+                info.title,
+                current.role.value,
+            )
+            continue
 
         runner = resolve_runner(info.app_id)
         if runner is None:
@@ -171,6 +290,8 @@ def run_launcher(
     list_only: bool = False,
     use_gui: bool = True,
     gui_runner: GuiRunner | None = None,
+    identity_provider: IdentityProvider | None = None,
+    policy: AppPolicy | None = None,
 ) -> int:
     """Arranca el menu (o solo lista las apps) sin cargar librerias de vision.
 
@@ -178,7 +299,9 @@ def run_launcher(
     usa ``gui_runner`` si se inyecta (dobles en tests) o el menu grafico real
     por defecto. Si el runner grafico falla con ``ImportError`` (sin tkinter)
     o ``tkinter.TclError`` (sin display) —lo lance el runner real o un doble
-    inyectado—, cae al menu de consola.
+    inyectado—, cae al menu de consola. ``identity_provider``/``policy`` son
+    inyectables para tests; por defecto se resuelven de la config (liviano,
+    sin modelos de vision).
     """
     configure_logging(verbose=False, log_file=default_log_file())
     log_banner(LOGGER)
@@ -190,9 +313,20 @@ def run_launcher(
         LOGGER.warning("Configuracion no disponible (%s); usando valores por defecto.", exc)
         app_config = AppConfig()
 
+    provider = identity_provider
+    engine = policy
+    if provider is None and engine is None:
+        try:
+            provider, engine = _identity_from_config(app_config)
+        except (ConfigError, OSError) as exc:
+            LOGGER.warning("Identidad no disponible (%s); modo abierto.", exc)
+    current = provider.current_identity() if provider is not None else None
+
     catalog = AppCatalog()
     if list_only:
-        LOGGER.info("\n%s", render_catalog(catalog, app_config.apps))
+        LOGGER.info(
+            "\n%s", render_catalog(catalog, app_config.apps, identity=current, policy=engine)
+        )
         return 0
 
     request = AppRunRequest(config_path=config_path, show_window=True)
@@ -207,4 +341,10 @@ def run_launcher(
                 return runner(request, app_config.apps, catalog)
             except tkinter.TclError as exc:
                 LOGGER.info("sin display; usando menú de consola (%s)", exc)
-    return run_menu(request=request, apps_config=app_config.apps, catalog=catalog)
+    return run_menu(
+        request=request,
+        apps_config=app_config.apps,
+        catalog=catalog,
+        identity_provider=provider,
+        policy=engine,
+    )

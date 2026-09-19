@@ -12,6 +12,7 @@ from recognizer.core.constants import (
     DEFAULT_ENROLLMENT_SAMPLES,
     DEFAULT_FACE_CONFIDENCE,
     DEFAULT_FACE_CONFIRM_FRAMES,
+    DEFAULT_FACE_DEFAULT_ROLE,
     DEFAULT_FACE_MATCH_THRESHOLD,
     DEFAULT_FACE_RELEASE_FRAMES,
     DEFAULT_FACE_STORE_DIR,
@@ -59,10 +60,12 @@ from recognizer.core.constants import (
     DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
+    DEFAULT_REQUIRE_LOGIN,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
     DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
     DEFAULT_SCROLL_LINES,
     DEFAULT_SCROLL_REPEAT_SECONDS,
+    DEFAULT_SESSION_TIMEOUT_SECONDS,
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
@@ -84,6 +87,7 @@ from recognizer.core.domain.gesture import (
     RulesPriority,
 )
 from recognizer.core.domain.hand import Handedness
+from recognizer.core.domain.identity import Role
 from recognizer.core.domain.pointer import ScrollDirection, SmoothingKind
 from recognizer.core.domain.tracking import LineAxis
 from recognizer.core.errors import ConfigError
@@ -618,6 +622,11 @@ class FaceAuthConfig(BaseModel):
     ``max_face_width_ratio`` guian la distancia; ``min_sharpness`` exige
     quietud; ``enrollment_samples`` fija las muestras del enrolamiento;
     ``match_threshold`` es la distancia coseno maxima aceptada.
+    ``default_role`` es el rol de los nuevos enrolados (el primero es admin);
+    ``session_timeout_seconds`` es la vigencia de la sesion tras el login
+    (0 = sin expiracion); ``require_login`` filtra el menu por rol (false =
+    modo abierto, sin sesion todo permitido); ``permissions`` es un override
+    por app (``{app_id: [roles]}``) sobre la matriz por defecto.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -632,6 +641,10 @@ class FaceAuthConfig(BaseModel):
     confirm_frames: int = Field(default=DEFAULT_FACE_CONFIRM_FRAMES, ge=1)
     release_frames: int = Field(default=DEFAULT_FACE_RELEASE_FRAMES, ge=1)
     store_dir: str = Field(default=DEFAULT_FACE_STORE_DIR, min_length=1)
+    default_role: Role = Role(DEFAULT_FACE_DEFAULT_ROLE)
+    session_timeout_seconds: int = Field(default=DEFAULT_SESSION_TIMEOUT_SECONDS, ge=0)
+    require_login: bool = DEFAULT_REQUIRE_LOGIN
+    permissions: dict[str, list[Role]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def _validate_widths(self) -> Self:
@@ -639,6 +652,16 @@ class FaceAuthConfig(BaseModel):
             msg = "La captura facial requiere min_face_width_ratio < max_face_width_ratio."
             raise ValueError(msg)
         return self
+
+    @field_validator("permissions")
+    @classmethod
+    def _validate_permission_apps(cls, permissions: dict[str, list[Role]]) -> dict[str, list[Role]]:
+        known = {app.value for app in AppId}
+        for key in permissions:
+            if key not in known:
+                msg = f"Permiso para aplicacion desconocida: {key}"
+                raise ValueError(msg)
+        return permissions
 
 
 class AppsConfig(BaseModel):
