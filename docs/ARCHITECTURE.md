@@ -158,9 +158,12 @@ La app del contador usa una sola vía de inferencia: `UltralyticsDetector.track`
 El conteo es dominio puro en `core/domain/tracking.py`: `TrackedDetection` (frozen)
 compone `Detection` + `track_id`; `CountingLine` (eje horizontal/vertical y `position`
 normalizada) divide el fotograma; `LineCrossingCounter` registra cruces por track con
-debounce `confirm_frames` e `invert`, sin importar infraestructura. El overlay vive en
-`adapters/overlay_people.py` (`draw_people_overlay`: cajas+ID, línea y HUD). La línea se
-configura en `people_counter.line` (`config.yaml`).
+debounce `confirm_frames` e `invert`, sin importar infraestructura. La línea admite una
+banda muerta (hysteresis) `margin` alrededor de `position` que evita cruces fantasma y el
+jitter del centro, y `track_timeout_frames` purga el estado de los tracks no vistos para
+que un ID muerto no cuente al reaparecer. El overlay vive en `adapters/overlay_people.py`
+(`draw_people_overlay`: cajas+ID, línea, banda muerta y HUD). La línea se configura en
+`people_counter.line` (`config.yaml`).
 
 ## Arquitectura dual: Web + Desktop
 

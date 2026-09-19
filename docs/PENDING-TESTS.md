@@ -280,6 +280,18 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 - [ ] Anti-jitter: quedarse justo sobre la línea no debe sumar; `confirm_frames: 2`
   exige 2 fotogramas consecutivos al otro lado. Ajustar si hay doble conteo o cruces
   perdidos.
+- [ ] Banda muerta (`people_counter.line.margin`, 0.05 por defecto): el overlay dibuja la
+  línea amarilla y, a ambos lados, una banda tenue. Detenerse y oscilar el centro dentro de
+  la banda no debe cambiar el conteo; solo se cuenta al superar el borde de la banda.
+- [ ] Un track que aparece ya dentro de la banda no debe contar hasta confirmar un lado
+  (sin cruce fantasma al alejarse); comprobar en el HUD que `Entradas`/`Salidas` no suman
+  con solo aparecer junto a la línea.
+- [ ] Calibrar `margin`: subirlo si el jitter sobre la línea sigue contando, bajarlo si
+  cruces reales cerca de la línea no se cuentan. Con `margin: 0` no se dibuja la banda.
+- [ ] Purga por timeout (`people_counter.line.track_timeout_frames`, 30): tapar y descubrir
+  a una persona o salir y volver a entrar rápido; el ID debe renovarse y no contar un cruce
+  fantasma al reaparecer. Subir/bajar el valor si quedan IDs muertos o se purgan tracks
+  reales.
 - [ ] `ESC`/`q`/`X` vuelve al menú; el resumen final reporta personas, entradas y
   salidas. Anotar FPS con 0/1/2 personas.
 - [ ] Nota: durante el warm-up del tracker el HUD puede mostrar `Personas: 0` hasta

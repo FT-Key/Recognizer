@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 12 (postura con YOLO pose) + fix 12b completadas; siguiente: 13 (Detector EPP de obra, requiere entrenamiento)
-- **Rama:** `stage/12b-posture-fix` (12 mergeada a `dev` en `4304ec2`)
-- **Actualizado:** 2026-09-18
+- **Fase actual:** etapa 12 + fix 12b y fix 10c-fix (contador) completados; siguiente: 13 (Detector EPP de obra, requiere entrenamiento)
+- **Rama:** `stage/10c-fix-counter-sync` (12 mergeada a `dev` en `4304ec2`, 12b en `74bad81`)
+- **Actualizado:** 2026-09-19
 
 ## Hecho
 - Repo `FT-Key/Recognizer` (`main`/`dev`); uv + Python 3.12; deps (+`ultralytics`).
@@ -27,6 +27,8 @@
 - Gate 12 verde: pytest **904 passed** (96.76%), mypy strict 158 archivos, ruff, check-arch 3/3, smoke 9.7 FPS (1280x720). Reviewer: apta para merge (menores aplicados).
 - Fix 12b: `measure_posture` con medición parcial (métricas que pueden faltar; escala por hombros/torso/cabeza; un solo hombro/cadera) y calibración en `PostureMonitor` (`calibration_frames` + `tolerances`, mediana de la postura correcta); `PostureSnapshot.calibrating` + HUD "Calibrando"; debounce tolerante a fotogramas no evaluables.
 - Gate 12b verde: pytest **946 passed** (96.67%), mypy strict 158 archivos, ruff, check-arch 3/3; app de postura headless EXIT 0 con modelo real. Reviewer: apta para merge (menores aplicados).
+- Fix 10c-fix (contador): `CountingLine` con banda muerta `margin` (hysteresis, `zone()` sustituye a `side()`, `SIDE_UNKNOWN` en banda) y `LineCrossingCounter` con lado inicial inmediato, `confirm_frames` solo en cambios de lado y purga `track_timeout_frames`; overlay dibuja la banda; config `people_counter.line.margin` (0.05) y `track_timeout_frames` (30).
+- Gate 10c-fix verde: pytest **973 passed** (96.75%), mypy strict 158 archivos, ruff, check-arch 3/3; `tracking.py` y `overlay_people.py` al 100%. Reviewer: apta para merge (menores aplicados).
 
 ## Siguiente (etapa 13 — Detector EPP de obra)
 - Requiere entrenamiento (EPP/cascos/chalecos). Roadmap: 14 inventario, 15 facial (checklist en `docs/WORKFLOW.md`, skill `new-app`).
@@ -34,7 +36,7 @@
 ## Bloqueos / notas
 - Usuario verifica manual: ESC/q+X, ventana del menú con cámara real y **aspecto visual del rediseño 10d**.
 - Verificación del `.exe` con YOLO/torch y con YOLO pose pendiente (bundle ~1 GB, excluido); regenerar `.exe` para probar assets/icono.
-- Calibrar con cámara real: `posture.calibration_frames` y `posture.tolerances` (o los umbrales absolutos si `calibration_frames: 0`), `anti_intruder.zone` y `alert.repeat_seconds`, `people_counter.line`, `min_confidence` y `swap_handedness`.
+- Calibrar con cámara real: `posture.calibration_frames` y `posture.tolerances` (o los umbrales absolutos si `calibration_frames: 0`), `anti_intruder.zone` y `alert.repeat_seconds`, `people_counter.line` (`position`, `margin` y `track_timeout_frames`), `min_confidence` y `swap_handedness`.
 - "Cabeza adelante" solo mide desvío horizontal en 2D (limitación conocida).
 - `PENDING-TESTS.md`: verificaciones manuales de etapas 0-9b las hace el usuario.
 - Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.
