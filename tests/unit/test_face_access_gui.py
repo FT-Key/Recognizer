@@ -30,7 +30,7 @@ class FakeToplevel:
 
     instances: ClassVar[list[FakeToplevel]] = []
 
-    def __init__(self) -> None:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
         self.titles: list[str] = []
         self.protocols: dict[str, Callable[[], None]] = {}
         self.bindings: dict[str, Callable[..., None]] = {}
@@ -38,10 +38,14 @@ class FakeToplevel:
         self.deiconify_calls = 0
         self.destroy_calls = 0
         self.wait_window_calls = 0
+        self.grab_calls = 0
         FakeToplevel.instances.append(self)
 
     def title(self, name: str) -> None:
         self.titles.append(name)
+
+    def grab_set(self) -> None:
+        self.grab_calls += 1
 
     def configure(self, *_args: object, **_kwargs: object) -> None:
         pass
@@ -249,6 +253,7 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tkinter, "Label", FakeLabel)
     monkeypatch.setattr(tkinter, "Button", FakeButton)
     monkeypatch.setattr(tkinter, "PhotoImage", FakePhotoImage)
+    monkeypatch.setattr(tkinter, "Toplevel", FakeToplevel)
     monkeypatch.setattr(tkinter, "ttk", FakeTtk, raising=False)
     monkeypatch.setattr(tkinter, "messagebox", object(), raising=False)
 
@@ -286,6 +291,10 @@ def _run(
     )
 
 
+def _has_button(text: str) -> bool:
+    return any(button.text == text for button in FakeButton.instances)
+
+
 def test_non_admin_filters_by_face_and_hides_photos(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     repo = FakeAccessRepository((_event("F-0001", "Ada", TS_OLD), _event("F-0002", "Bo", TS_NEW)))
@@ -298,11 +307,7 @@ def test_non_admin_filters_by_face_and_hides_photos(monkeypatch: pytest.MonkeyPa
     tree = FakeTreeview.instances[0]
     assert tuple(tree.rows) == ("0",)
     assert tree.rows["0"][2] == "F-0002"
-    assert not any(
-        label.text == face_access_gui.ACCESS_PHOTO_LABEL for label in FakeLabel.instances
-    )
-    tree.set_selection(["0"])
-    tree.bindings[menu_gui.EVENT_TREE_SELECT](None)
+    assert not _has_button(face_access_gui.ACCESS_VIEW_TEXT)
     assert FakePhotoImage.instances == []
 
 
@@ -317,10 +322,12 @@ def test_admin_sees_all_events(monkeypatch: pytest.MonkeyPatch) -> None:
     assert repo.find_calls == []
     tree = FakeTreeview.instances[0]
     assert tuple(tree.rows) == ("0", "1")
-    assert any(label.text == face_access_gui.ACCESS_PHOTO_LABEL for label in FakeLabel.instances)
+    assert _has_button(face_access_gui.ACCESS_VIEW_TEXT)
 
 
-def test_admin_select_shows_photo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_admin_view_image_opens_modal_with_photo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _install_fakes(monkeypatch)
     repo = FileAccessLogRepository(tmp_path / "access")
     repo.append(event=_event("F-0001", "Ada", TS_NEW), image=PNG_BYTES)
@@ -328,9 +335,25 @@ def test_admin_select_shows_photo(tmp_path: Path, monkeypatch: pytest.MonkeyPatc
     _run(_identity("F-0001", Role.ADMIN), repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["0"])
-    tree.bindings[menu_gui.EVENT_TREE_SELECT](None)
+    _press(_button_with_text(face_access_gui.ACCESS_VIEW_TEXT).command)
 
     assert len(FakePhotoImage.instances) == 1
+    modal = FakeToplevel.instances[-1]
+    assert face_access_gui.ACCESS_MODAL_TITLE in modal.titles
+    assert modal.grab_calls == 1
+
+
+def test_view_image_without_selection_opens_no_modal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _install_fakes(monkeypatch)
+    repo = FileAccessLogRepository(tmp_path / "access")
+    repo.append(event=_event("F-0001", "Ada", TS_NEW), image=PNG_BYTES)
+
+    _run(_identity("F-0001", Role.ADMIN), repo)
+    _press(_button_with_text(face_access_gui.ACCESS_VIEW_TEXT).command)
+
+    assert FakePhotoImage.instances == []
 
 
 def test_non_admin_never_shows_photo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -340,12 +363,7 @@ def test_non_admin_never_shows_photo(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
     _run(_identity("F-0001", Role.OPERATOR), repo, show_photos=True)
 
-    assert not any(
-        label.text == face_access_gui.ACCESS_PHOTO_LABEL for label in FakeLabel.instances
-    )
-    tree = FakeTreeview.instances[0]
-    tree.set_selection(["0"])
-    tree.bindings[menu_gui.EVENT_TREE_SELECT](None)
+    assert not _has_button(face_access_gui.ACCESS_VIEW_TEXT)
     assert FakePhotoImage.instances == []
 
 
