@@ -52,6 +52,8 @@ FACE_LOGIN_PROMPT = "Inicia sesión con tu rostro"
 FACE_ENROLL_TEXT = "Enrolar"
 FACE_LOGIN_TEXT = "Iniciar sesión"
 FACE_LOGOUT_TEXT = "Cerrar sesión"
+FACE_LOGOUT_CONFIRM_TITLE = "Cerrar sesión"
+FACE_LOGOUT_CONFIRM_TEXT = "¿Seguro que quieres cerrar la sesión?"
 FACE_USERS_TEXT = "Usuarios"
 FACE_ACCESS_TEXT = "Accesos"
 FACE_MY_ACCESS_TEXT = "Mis accesos"
@@ -158,8 +160,25 @@ def run_face_submenu(
         action: Callable[[], None],
         *,
         primary: bool,
+        danger: bool = False,
     ) -> tkinter.Button:
-        """Boton vintage con el mismo estilo del menu principal (raised 3px)."""
+        """Boton vintage con el mismo estilo del menu principal (raised 3px).
+
+        ``danger=True`` pinta el boton en rojo (acciones destructivas, como
+        cerrar sesion) manteniendo el mismo relieve y tipografia.
+        """
+        if danger:
+            background = theme.danger
+            foreground = theme.primary_contrast
+            active_background = theme.danger
+        elif primary:
+            background = theme.primary
+            foreground = theme.primary_contrast
+            active_background = theme.primary_strong
+        else:
+            background = theme.surface_alt
+            foreground = theme.text
+            active_background = theme.surface
         return tkinter.Button(
             parent,
             text=text,
@@ -169,10 +188,10 @@ def run_face_submenu(
             padx=theme.pad_button_x,
             pady=theme.space_1,
             font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
-            bg=theme.primary if primary else theme.surface_alt,
-            fg=theme.primary_contrast if primary else theme.text,
-            activebackground=theme.primary_strong if primary else theme.surface,
-            activeforeground=theme.primary_contrast if primary else theme.text,
+            bg=background,
+            fg=foreground,
+            activebackground=active_background,
+            activeforeground=foreground,
             cursor=menu_gui.CURSOR_HAND,
             takefocus=True,
             highlightthickness=menu_gui.FOCUS_HIGHLIGHT_WIDTH,
@@ -308,6 +327,11 @@ def run_face_submenu(
         refresh_session()
 
     def do_logout() -> None:
+        from tkinter import messagebox
+
+        if not messagebox.askyesno(FACE_LOGOUT_CONFIRM_TITLE, FACE_LOGOUT_CONFIRM_TEXT):
+            logger.info("Cierre de sesion cancelado.")
+            return
         runner = logout_runner if logout_runner is not None else _default_logout_runner()
         window.withdraw()
         try:
@@ -363,7 +387,6 @@ def run_face_submenu(
     users_button = _make_button(actions, FACE_USERS_TEXT, do_users, primary=False)
     access_button = _make_button(actions, FACE_ACCESS_TEXT, do_access, primary=False)
     my_access_button = _make_button(actions, FACE_MY_ACCESS_TEXT, do_my_access, primary=False)
-    logout_button = _make_button(actions, FACE_LOGOUT_TEXT, do_logout, primary=False)
     login_button = _make_button(session_card, FACE_LOGIN_TEXT, do_login, primary=True)
 
     footer = tkinter.Frame(window, bg=theme.surface_alt)
@@ -376,8 +399,13 @@ def run_face_submenu(
         bg=theme.surface_alt,
         anchor=menu_gui.ANCHOR_WEST,
     ).pack(side=menu_gui.SIDE_LEFT, padx=theme.pad_footer, pady=theme.pad_footer)
-    back_button = _make_button(footer, FACE_BACK_TEXT, close, primary=False)
-    back_button.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
+    footer_actions = tkinter.Frame(footer, bg=theme.surface_alt)
+    footer_actions.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
+    # "Cerrar sesion" va al final (a la derecha de Volver) y en rojo.
+    logout_button = _make_button(
+        footer_actions, FACE_LOGOUT_TEXT, do_logout, primary=False, danger=True
+    )
+    back_button = _make_button(footer_actions, FACE_BACK_TEXT, close, primary=False)
 
     def _render_session(identity: Identity) -> None:
         """Pinta la tarjeta de sesion y el boton de login segun haya login."""
@@ -444,10 +472,15 @@ def run_face_submenu(
         else:
             _hide(enroll_button)
             logger.warning(FACE_ENROLL_DENIED_TEMPLATE.format(role=fresh.role.value))
+        # "Cerrar sesion" siempre al final del pie y en rojo; "Volver" a su
+        # izquierda. Se re-empaquetan en orden para que el rojo quede a la derecha.
+        logout_button.pack_forget()
+        back_button.pack_forget()
         if logged_in:
-            _show(logout_button)
+            logout_button.pack(side=menu_gui.SIDE_RIGHT)
+            back_button.pack(side=menu_gui.SIDE_RIGHT, padx=(menu_gui.BORDER_NONE, theme.space_1))
         else:
-            _hide(logout_button)
+            back_button.pack(side=menu_gui.SIDE_RIGHT)
         if is_admin:
             _show(users_button)
             _show(access_button)
