@@ -80,6 +80,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.ANTI_INTRUDER,
         title="Anti-intrusos",
         description="Detecta personas en una zona y dispara una alerta; no requiere entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.POSTURE,

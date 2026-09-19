@@ -6,6 +6,17 @@ from recognizer.core.domain.detection import Detection
 from recognizer.core.domain.frame import Frame
 
 
+class DetectorConfig(Protocol):
+    """Parametros minimos que necesita un detector (contador, anti-intrusos...).
+
+    Es estructural: cualquier modelo de configuracion con ``model_path`` y
+    ``min_confidence`` sirve, sin acoplar el adaptador a una app concreta.
+    """
+
+    model_path: str
+    min_confidence: float
+
+
 class ObjectDetector(Protocol):
     """Detecta objetos sobre fotogramas (YOLO hoy, otro motor en el futuro)."""
 

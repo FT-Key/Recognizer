@@ -13,6 +13,13 @@ from recognizer.core.constants import (
     DEFAULT_FRAME_WIDTH,
     DEFAULT_GESTURE_MODEL_PATH,
     DEFAULT_HAND_MODEL_PATH,
+    DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS,
+    DEFAULT_INTRUSION_CONFIRM_FRAMES,
+    DEFAULT_INTRUSION_RELEASE_FRAMES,
+    DEFAULT_INTRUSION_ZONE_X_MAX,
+    DEFAULT_INTRUSION_ZONE_X_MIN,
+    DEFAULT_INTRUSION_ZONE_Y_MAX,
+    DEFAULT_INTRUSION_ZONE_Y_MIN,
     DEFAULT_LINE_CONFIRM_FRAMES,
     DEFAULT_LINE_POSITION,
     DEFAULT_MAX_HANDS,
@@ -475,6 +482,51 @@ class PeopleCounterConfig(BaseModel):
     line: CountingLineConfig = Field(default_factory=CountingLineConfig)
 
 
+class IntrusionZoneConfig(BaseModel):
+    """Zona de intrusion del anti-intrusos: rectangulo normalizado 0..1."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    x_min: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MIN, ge=0, le=1)
+    y_min: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MIN, ge=0, le=1)
+    x_max: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MAX, ge=0, le=1)
+    y_max: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MAX, ge=0, le=1)
+    confirm_frames: int = Field(default=DEFAULT_INTRUSION_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_INTRUSION_RELEASE_FRAMES, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_rectangle(self) -> Self:
+        if self.x_min >= self.x_max:
+            msg = "La zona de intrusion requiere x_min < x_max."
+            raise ValueError(msg)
+        if self.y_min >= self.y_max:
+            msg = "La zona de intrusion requiere y_min < y_max."
+            raise ValueError(msg)
+        return self
+
+
+class IntrusionAlertConfig(BaseModel):
+    """Alerta sonora del anti-intrusos: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class AntiIntruderConfig(BaseModel):
+    """Anti-intrusos: modelo YOLO, umbrales, zona de intrusion y alerta."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    zone: IntrusionZoneConfig = Field(default_factory=IntrusionZoneConfig)
+    alert: IntrusionAlertConfig = Field(default_factory=IntrusionAlertConfig)
+
+
 class AppsConfig(BaseModel):
     """Habilitacion de apps del launcher (override sobre el catalogo).
 
@@ -503,6 +555,7 @@ class AppConfig(BaseModel):
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
     people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
+    anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:

@@ -23,7 +23,7 @@ etapa que se necesite.
 | 10b-fix | Menú GUI + salida a menú (ESC/q+X, tkinter) | completada | [stage-10b-fix-menu-gui.md](stage-10b-fix-menu-gui.md) |
 | 10d | Rediseño UX/UI del menú (estética Vintage + logo/icono) | completada | [stage-10d-menu-ui.md](stage-10d-menu-ui.md) |
 | 10c | Contador de personas: tracking, zona/línea y overlay | completada | [stage-10c-people-counter-tracking.md](stage-10c-people-counter-tracking.md) |
-| 11 | Anti-intrusos (zona + alerta) | pendiente | - |
+| 11 | Anti-intrusos (zona + alerta) | completada | [stage-11-anti-intruder.md](stage-11-anti-intruder.md) |
 | 12 | Postura ergonómica (YOLO pose) | pendiente | - |
 | 13 | Detector EPP de obra (requiere entrenamiento) | pendiente | - |
 | 14 | Inventario por cámara (requiere entrenamiento) | pendiente | - |

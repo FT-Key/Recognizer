@@ -6,7 +6,6 @@ from typing import Protocol, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from recognizer.core.config import PeopleCounterConfig
 from recognizer.core.constants import DEFAULT_TRACKER_CONFIG
 from recognizer.core.domain.detection import (
     MAX_NORMALIZED_COORDINATE,
@@ -17,7 +16,7 @@ from recognizer.core.domain.detection import (
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.tracking import TrackedDetection
 from recognizer.core.errors import DetectorError
-from recognizer.core.ports.object_detector import ObjectDetector
+from recognizer.core.ports.object_detector import DetectorConfig, ObjectDetector
 
 
 class _ScalarLike(Protocol):
@@ -203,7 +202,7 @@ def _map_tracked_results(
 class UltralyticsDetectorFacade:
     """Fachada real sobre ultralytics.YOLO."""
 
-    def __init__(self, config: PeopleCounterConfig) -> None:
+    def __init__(self, config: DetectorConfig) -> None:
         self._config = config
         self._model: _ModelLike | None = None
 
@@ -285,8 +284,8 @@ class UltralyticsDetector(ObjectDetector):
 
     def __init__(
         self,
-        config: PeopleCounterConfig,
-        facade_factory: Callable[[PeopleCounterConfig], ObjectDetectorFacade] | None = None,
+        config: DetectorConfig,
+        facade_factory: Callable[[DetectorConfig], ObjectDetectorFacade] | None = None,
     ) -> None:
         self._config = config
         self._facade_factory = facade_factory or UltralyticsDetectorFacade

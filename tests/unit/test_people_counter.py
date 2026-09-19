@@ -44,6 +44,7 @@ from recognizer.core.domain.detection import (
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.tracking import CountingLine, TrackedDetection
 from recognizer.core.errors import ConfigError, DetectorError
+from recognizer.core.ports.object_detector import DetectorConfig
 from recognizer.core.ports.object_tracker import ObjectTracker
 
 FRAME_SHAPE = (48, 64, 3)
@@ -192,7 +193,7 @@ def test_app_config_includes_people_counter() -> None:
 class FakeFacade:
     """Fachada fake con guion de detecciones y registro de llamadas."""
 
-    def __init__(self, config: PeopleCounterConfig) -> None:
+    def __init__(self, config: DetectorConfig) -> None:
         self.config = config
         self.detections: tuple[Detection, ...] = ()
         self.tracked: tuple[TrackedDetection, ...] = ()
@@ -233,7 +234,7 @@ def _detector_with_fake(
 ) -> tuple[UltralyticsDetector, FakeFacade]:
     fake: FakeFacade | None = None
 
-    def factory(config: PeopleCounterConfig) -> FakeFacade:
+    def factory(config: DetectorConfig) -> FakeFacade:
         nonlocal fake
         fake = FakeFacade(config)
         fake.detections = script
@@ -311,7 +312,7 @@ def test_detector_close_is_idempotent_and_releases_facade() -> None:
 def test_detector_context_manager_opens_and_closes() -> None:
     seen: list[FakeFacade] = []
 
-    def factory(config: PeopleCounterConfig) -> FakeFacade:
+    def factory(config: DetectorConfig) -> FakeFacade:
         fake = FakeFacade(config)
         seen.append(fake)
         return fake

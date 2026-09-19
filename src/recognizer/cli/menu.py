@@ -65,6 +65,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.people_counter import run_people_counter
 
             return run_people_counter
+        case AppId.ANTI_INTRUDER:
+            from recognizer.cli.apps.anti_intruder import run_anti_intruder
+
+            return run_anti_intruder
         case _:
             return None
 

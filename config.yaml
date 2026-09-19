@@ -9,7 +9,7 @@ apps:
   enabled:
     gestures: true
     people_counter: true
-    # anti_intruder: true
+    anti_intruder: true
     # posture: true
     # ppe_detector: true
     # inventory: true
@@ -189,6 +189,31 @@ people_counter:
     position: 0.5
     invert: false
     confirm_frames: 2
+
+# Anti-intrusos (etapa 11): tracking YOLO + zona de intrusion + alerta sonora.
+# zone: rectangulo normalizado 0..1 sobre el fotograma. Un objeto se considera
+#   dentro si el centro de su caja cae en la zona.
+#   enabled: false desactiva la zona (solo muestra cajas, sin alerta).
+#   confirm_frames: fotogramas consecutivos dentro para confirmar al intruso.
+#   release_frames: fotogramas consecutivos fuera (o ausente) para liberarlo.
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dura la intrusion (0 = una vez).
+anti_intruder:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
+  zone:
+    enabled: true
+    x_min: 0.25
+    y_min: 0.4
+    x_max: 0.75
+    y_max: 0.9
+    confirm_frames: 3
+    release_frames: 5
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla

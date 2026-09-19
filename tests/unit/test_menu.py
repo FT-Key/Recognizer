@@ -80,11 +80,13 @@ def test_availability_label_variants() -> None:
 
 def test_resolve_runner_returns_implemented_runners() -> None:
     from recognizer.cli.app import run_gestures
+    from recognizer.cli.apps.anti_intruder import run_anti_intruder
     from recognizer.cli.apps.people_counter import run_people_counter
 
     assert resolve_runner(AppId.GESTURES) is run_gestures
     assert resolve_runner(AppId.PEOPLE_COUNTER) is run_people_counter
-    assert resolve_runner(AppId.ANTI_INTRUDER) is None
+    assert resolve_runner(AppId.ANTI_INTRUDER) is run_anti_intruder
+    assert resolve_runner(AppId.POSTURE) is None
 
 
 def test_run_menu_runs_selected_app_then_exits(
@@ -140,7 +142,7 @@ def test_run_menu_skips_coming_soon_without_runner(
     result = run_menu(
         request=REQUEST,
         apps_config=AppsConfig(),
-        input_fn=_scripted(["3", "0"]),
+        input_fn=_scripted(["4", "0"]),
         logger=TEST_LOGGER,
     )
 
