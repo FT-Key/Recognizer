@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** fix 15b-face-ux (submenú facial + selector cámara + marco objetivo) completado; siguiente: 13 (EPP) o 15c (DB distribuida)
-- **Rama:** `stage/15b-fix-face-ux`
+- **Fase actual:** fix 15b-ux2 (contraste overlay + cierre submenú facial) completado; siguiente: 13 (EPP) o 15c (DB distribuida)
+- **Rama:** `stage/15b-fix2-face-ux`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -35,7 +35,9 @@
 - Etapa 15b: roles `admin > operator > viewer` (`identity.py` + `PolicyEngine`, `IdentityProvider`, `FileIdentityProvider` con `session.json`); `EnrolledFace.role` + migración legado; menú filtra por rol y revalida; `FaceAuthConfig` + `AuthError`; merge `fcb7c23`.
 - Gate 15b verde: pytest **1099 passed** (94.65%), mypy 177, ruff, check-arch 3/3. Reviewer: apta (TOCTOU GUI + fallback viewer + `mkstemp`).
 - Fix 15b-face-ux: submenú facial vintage (`face_menu_gui.py` + nombre/rol), selector cámara en header (`CameraEnumerator`, `device` vía `replace(request)`), marco objetivo en `overlay_face` ligado a `min_face_width_ratio` (default 0.18 + MAX); tests `test_face_menu_gui`/`test_camera_discovery`/`test_face_overlay`.
-- Gate fix 15b-face-ux verde: lint OK, mypy strict 183, pytest **1119 passed** (94.59%), check-arch 3/3. Reviewer: apta (refresh permisos + `q`). Commits pendientes `git-ops`.
+- Gate fix 15b-face-ux verde: lint OK, mypy strict 183, pytest **1119 passed** (94.59%), check-arch 3/3. Reviewer: apta (refresh permisos + `q`).
+- Fix 15b-ux2: overlay facial legible (paneles oscuros + texto claro) y cierre del submenú con `Toplevel.wait_window()` (antes `mainloop()` anidado dejaba el proceso colgado sin interfaz).
+- Gate fix 15b-ux2 verde: lint OK, mypy strict 183, pytest **1119 passed** (94.67%), check-arch 3/3. Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).

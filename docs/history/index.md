@@ -33,3 +33,5 @@ etapa que se necesite.
 | 15 | Reconocimiento facial (enrolamiento, login y roles) | pendiente | - |
 | 15a | Enrolamiento + login facial (archivos locales) | completada | [stage-15a-face-enroll-login.md](stage-15a-face-enroll-login.md) |
 | 15b | Roles y permisos sobre login facial | completada | [stage-15b-face-roles.md](stage-15b-face-roles.md) |
+| 15b-ux | Fix facial: submenú gráfico + selector cámara + marco objetivo | completada | [stage-15b-fix-face-ux.md](stage-15b-fix-face-ux.md) |
+| 15b-ux2 | Fix facial: contraste del overlay + cierre del submenú | completada | [stage-15b-fix2-face-ux.md](stage-15b-fix2-face-ux.md) |

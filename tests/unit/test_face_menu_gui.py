@@ -42,6 +42,7 @@ class FakeToplevel:
         self.deiconify_calls = 0
         self.destroy_calls = 0
         self.mainloop_calls = 0
+        self.wait_window_calls = 0
         FakeToplevel.instances.append(self)
 
     def title(self, name: str) -> None:
@@ -67,6 +68,9 @@ class FakeToplevel:
 
     def mainloop(self) -> None:
         self.mainloop_calls += 1
+
+    def wait_window(self, _window: object = None) -> None:
+        self.wait_window_calls += 1
 
 
 class _WidgetBase:
@@ -260,7 +264,8 @@ def test_face_submenu_shows_title_and_role_options(monkeypatch: pytest.MonkeyPat
 
     window = FakeToplevel.instances[0]
     assert window.titles == [face_menu_gui.FACE_SUBMENU_TITLE]
-    assert window.mainloop_calls == 1
+    assert window.wait_window_calls == 1
+    assert window.mainloop_calls == 0
     assert FakeOptionMenu.instances[0].options == ("admin", "operator", "viewer")
 
 

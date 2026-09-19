@@ -428,7 +428,11 @@ def run_face_submenu(
     window.bind(menu_gui.EVENT_KEY_Q_UPPER, lambda _event: close())
 
     try:
-        window.mainloop()
+        # `wait_window` espera SOLO a que se destruya este Toplevel: con un
+        # `mainloop()` anidado el bucle no termina al destruir la ventana
+        # (la raiz del menu sigue viva, aunque este oculta) y el proceso queda
+        # colgado sin interfaz.
+        window.wait_window()
     except KeyboardInterrupt:
         logger.info("Interrumpido; volviendo al menu.")
     return 0
