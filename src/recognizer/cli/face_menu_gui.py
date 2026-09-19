@@ -268,37 +268,54 @@ def run_face_submenu(
         padx=theme.pad_body,
         pady=theme.space_4,
     )
-    tkinter.Label(
-        body,
+    # Formulario de enrolamiento (nombre + rol). Solo tiene sentido cuando el
+    # usuario puede enrolar; si no, se oculta por completo (los datos no sirven).
+    enroll_form = tkinter.Frame(body, bg=theme.surface)
+    enroll_form.pack(fill=menu_gui.FILL_X)
+    name_label = tkinter.Label(
+        enroll_form,
         text=FACE_NAME_LABEL,
         font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
         fg=theme.text,
         bg=theme.surface,
         anchor=menu_gui.ANCHOR_WEST,
-    ).pack(fill=menu_gui.FILL_X)
-    name_entry = tkinter.Entry(body)
-    name_entry.pack(fill=menu_gui.FILL_X)
-    try:
-        name_entry.focus_set()
-    except Exception as exc:  # los fakes o Tk sin display pueden no enfocar
-        logger.debug("Sin foco inicial del nombre (%s).", exc)
-
-    tkinter.Label(
-        body,
+    )
+    name_entry = tkinter.Entry(enroll_form)
+    role_label = tkinter.Label(
+        enroll_form,
         text=FACE_ROLE_LABEL,
         font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
         fg=theme.text,
         bg=theme.surface,
         anchor=menu_gui.ANCHOR_WEST,
-    ).pack(fill=menu_gui.FILL_X)
+    )
     role_var = tkinter.StringVar()
     role_option: tkinter.OptionMenu | None = None
-    if allowed:
-        role_var.set(_default_role(request, allowed, logger=logger).value)
-        role_option = tkinter.OptionMenu(body, role_var, *(role.value for role in allowed))
+    role_option_values: tuple[str, ...] = ()
+    first_note = tkinter.Label(
+        enroll_form,
+        text=FACE_FIRST_NOTE_TEXT,
+        font=(body_family, theme.size_body_small),
+        fg=theme.text_muted,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    )
+    no_permission_label = tkinter.Label(
+        enroll_form,
+        text=FACE_NO_PERMISSION_TEXT,
+        font=(body_family, theme.size_body_small),
+        fg=theme.text_muted,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    )
+
+    def _build_role_option(roles: tuple[Role, ...]) -> tkinter.OptionMenu:
+        """Crea (o recrea) el selector de rol con las opciones permitidas."""
+        role_var.set(_default_role(request, roles, logger=logger).value)
+        option = tkinter.OptionMenu(enroll_form, role_var, *(role.value for role in roles))
         # El __init__ de OptionMenu en typeshed no declara los kwargs del
         # Menubutton; se aplican con `configure`, que si los acepta.
-        role_option.configure(
+        option.configure(
             relief=menu_gui.RELIEF_RAISED,
             bd=menu_gui.BUTTON_BORDER_WIDTH,
             font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
@@ -312,25 +329,45 @@ def run_face_submenu(
             highlightcolor=theme.primary_strong,
             anchor=menu_gui.ANCHOR_WEST,
         )
-        role_option.pack(fill=menu_gui.FILL_X)
-    else:
-        tkinter.Label(
-            body,
-            text=FACE_NO_PERMISSION_TEXT,
-            font=(body_family, theme.size_body_small),
-            fg=theme.text_muted,
-            bg=theme.surface,
-            anchor=menu_gui.ANCHOR_WEST,
-        ).pack(fill=menu_gui.FILL_X)
-    if is_first:
-        tkinter.Label(
-            body,
-            text=FACE_FIRST_NOTE_TEXT,
-            font=(body_family, theme.size_body_small),
-            fg=theme.text_muted,
-            bg=theme.surface,
-            anchor=menu_gui.ANCHOR_WEST,
-        ).pack(fill=menu_gui.FILL_X)
+        option.pack(fill=menu_gui.FILL_X)
+        return option
+
+    def _sync_enroll_form(roles: tuple[Role, ...], *, first: bool) -> None:
+        """Muestra el formulario solo si hay permiso; ajusta el selector de rol."""
+        nonlocal role_option, role_option_values
+        wanted = tuple(role.value for role in roles)
+        if roles:
+            name_label.pack(fill=menu_gui.FILL_X)
+            name_entry.pack(fill=menu_gui.FILL_X)
+            role_label.pack(fill=menu_gui.FILL_X)
+            if role_option is None or role_option_values != wanted:
+                if role_option is not None:
+                    role_option.pack_forget()
+                    role_option.destroy()
+                role_option = _build_role_option(roles)
+                role_option_values = wanted
+            no_permission_label.pack_forget()
+            if first:
+                first_note.pack(fill=menu_gui.FILL_X)
+            else:
+                first_note.pack_forget()
+            try:
+                name_entry.focus_set()
+            except Exception as exc:  # los fakes o Tk sin display pueden no enfocar
+                logger.debug("Sin foco inicial del nombre (%s).", exc)
+        else:
+            name_label.pack_forget()
+            name_entry.pack_forget()
+            role_label.pack_forget()
+            if role_option is not None:
+                role_option.pack_forget()
+                role_option.destroy()
+                role_option = None
+                role_option_values = ()
+            first_note.pack_forget()
+            no_permission_label.pack(fill=menu_gui.FILL_X)
+
+    _sync_enroll_form(allowed, first=is_first)
 
     footer = tkinter.Frame(window, bg=theme.surface_alt)
     footer.pack(side=menu_gui.SIDE_BOTTOM, fill=menu_gui.FILL_X)
@@ -500,6 +537,7 @@ def run_face_submenu(
         state["is_admin"] = is_admin
         raw_allowed = state["allowed"]
         allowed_now = raw_allowed if isinstance(raw_allowed, tuple) else ()
+        _sync_enroll_form(allowed_now, first=bool(state["is_first"]))
         if allowed_now:
             _show(enroll_button)
         else:

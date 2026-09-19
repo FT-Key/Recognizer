@@ -42,3 +42,4 @@ etapa que se necesite.
 | 15b-cost | Fix facial: modelos extra y tope de FPS | completada | [stage-15b-fix7-face-infer-cost.md](stage-15b-fix7-face-infer-cost.md) |
 | 15c | Gestión de usuarios, accesos y fotos | completada | [stage-15c-users-access.md](stage-15c-users-access.md) |
 | 15c-ux | Fix login: redirección automática + visor de foto modal | completada | [stage-15c-fix-login-redirect.md](stage-15c-fix-login-redirect.md) |
+| 15c-form | Fix facial: formulario de enrolamiento coherente + "Ver detalle" | completada | [stage-15c-fix-enroll-form.md](stage-15c-fix-enroll-form.md) |

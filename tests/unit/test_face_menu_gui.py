@@ -100,6 +100,9 @@ class _WidgetBase:
     def focus_set(self) -> None:
         pass
 
+    def destroy(self) -> None:
+        self.packed = False
+
 
 class FakeFrame(_WidgetBase):
     """Doble de tkinter.Frame sin display."""
@@ -400,6 +403,40 @@ def test_face_submenu_viewer_gets_warning_without_options(
     assert FakeOptionMenu.instances == []
     warnings = [label.text for label in FakeLabel.instances]
     assert face_menu_gui.FACE_NO_PERMISSION_TEXT in warnings
+
+
+def test_face_submenu_hides_enroll_form_without_permission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.VIEWER)),
+        logger=TEST_LOGGER,
+    )
+
+    labels = {label.text: label for label in FakeLabel.instances}
+    assert not labels[face_menu_gui.FACE_NAME_LABEL].packed
+    assert not labels[face_menu_gui.FACE_ROLE_LABEL].packed
+    assert labels[face_menu_gui.FACE_NO_PERMISSION_TEXT].packed
+
+
+def test_face_submenu_shows_enroll_form_for_admin(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.ADMIN)),
+        logger=TEST_LOGGER,
+    )
+
+    labels = {label.text: label for label in FakeLabel.instances}
+    assert labels[face_menu_gui.FACE_NAME_LABEL].packed
+    assert labels[face_menu_gui.FACE_ROLE_LABEL].packed
+    assert not labels[face_menu_gui.FACE_NO_PERMISSION_TEXT].packed
 
 
 def test_face_submenu_anonymous_gets_warning_without_options(
