@@ -34,6 +34,17 @@ for package in ("mediapipe",):
     binaries += pkg_binaries
     hiddenimports += pkg_hidden
 
+# InsightFace/onnxruntime (app facial): bundle pesado pero necesario para el
+# login facial en el .exe; si faltan en el entorno se omiten sin romper el spec.
+for package in ("insightface", "onnxruntime"):
+    try:
+        pkg_datas, pkg_binaries, pkg_hidden = collect_all(package)
+    except Exception:
+        continue
+    datas += pkg_datas
+    binaries += pkg_binaries
+    hiddenimports += pkg_hidden
+
 hiddenimports += collect_submodules("pynput")
 hiddenimports += collect_submodules("websocket")
 # El launcher importa cada app de forma perezosa dentro de una funcion; se
@@ -44,6 +55,7 @@ hiddenimports += [
     "recognizer.cli.apps.people_counter",
     "recognizer.cli.apps.anti_intruder",
     "recognizer.cli.apps.posture",
+    "recognizer.cli.apps.face_auth",
 ]
 # Assets de escritorio (icono .ico, logo .png y fuente pixel Silkscreen) que el
 # menu resuelve en tiempo de ejecucion via `recognizer.cli.paths.assets_dir()`

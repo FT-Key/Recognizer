@@ -11,8 +11,10 @@ requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "FT-Key" }]
 dependencies = [
+    "insightface>=0.7.1",
     "mediapipe>=1.0.1",
     "numpy>=2.5.3",
+    "onnxruntime>=1.17.1",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
@@ -94,6 +96,10 @@ module = ["ultralytics", "ultralytics.*", "torch", "torch.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = ["insightface", "insightface.*", "onnxruntime", "onnxruntime.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["websocket", "websocket.*"]
 ignore_missing_imports = true
 
@@ -135,7 +141,7 @@ forbidden_modules = [
 name = "core no depende de infraestructura"
 type = "forbidden"
 source_modules = ["recognizer.core"]
-forbidden_modules = ["cv2", "mediapipe", "pynput", "yaml", "fastapi", "ultralytics", "torch"]
+forbidden_modules = ["cv2", "mediapipe", "pynput", "yaml", "fastapi", "ultralytics", "torch", "insightface", "onnxruntime"]
 
 [[tool.importlinter.contracts]]
 name = "adapters no dependen de cli ni settings"

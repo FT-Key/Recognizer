@@ -104,6 +104,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.FACE_AUTH,
         title="Reconocimiento facial",
         description="Registra tu cara y saluda al entrar; requiere enrolamiento, no entrenamiento.",
+        implemented=True,
         preparation=AppPreparation.ENROLLMENT,
     ),
 )

@@ -73,6 +73,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.posture import run_posture
 
             return run_posture
+        case AppId.FACE_AUTH:
+            from recognizer.cli.apps.face_auth import run_face_auth
+
+            return run_face_auth
         case _:
             return None
 

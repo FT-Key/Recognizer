@@ -57,7 +57,9 @@ def test_render_catalog_marks_training_requirement() -> None:
     text = render_catalog(AppCatalog(), AppsConfig())
 
     assert "requiere entrenamiento" in text
-    assert "requiere enrolamiento" in text
+    # FACE_AUTH (enrolamiento) ya está implementada: su fila es [disponible].
+    assert "Reconocimiento facial" in text
+    assert LABEL_AVAILABLE in text
 
 
 def test_availability_label_variants() -> None:
