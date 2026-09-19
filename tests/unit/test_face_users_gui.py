@@ -30,7 +30,7 @@ class FakeToplevel:
 
     instances: ClassVar[list[FakeToplevel]] = []
 
-    def __init__(self) -> None:
+    def __init__(self, *_args: object, **_kwargs: object) -> None:
         self.titles: list[str] = []
         self.protocols: dict[str, Callable[[], None]] = {}
         self.bindings: dict[str, Callable[..., None]] = {}
@@ -38,6 +38,7 @@ class FakeToplevel:
         self.deiconify_calls = 0
         self.destroy_calls = 0
         self.wait_window_calls = 0
+        self.grab_calls = 0
         FakeToplevel.instances.append(self)
 
     def title(self, name: str) -> None:
@@ -45,6 +46,9 @@ class FakeToplevel:
 
     def configure(self, *_args: object, **_kwargs: object) -> None:
         pass
+
+    def grab_set(self) -> None:
+        self.grab_calls += 1
 
     def withdraw(self) -> None:
         self.withdraw_calls += 1
@@ -347,6 +351,7 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tkinter, "StringVar", FakeStringVar)
     monkeypatch.setattr(tkinter, "OptionMenu", FakeOptionMenu)
     monkeypatch.setattr(tkinter, "PhotoImage", FakePhotoImage)
+    monkeypatch.setattr(tkinter, "Toplevel", FakeToplevel)
     monkeypatch.setattr(tkinter, "ttk", FakeTtk, raising=False)
     monkeypatch.setattr(tkinter, "messagebox", FakeMessagebox, raising=False)
 
@@ -400,43 +405,55 @@ def test_admin_lists_all_faces(monkeypatch: pytest.MonkeyPatch) -> None:
     assert tree.rows["F-0002"][1] == "Bo"
 
 
-def test_select_loads_preview_photo(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detail_opens_modal_with_photo_and_grab(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     repo = FakeFaceRepository((_face(),), previews={"F-0001": PREVIEW_PATH})
 
     _run(Role.ADMIN, repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["F-0001"])
-    tree.bindings[menu_gui.EVENT_TREE_SELECT](None)
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
 
     assert len(FakePhotoImage.instances) == 1
-    preview_labels = [label for label in FakeLabel.instances if label.image]
-    assert preview_labels
-    assert preview_labels[-1].text == ""
+    modal = FakeToplevel.instances[-1]
+    assert face_users_gui.USERS_DETAIL_TITLE in modal.titles
+    assert modal.grab_calls == 1
+    assert modal.wait_window_calls == 1
 
 
-def test_select_without_preview_keeps_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detail_without_photo_shows_placeholder(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     repo = FakeFaceRepository((_face(),))
 
     _run(Role.ADMIN, repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["F-0001"])
-    tree.bindings[menu_gui.EVENT_TREE_SELECT](None)
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
 
     assert FakePhotoImage.instances == []
+    texts = [label.text for label in FakeLabel.instances]
+    assert face_users_gui.USERS_MODAL_NO_PHOTO in texts
 
 
-def test_edit_saves_name_and_role(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_detail_without_selection_opens_no_modal(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+
+    _run(Role.ADMIN, FakeFaceRepository((_face(),)))
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+
+    assert len(FakeToplevel.instances) == 1
+
+
+def test_edit_from_modal_saves_name_and_role(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     repo = FakeFaceRepository((_face(role=Role.OPERATOR),))
 
     _run(Role.ADMIN, repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
 
-    assert len(FakeToplevel.instances) == 2
     FakeEntry.instances[0].insert(0, "Ada Lovelace")
     FakeStringVar.instances[0].set("viewer")
     _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
@@ -453,20 +470,12 @@ def test_edit_empty_name_does_not_save(monkeypatch: pytest.MonkeyPatch) -> None:
     _run(Role.ADMIN, repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
     FakeEntry.instances[0].insert(0, "   ")
     _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
 
     assert repo.updated == []
-
-
-def test_edit_without_selection_opens_no_dialog(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fakes(monkeypatch)
-
-    _run(Role.ADMIN, FakeFaceRepository((_face(),)))
-    _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
-
-    assert len(FakeToplevel.instances) == 1
 
 
 def test_delete_confirmed_removes_face(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -496,7 +505,7 @@ def test_delete_cancelled_keeps_face(monkeypatch: pytest.MonkeyPatch) -> None:
     assert repo.deleted == []
 
 
-def test_reenroll_runs_runner_with_face_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_reenroll_from_modal_runs_runner_with_face_id(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     from recognizer.cli.apps import face_auth
 
@@ -517,6 +526,7 @@ def test_reenroll_runs_runner_with_face_id(monkeypatch: pytest.MonkeyPatch) -> N
     _run(Role.ADMIN, repo)
     tree = FakeTreeview.instances[0]
     tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_REENROLL_TEXT).command)
 
     assert seen == [("F-0001", True)]
