@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** fix 15c-ui (rediseño submenú facial + detalle de usuarios) completado; siguiente: 13 (EPP) o 15d (identidad distribuida)
-- **Rama:** `stage/15c-face-ui-redesign`
+- **Fase actual:** fix 15c-logout ("Cerrar sesión" rojo al final con confirmación) completado; siguiente: 13 (EPP) o 15d (identidad distribuida)
+- **Rama:** `stage/15c-fix-logout-button`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -57,6 +57,8 @@
 - Gate 15c-form verde: lint OK, mypy strict 199, pytest **1201 passed** (95.53%), check-arch 3/3.
 - Fix 15c-ui: submenú facial rediseñado (una sola línea de sesión —se corrigió el bug de `role_label` duplicado—, tarjeta de sesión + panel de login, botones agrupados); Nombre/Rol pasan al formulario `face_enroll_gui`; panel de usuarios con "Ver detalle" modal (foto + Editar + Re-enrolar).
 - Gate 15c-ui verde: lint OK, mypy strict 201, pytest **1206 passed** (95.46%), check-arch 3/3.
+- Fix 15c-logout: "Cerrar sesión" al final del pie, en rojo (`theme.danger`) y con confirmación (`askyesno`) para evitar clicks accidentales.
+- Gate 15c-logout verde: lint OK, mypy strict 201, pytest **1207 passed** (95.46%), check-arch 3/3. Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
