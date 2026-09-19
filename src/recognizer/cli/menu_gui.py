@@ -145,6 +145,9 @@ EVENT_SPACE: Final = "<space>"
 EVENT_UP: Final = "<Up>"
 EVENT_DOWN: Final = "<Down>"
 EVENT_DOUBLE_CLICK: Final = "<Double-Button-1>"
+EVENT_MOUSEWHEEL: Final = "<MouseWheel>"
+SCROLL_UNITS: Final = "units"
+WHEEL_DELTA: Final = 120
 TK_BREAK: Final = "break"
 TK_ALL: Final = "all"
 
@@ -371,6 +374,21 @@ def _event_handler(
         return TK_BREAK if consume else None
 
     return handler
+
+
+def _scroll_canvas(canvas: tkinter.Canvas, event: tkinter.Event) -> str:
+    """Desplaza la lista con la rueda del raton aunque el puntero este sobre un boton.
+
+    El evento se enlaza en la raiz (`Tk`), que forma parte de los `bindtags` de
+    todos sus descendientes, de modo que la rueda funciona sobre cualquier widget
+    de la lista y no solo sobre la barra de desplazamiento.
+    """
+    delta = getattr(event, "delta", 0)
+    if delta == 0:
+        return TK_BREAK
+    steps = max(1, abs(delta) // WHEEL_DELTA)
+    canvas.yview_scroll(-steps if delta > 0 else steps, SCROLL_UNITS)
+    return TK_BREAK
 
 
 def _register_display_font(*, logger: logging.Logger) -> str:
@@ -661,7 +679,7 @@ def run_gui_menu(
     for row in rows:
         selectable = row.selectable and row.app_id is not None
         row_frame = tkinter.Frame(body, bg=theme.surface)
-        row_frame.pack(fill=FILL_X, pady=theme.pad_row)
+        row_frame.pack(fill=FILL_X, padx=theme.space_1, pady=theme.pad_row)
         button = tkinter.Button(
             row_frame,
             text=BUTTON_TEXT_TEMPLATE.format(
@@ -699,7 +717,7 @@ def run_gui_menu(
             relief=RELIEF_RAISED,
             bd=BADGE_BORDER_WIDTH,
         )
-        badge.pack(side=SIDE_RIGHT, padx=(theme.space_2, BORDER_NONE))
+        badge.pack(side=SIDE_RIGHT, padx=(theme.space_2, theme.space_3))
         button.pack(side=SIDE_LEFT, fill=FILL_X, expand=True)
         if selectable:
             open_row_action = partial(open_row, row)
@@ -717,6 +735,7 @@ def run_gui_menu(
     root.bind(EVENT_SPACE, lambda _event: open_focused())
     root.bind(EVENT_UP, lambda _event: focus_at(focused_index - 1))
     root.bind(EVENT_DOWN, lambda _event: focus_at(focused_index + 1))
+    root.bind(EVENT_MOUSEWHEEL, lambda event: _scroll_canvas(canvas, event))
 
     try:
         root.mainloop()
