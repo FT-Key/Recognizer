@@ -1,12 +1,15 @@
 """Panel de gestion de usuarios enrolados (imperative shell) vintage.
 
-Solo admin: tabla de rostros con su foto de enrolamiento y acciones de editar
-(nombre/rol), re-enrolar (captura 5 muestras nuevas) y eliminar. ``tkinter`` y
-el runner de enrolamiento (que carga InsightFace) se importan dentro de las
-funciones para mantener la carga perezosa.
+Solo admin: tabla de rostros con acciones de ver detalle (foto + datos),
+editar (nombre/rol), re-enrolar (captura 5 muestras nuevas) y eliminar. La foto
+de enrolamiento se muestra en una ventana modal con ``grab_set``/``wait_window``
+en vez de una vista previa inline. ``tkinter`` y el runner de enrolamiento (que
+carga InsightFace) se importan dentro de las funciones para mantener la carga
+perezosa.
 
-Testabilidad: ``tk_factory`` inyecta el ``Toplevel`` y los tests parchean
-``tkinter.Frame/Label/Button/Entry/OptionMenu/StringVar/PhotoImage`` y
+Testabilidad: ``tk_factory`` inyecta el ``Toplevel`` principal; los modales usan
+``tkinter.Toplevel`` (parcheable). Los tests parchean
+``tkinter.Frame/Label/Button/Entry/OptionMenu/StringVar/PhotoImage/Toplevel`` y
 ``tkinter.ttk.Treeview``/``ttk.Scrollbar``. El repositorio y el proveedor de
 identidad son inyectables; por defecto se construyen desde ``request``.
 """
@@ -34,8 +37,12 @@ USERS_PANEL_TITLE = "Usuarios enrolados"
 USERS_HEADER_TITLE = "USUARIOS"
 USERS_HEADER_SUBTITLE = "edita, re-enrola o elimina rostros"
 USERS_TABLE_LABEL = "Rostros enrolados"
-USERS_PREVIEW_LABEL = "Foto de enrolamiento"
-USERS_PREVIEW_EMPTY = "sin foto"
+USERS_DETAIL_TEXT = "Ver detalle"
+USERS_DETAIL_TITLE = "Detalle del rostro"
+USERS_MODAL_NO_PHOTO = "sin foto de enrolamiento"
+USERS_MODAL_INFO_TEMPLATE = (
+    "ID: {face_id}\nNombre: {name}\nRol: {role}\nMuestras: {samples}\nFecha: {created_at}"
+)
 USERS_EDIT_TEXT = "Editar"
 USERS_REENROLL_TEXT = "Re-enrolar"
 USERS_DELETE_TEXT = "Eliminar"
@@ -56,8 +63,11 @@ USERS_COLUMNS = ("id", "name", "role", "samples", "created")
 USERS_COLUMN_HEADINGS = ("ID", "Nombre", "Rol", "Muestras", "Fecha")
 USERS_COLUMN_WIDTHS = (90, 220, 100, 90, 220)
 USERS_ROLE_CHOICES = (Role.ADMIN, Role.OPERATOR, Role.VIEWER)
-USERS_PREVIEW_WIDTH = 40
-USERS_PREVIEW_HEIGHT = 8
+USERS_PHOTO_ERROR = "Sin foto de %s (%s)."
+USERS_NAME_READ_ERROR = "No se pudo leer el nombre (%s)."
+USERS_REENROLL_LOG = "Re-enrolando %s (%s)... (ESC/q para volver)"
+USERS_DELETED_LOG = "Rostro eliminado: %s (%s)."
+USERS_UPDATED_LOG = "Rostro actualizado: %s (%s, rol %s)."
 
 
 def run_users_panel(
@@ -99,10 +109,10 @@ def run_users_panel(
     window.title(USERS_PANEL_TITLE)
     window.configure(bg=theme.surface)
     body_family = theme.font_body
-    state: dict[str, object] = {"preview": None}
+    state: dict[str, object] = {"photo": None}
 
     def _make_button(
-        parent: tkinter.Frame,
+        parent: tkinter.Misc,
         text: str,
         action: Callable[[], None],
         *,
@@ -188,50 +198,6 @@ def run_users_panel(
     scrollbar.pack(side=menu_gui.SIDE_RIGHT, fill=menu_gui.FILL_Y)
     tree.pack(side=menu_gui.SIDE_LEFT, fill=menu_gui.FILL_BOTH, expand=True)
 
-    tkinter.Label(
-        window,
-        text=USERS_PREVIEW_LABEL,
-        font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
-        fg=theme.text,
-        bg=theme.surface,
-        anchor=menu_gui.ANCHOR_WEST,
-    ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_2, menu_gui.BORDER_NONE))
-    preview_label = tkinter.Label(
-        window,
-        text=USERS_PREVIEW_EMPTY,
-        font=(body_family, theme.size_body_small),
-        fg=theme.text_muted,
-        bg=theme.surface_sunken,
-        width=USERS_PREVIEW_WIDTH,
-        height=USERS_PREVIEW_HEIGHT,
-        anchor=menu_gui.ANCHOR_WEST,
-    )
-    preview_label.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
-
-    def _clear_preview() -> None:
-        state["preview"] = None
-        try:
-            preview_label.configure(image="", text=USERS_PREVIEW_EMPTY)
-        except Exception as exc:  # la vista previa nunca tumba el panel
-            logger.debug("No se pudo limpiar la vista previa (%s).", exc)
-
-    def _load_preview(face_id: str) -> None:
-        path = repo.preview_path(face_id)
-        if path is None:
-            _clear_preview()
-            return
-        try:
-            photo = tkinter.PhotoImage(file=str(path))
-        except Exception as exc:  # sin foto o sin Tk: texto de respaldo
-            logger.debug("Sin foto de %s (%s).", face_id, exc)
-            _clear_preview()
-            return
-        state["preview"] = photo
-        try:
-            preview_label.configure(image=photo, text="")
-        except Exception as exc:
-            logger.debug("No se pudo mostrar la foto de %s (%s).", face_id, exc)
-
     def refresh_table() -> None:
         """Recarga la tabla desde el repositorio y limpia la seleccion."""
         for item in tree.get_children():
@@ -249,7 +215,6 @@ def run_users_panel(
                     face.created_at,
                 ),
             )
-        _clear_preview()
 
     def _selected_face() -> EnrolledFace | None:
         selection = tree.selection()
@@ -262,13 +227,6 @@ def run_users_panel(
             refresh_table()
             return None
         return face
-
-    def on_select(_event: tkinter.Event) -> None:
-        selection = tree.selection()
-        if not selection:
-            _clear_preview()
-            return
-        _load_preview(str(selection[0]))
 
     def _open_edit_dialog(face: EnrolledFace) -> None:
         dialog = tk_cls()
@@ -324,7 +282,7 @@ def run_users_panel(
             try:
                 new_name = name_entry.get().strip()
             except Exception as exc:
-                logger.warning("No se pudo leer el nombre (%s).", exc)
+                logger.warning(USERS_NAME_READ_ERROR, exc)
                 return
             if not new_name:
                 logger.warning(USERS_EMPTY_NAME)
@@ -335,9 +293,7 @@ def run_users_panel(
                 logger.warning("Rol no valido; se conserva %s.", face.role.value)
                 new_role = face.role
             repo.update(replace(face, name=new_name, role=new_role))
-            logger.info(
-                "Rostro actualizado: %s (%s, rol %s).", new_name, face.face_id, new_role.value
-            )
+            logger.info(USERS_UPDATED_LOG, new_name, face.face_id, new_role.value)
             dialog.destroy()
             refresh_table()
 
@@ -348,25 +304,103 @@ def run_users_panel(
         cancel_button = _make_button(buttons, USERS_CANCEL_TEXT, dialog.destroy, primary=False)
         cancel_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
 
-    def do_edit() -> None:
-        face = _selected_face()
-        if face is None:
-            return
-        _open_edit_dialog(face)
-
-    def do_reenroll() -> None:
-        face = _selected_face()
-        if face is None:
-            return
+    def _reenroll(face: EnrolledFace) -> None:
         from recognizer.cli.apps.face_auth import run_face_enroll
 
-        logger.info("Re-enrolando %s (%s)... (ESC/q para volver)", face.name, face.face_id)
+        logger.info(USERS_REENROLL_LOG, face.name, face.face_id)
         window.withdraw()
         try:
             run_face_enroll(replace(request), face_id=face.face_id, reader=lambda _prompt: "")
         finally:
             window.deiconify()
         refresh_table()
+
+    def _open_detail_modal(face: EnrolledFace) -> None:
+        """Ventana modal con la foto de enrolamiento y los datos del rostro."""
+        modal = tkinter.Toplevel(window)
+        modal.title(USERS_DETAIL_TITLE)
+        modal.configure(bg=theme.surface)
+        photo: tkinter.PhotoImage | None = None
+        path = repo.preview_path(face.face_id)
+        if path is not None:
+            try:
+                photo = tkinter.PhotoImage(file=str(path))
+            except Exception as exc:  # sin foto o sin Tk: texto de respaldo
+                logger.debug(USERS_PHOTO_ERROR, face.face_id, exc)
+                photo = None
+        if photo is not None:
+            state["photo"] = photo  # referencia anti-GC mientras vive el modal
+            tkinter.Label(modal, image=photo, bg=theme.surface).pack(
+                padx=theme.pad_body, pady=theme.space_2
+            )
+        else:
+            tkinter.Label(
+                modal,
+                text=USERS_MODAL_NO_PHOTO,
+                font=(body_family, theme.size_body_small),
+                fg=theme.text_muted,
+                bg=theme.surface_sunken,
+                anchor=menu_gui.ANCHOR_WEST,
+            ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_2)
+        tkinter.Label(
+            modal,
+            text=USERS_MODAL_INFO_TEMPLATE.format(
+                face_id=face.face_id,
+                name=face.name,
+                role=face.role.value,
+                samples=face.samples,
+                created_at=face.created_at,
+            ),
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.text,
+            bg=theme.surface,
+            justify=menu_gui.JUSTIFY_LEFT,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_2)
+
+        def edit_from_modal() -> None:
+            modal.destroy()
+            _open_edit_dialog(face)
+
+        def reenroll_from_modal() -> None:
+            modal.destroy()
+            _reenroll(face)
+
+        buttons = tkinter.Frame(modal, bg=theme.surface)
+        buttons.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_2)
+        edit_button = _make_button(buttons, USERS_EDIT_TEXT, edit_from_modal, primary=True)
+        edit_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
+        reenroll_button = _make_button(
+            buttons, USERS_REENROLL_TEXT, reenroll_from_modal, primary=False
+        )
+        reenroll_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
+        back_button = _make_button(buttons, USERS_BACK_TEXT, modal.destroy, primary=False)
+        back_button.pack(side=menu_gui.SIDE_RIGHT, padx=theme.space_1)
+        for button, action in (
+            (edit_button, edit_from_modal),
+            (reenroll_button, reenroll_from_modal),
+            (back_button, modal.destroy),
+        ):
+            button.bind(menu_gui.EVENT_RETURN, _consume(action))
+            button.bind(menu_gui.EVENT_SPACE, _consume(action))
+        modal.bind(menu_gui.EVENT_ESCAPE, lambda _event: modal.destroy())
+        modal.bind(menu_gui.EVENT_KEY_Q, lambda _event: modal.destroy())
+        modal.bind(menu_gui.EVENT_KEY_Q_UPPER, lambda _event: modal.destroy())
+        modal.protocol(menu_gui.EVENT_CLOSE_WINDOW, modal.destroy)
+        try:
+            modal.grab_set()  # modal: bloquea la ventana de la lista
+        except Exception as exc:  # fakes o Tk sin display
+            logger.debug("Sin grab_set en el detalle (%s).", exc)
+        try:
+            modal.wait_window()
+        except Exception as exc:
+            logger.debug("Sin wait_window en el detalle (%s).", exc)
+
+    def do_detail() -> None:
+        face = _selected_face()
+        if face is None:
+            return
+        _open_detail_modal(face)
 
     def do_delete() -> None:
         face = _selected_face()
@@ -379,7 +413,7 @@ def run_users_panel(
         if not confirmed:
             return
         repo.delete(face.face_id)
-        logger.info("Rostro eliminado: %s (%s).", face.name, face.face_id)
+        logger.info(USERS_DELETED_LOG, face.name, face.face_id)
         refresh_table()
 
     def close() -> None:
@@ -387,10 +421,8 @@ def run_users_panel(
 
     actions = tkinter.Frame(window, bg=theme.surface)
     actions.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_2)
-    edit_button = _make_button(actions, USERS_EDIT_TEXT, do_edit, primary=False)
-    edit_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
-    reenroll_button = _make_button(actions, USERS_REENROLL_TEXT, do_reenroll, primary=False)
-    reenroll_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
+    detail_button = _make_button(actions, USERS_DETAIL_TEXT, do_detail, primary=True)
+    detail_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
     delete_button = _make_button(actions, USERS_DELETE_TEXT, do_delete, primary=False)
     delete_button.pack(side=menu_gui.SIDE_LEFT, padx=theme.space_1)
 
@@ -407,10 +439,8 @@ def run_users_panel(
     back_button = _make_button(footer, USERS_BACK_TEXT, close, primary=False)
     back_button.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
 
-    tree.bind(menu_gui.EVENT_TREE_SELECT, on_select)
     for button, action in (
-        (edit_button, do_edit),
-        (reenroll_button, do_reenroll),
+        (detail_button, do_detail),
         (delete_button, do_delete),
         (back_button, close),
     ):
