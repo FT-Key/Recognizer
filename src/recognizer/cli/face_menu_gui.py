@@ -115,16 +115,17 @@ def _store_is_empty(provider: IdentityProvider) -> bool:
     """Indica si el almacen facial esta vacio (primer rostro = admin)."""
     from recognizer.adapters.file_face_repository import FileFaceRepository
     from recognizer.adapters.file_identity_provider import FileIdentityProvider
+    from recognizer.core.errors import RecognizerError
 
     if not isinstance(provider, FileIdentityProvider):
         return False
     try:
         repository = FileFaceRepository(provider.store_dir)
-    except OSError:
+    except (OSError, RecognizerError):
         return False
     try:
         return len(repository.list_all()) == 0
-    except OSError:
+    except (OSError, RecognizerError):
         return False
 
 
