@@ -1,8 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 10c (contador: tracking + línea + overlay) completada;
-  siguiente: 11 (anti-intrusos: zona + alerta)
-- **Rama:** `stage/10c-people-counter-tracking` (10d mergeada a `dev` en `097f6f6`)
+- **Fase actual:** etapa 11 (anti-intrusos: zona + alerta) completada; siguiente: 12 (postura con YOLO pose)
+- **Rama:** `stage/11-anti-intruder` (10c mergeada a `dev` en `1e8a5a6`)
 - **Actualizado:** 2026-09-18
 
 ## Hecho
@@ -16,8 +15,7 @@
 - Etapa 7: `open_links` + ejemplo `scripts/actions/log_gesture.py`.
 - Etapa 8: menús compuestos por mano + `gestures.swap_handedness`.
 - Etapa 9: web React 19 + Vite (Vercel) y `.exe` PyInstaller + `/health`.
-- Etapa 9b: navegador CDP (`open_tab`/`tab_seek`/`tab_press`) + fix Chrome 152.
-- Etapa 9c: scroll con `Victory`/`Closed_Fist` sostenidos + mute en menú System.
+- Etapas 9b-9c: navegador CDP (`open_tab`/`tab_seek`/`tab_press`), fix Chrome 152 y scroll con `Victory`/`Closed_Fist` + mute.
 - Etapa 10a: launcher multi-app (menú, import perezoso, `ESC`/`q`); merge `c8c8b9f`.
 - Etapa 10b: contador YOLO (`yolo26n.pt` nano CPU); dominio + puerto +
   `UltralyticsDetector` + runner HUD `Personas: N`; `.spec` sin torch.
@@ -29,22 +27,24 @@
   `core/domain/tracking.py` (`CountingLine`/`LineCrossingCounter`), puerto
   `ObjectTracker`, overlay dedicado (`overlay_people.py`) y `people_counter.line`;
   runner con HUD Personas/Entradas/Salidas.
-- Gate 10c verde: pytest **755 passed** (96.36%), mypy strict 140 archivos,
-  ruff 165, check-arch 3/3. Reviewer: sin bloqueantes (menores aplicados).
+- Etapa 11: anti-intrusos; dominio `core/domain/intrusion.py`
+  (`IntrusionZone`/`ZoneIntrusionMonitor`), puerto `AlertSink`, adaptadores
+  `alert_sound`/`overlay_intrusion` y runner `cli/apps/anti_intruder.py`; zona +
+  alerta sonora edge-triggered; `DetectorConfig` reutilizable por contador/anti-intrusos.
+- Gate 11 verde: pytest **812 passed** (96.57%), mypy strict 148 archivos,
+  ruff 173, check-arch 3/3. Reviewer: sin bloqueantes (menores aplicados).
 
-## Siguiente (etapa 11 — anti-intrusos: zona + alerta)
-- Zona de intrusión + alerta sobre tracking (reutiliza dominio de 10c).
-- Roadmap: 12 postura, 13 EPP, 14 inventario, 15 facial.
-  Checklist de apps en `docs/WORKFLOW.md` y skill `new-app`.
+## Siguiente (etapa 12 — postura ergonómica con YOLO pose)
+- Postura sobre YOLO pose; reutiliza tracking/overlay. Roadmap: 13 EPP, 14 inventario, 15 facial (checklist en `docs/WORKFLOW.md`, skill `new-app`).
 
 ## Bloqueos / notas
 - Usuario verifica manual: ESC/q+X, ventana del menú con cámara real y **aspecto
   visual del rediseño 10d** (tamaño, colores, icono en la barra de tareas, teclado).
 - Verificación del `.exe` con YOLO/torch pendiente (bundle ~1 GB, excluido); el
   icono y los assets ya van bundleados por el spec (regenerar `.exe` para probar).
-- Calibrar con cámara real: `people_counter.line` (`position`/`invert`/
-  `confirm_frames`), `min_confidence` (0.5) y `gestures.swap_handedness`.
-- El HUD `Personas` del contador cuenta solo tracks con ID (puede mostrar 0 en el
-  warm-up del tracker).
+- Calibrar con cámara real: `anti_intruder.zone` (x/y, `confirm_frames`/`release_frames`),
+  `alert.repeat_seconds`, `people_counter.line`, `min_confidence` y `swap_handedness`.
+- Smoke `uv run smoke --frames 30 --no-window` pendiente (cámara real); HUD del
+  contador cuenta solo tracks con ID (puede mostrar 0 en el warm-up del tracker).
 - `PENDING-TESTS.md`: verificaciones manuales de etapas 0-9b las hace el usuario.
 - Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.
