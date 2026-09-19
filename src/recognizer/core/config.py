@@ -34,6 +34,7 @@ from recognizer.core.constants import (
     DEFAULT_POINTER_ENABLED,
     DEFAULT_POINTER_MIRROR_X,
     DEFAULT_POINTER_SMOOTHING_ALPHA,
+    DEFAULT_POSTURE_CALIBRATION_FRAMES,
     DEFAULT_POSTURE_CONFIRM_FRAMES,
     DEFAULT_POSTURE_KEYPOINT_CONFIDENCE,
     DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO,
@@ -42,6 +43,10 @@ from recognizer.core.constants import (
     DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO,
     DEFAULT_POSTURE_MODEL_PATH,
     DEFAULT_POSTURE_RELEASE_FRAMES,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET,
+    DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT,
+    DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
@@ -544,11 +549,27 @@ class PostureAlertConfig(BaseModel):
     repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
 
 
-class PostureConfig(BaseModel):
-    """Postura ergonomica: modelo YOLO pose, umbrales y debounce del aviso.
+class PostureTolerancesConfig(BaseModel):
+    """Desvio admitido respecto a la linea base calibrada."""
 
-    Los umbrales se expresan en relacion al ancho de hombros (normalizado), de
-    modo que son invariantes a la distancia a la camara.
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    head_offset: float = Field(default=DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET, ge=0)
+    head_height: float = Field(default=DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT, ge=0)
+    torso_angle_deg: float = Field(
+        default=DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG, ge=0, le=MAX_ANGLE_DEG
+    )
+    shoulder_tilt: float = Field(default=DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT, ge=0)
+
+
+class PostureConfig(BaseModel):
+    """Postura ergonomica: modelo YOLO pose, calibracion, umbrales y debounce.
+
+    Con ``calibration_frames > 0`` la app aprende la postura correcta al inicio
+    (el usuario se sienta derecho unos segundos) y luego avisa de los desvios
+    respecto a esa linea base usando ``tolerances``. Con ``calibration_frames: 0``
+    se usan los umbrales absolutos. Las metricas se normalizan por una escala
+    corporal (ancho de hombros o largo del torso en perfil).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -556,6 +577,8 @@ class PostureConfig(BaseModel):
     model_path: str = Field(default=DEFAULT_POSTURE_MODEL_PATH, min_length=1)
     min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
     min_keypoint_confidence: float = Field(default=DEFAULT_POSTURE_KEYPOINT_CONFIDENCE, ge=0, le=1)
+    calibration_frames: int = Field(default=DEFAULT_POSTURE_CALIBRATION_FRAMES, ge=0)
+    tolerances: PostureTolerancesConfig = Field(default_factory=PostureTolerancesConfig)
     max_head_offset_ratio: float = Field(default=DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO, gt=0)
     min_head_height_ratio: float = Field(default=DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO, ge=0)
     max_torso_angle_deg: float = Field(

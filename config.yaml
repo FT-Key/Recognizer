@@ -221,27 +221,42 @@ anti_intruder:
 # Postura ergonomica (etapa 12): estima la pose con YOLO pose y avisa de malos
 # habitos frente a la camara. model_path admite un .pt de Ultralytics; si no
 # existe, se descarga solo (yolo26n-pose.pt).
-# Los umbrales se miden en relacion al ancho de hombros (invariante a la
-# distancia): sube/baja cada ratio si el aviso no dispara o dispara de mas.
-#   max_head_offset_ratio: desvio horizontal de la nariz respecto al centro de
-#     los hombros -> "cabeza adelante".
-#   min_head_height_ratio: altura de la nariz sobre los hombros -> "cabeza baja".
-#   max_torso_angle_deg: inclinacion de la linea hombros-caderas -> "espalda
-#     inclinada".
-#   max_shoulder_tilt_ratio: desnivel vertical entre hombros -> "hombros
-#     desnivelados".
-#   min_keypoint_confidence: confianza minima de cada punto clave para evaluar.
-#   confirm_frames/release_frames: debounce del aviso.
+#
+# CALIBRACION (recomendada): al arrancar la app, sientate derecho y quieto.
+# Durante `calibration_frames` fotogramas se aprende tu postura correcta y luego
+# se avisa cuando te desvias mas de `tolerances`. Esto funciona aunque las
+# caderas queden ocultas por el escritorio y aunque la camara cambie de posicion.
+#   calibration_frames: 0 desactiva la calibracion y usa los umbrales absolutos.
+#   tolerances: cuanto puede desviarse cada metrica antes de avisar. Sube una
+#     tolerancia si el aviso salta de mas; bajala si no detecta tu mala postura.
+#       head_offset: nariz respecto al centro de hombros -> "cabeza adelante".
+#       head_height: altura de la nariz sobre los hombros -> "cabeza baja".
+#       torso_angle_deg: inclinacion de la linea hombros-caderas -> "espalda
+#         inclinada".
+#       shoulder_tilt: desnivel vertical entre hombros -> "hombros desnivelados".
+#
+# Umbrales absolutos (solo se usan si calibration_frames: 0):
+#   max_head_offset_ratio / min_head_height_ratio / max_torso_angle_deg /
+#   max_shoulder_tilt_ratio.
+# min_keypoint_confidence: confianza minima de cada punto clave para evaluar
+#   (las caderas suelen quedar por debajo de este umbral al estar sentado).
+# confirm_frames/release_frames: debounce del aviso.
 # alert: alerta sonora del sistema (winsound en Windows); repeat_seconds = 0
 #   suena una sola vez por aviso.
 posture:
   model_path: models/yolo26n-pose.pt
   min_confidence: 0.5
   min_keypoint_confidence: 0.5
+  calibration_frames: 60
+  tolerances:
+    head_offset: 0.15
+    head_height: 0.2
+    torso_angle_deg: 8.0
+    shoulder_tilt: 0.1
   max_head_offset_ratio: 0.35
-  min_head_height_ratio: 0.4
-  max_torso_angle_deg: 20.0
-  max_shoulder_tilt_ratio: 0.2
+  min_head_height_ratio: 0.7
+  max_torso_angle_deg: 15.0
+  max_shoulder_tilt_ratio: 0.15
   confirm_frames: 5
   release_frames: 10
   alert:

@@ -26,6 +26,8 @@ BANNER_COLOR_BGR = (0, 0, 255)
 BANNER_TEMPLATE = "MALA POSTURA: {issues}"
 BANNER_MARGIN_PX = 20
 ISSUE_SEPARATOR = ", "
+CALIBRATION_COLOR_BGR = (0, 200, 255)
+CALIBRATION_TEXT = "CALIBRANDO: sientate derecho"
 
 # Conexiones del esqueleto COCO (pares de puntos clave).
 SKELETON_EDGES: tuple[tuple[PoseKeypoint, PoseKeypoint], ...] = (
@@ -94,6 +96,7 @@ def draw_posture_overlay(
     active: bool,
     issues: tuple[PostureIssue, ...],
     min_keypoint_confidence: float,
+    calibrating: bool = False,
 ) -> None:
     """Dibuja el esqueleto de cada persona, el HUD y el banner si hay aviso."""
     height, width = image.shape[:2]
@@ -107,6 +110,18 @@ def draw_posture_overlay(
             height=height,
             min_keypoint_confidence=min_keypoint_confidence,
         )
+
+    if calibrating:
+        cv2.putText(
+            image,
+            CALIBRATION_TEXT,
+            HUD_POSITION,
+            HUD_FONT,
+            HUD_SCALE,
+            CALIBRATION_COLOR_BGR,
+            HUD_THICKNESS,
+        )
+        return
 
     if active:
         cv2.putText(
