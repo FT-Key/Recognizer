@@ -12,9 +12,11 @@ import os
 import re
 import tempfile
 from contextlib import suppress
+from dataclasses import replace
 from pathlib import Path
 from typing import cast
 
+from recognizer.core.constants import FACE_PREVIEW_SUFFIX
 from recognizer.core.domain.face import EnrolledFace, next_face_id
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import FaceRepositoryError
@@ -34,6 +36,7 @@ FACE_EMBEDDING_KEY = "embedding"
 FACE_SAMPLES_KEY = "samples"
 FACE_CREATED_AT_KEY = "created_at"
 FACE_ROLE_KEY = "role"
+FACE_PREVIEW_KEY = "preview"
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
@@ -85,6 +88,10 @@ class FileFaceRepository(FaceRepository):
     def _face_path(self, face_id: str) -> Path:
         self._require_face_id(face_id)
         return self._store_dir / FACE_FILE_TEMPLATE.format(face_id=face_id)
+
+    def _preview_path(self, face_id: str) -> Path:
+        self._require_face_id(face_id)
+        return self._store_dir / f"{face_id}{FACE_PREVIEW_SUFFIX}"
 
     def _read_index(self) -> tuple[int, list[str]]:
         """Contador persistido y lista de ids conocidos (tolerante a corrupcion)."""
@@ -158,13 +165,18 @@ class FileFaceRepository(FaceRepository):
                         )
                 else:
                     LOGGER.warning("Rol invalido en %s; se usa viewer.", face_id)
+            preview_raw = raw.get(FACE_PREVIEW_KEY, "")
+            preview = preview_raw if isinstance(preview_raw, str) else ""
             return EnrolledFace(
-                face_id=str(raw.get(FACE_ID_KEY, face_id)),
+                # El id del nombre de archivo manda: evita ids embebidos que no
+                # coincidan (y que `list_all` devuelva ids no validados).
+                face_id=face_id,
                 name=name_raw,
                 embedding=embedding,
                 samples=samples_raw,
                 created_at=created_raw,
                 role=role,
+                preview=preview,
             )
         except (KeyError, TypeError, ValueError):
             LOGGER.warning("Cara corrupta %s; se ignora.", face_id)
@@ -202,6 +214,7 @@ class FileFaceRepository(FaceRepository):
                 FACE_SAMPLES_KEY: face.samples,
                 FACE_CREATED_AT_KEY: face.created_at,
                 FACE_ROLE_KEY: face.role.value,
+                FACE_PREVIEW_KEY: face.preview,
             },
         )
         counter, _ = self._read_index()
@@ -212,6 +225,23 @@ class FileFaceRepository(FaceRepository):
             if suffix.isdigit():
                 highest = max(highest, int(suffix))
         self._write_index(counter=max(counter, highest), face_ids=known)
+
+    def update(self, face: EnrolledFace) -> None:
+        """Actualiza un rostro existente; delega en ``save``."""
+        self.save(face)
+
+    def delete(self, face_id: str) -> None:
+        """Borra el rostro y su foto, y lo quita del indice (contador intacto)."""
+        self._require_face_id(face_id)
+        try:
+            self._face_path(face_id).unlink(missing_ok=True)
+            self._preview_path(face_id).unlink(missing_ok=True)
+        except OSError as exc:
+            msg = f"No se pudo borrar el rostro {face_id}."
+            raise FaceRepositoryError(msg) from exc
+        counter, _ = self._read_index()
+        remaining = [known for known in self._known_ids() if known != face_id]
+        self._write_index(counter=counter, face_ids=remaining)
 
     def list_all(self) -> tuple[EnrolledFace, ...]:
         """Todas las caras legibles, ordenadas por id."""
@@ -231,3 +261,26 @@ class FileFaceRepository(FaceRepository):
     def find_by_name(self, name: str) -> tuple[EnrolledFace, ...]:
         """Caras con ese nombre exacto, ordenadas por id."""
         return tuple(face for face in self.list_all() if face.name == name)
+
+    def save_preview(self, *, face_id: str, image: bytes) -> str:
+        """Guarda la foto de enrolamiento ``<id>.png`` y la asocia al JSON.
+
+        Si el rostro aun no tiene JSON (enrolamiento en curso) solo escribe la
+        imagen; el runner guarda luego el ``EnrolledFace`` con ``preview``.
+        Devuelve el nombre de archivo.
+        """
+        path = self._preview_path(face_id)
+        try:
+            path.write_bytes(image)
+        except OSError as exc:
+            msg = f"No se pudo escribir la foto {path}."
+            raise FaceRepositoryError(msg) from exc
+        face = self._read_face_file(face_id)
+        if face is not None and face.preview != path.name:
+            self.save(replace(face, preview=path.name))
+        return path.name
+
+    def preview_path(self, face_id: str) -> Path | None:
+        """Ruta de la foto de enrolamiento o ``None`` si no existe."""
+        path = self._preview_path(face_id)
+        return path if path.is_file() else None

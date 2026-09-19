@@ -40,3 +40,4 @@ etapa que se necesite.
 | 15b-async | Fix facial: captura asíncrona + worker de inferencia | completada | [stage-15b-fix5-face-async.md](stage-15b-fix5-face-async.md) |
 | 15b-open | Fix facial: doble apertura de cámara | completada | [stage-15b-fix6-face-double-open.md](stage-15b-fix6-face-double-open.md) |
 | 15b-cost | Fix facial: modelos extra y tope de FPS | completada | [stage-15b-fix7-face-infer-cost.md](stage-15b-fix7-face-infer-cost.md) |
+| 15c | Gestión de usuarios, accesos y fotos | completada | [stage-15c-users-access.md](stage-15c-users-access.md) |

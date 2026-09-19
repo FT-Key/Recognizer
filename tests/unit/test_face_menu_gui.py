@@ -78,9 +78,13 @@ class _WidgetBase:
 
     def __init__(self, *_args: object, **_kwargs: object) -> None:
         self.bindings: dict[str, Callable[..., object]] = {}
+        self.packed = False
 
     def pack(self, *_args: object, **_kwargs: object) -> None:
-        pass
+        self.packed = True
+
+    def pack_forget(self) -> None:
+        self.packed = False
 
     def bind(self, sequence: str, func: Callable[..., object]) -> None:
         self.bindings[sequence] = func
@@ -89,6 +93,9 @@ class _WidgetBase:
         text = _kwargs.get("text")
         if text is not None and hasattr(self, "text"):
             self.text = str(text)
+        image = _kwargs.get("image")
+        if image is not None and hasattr(self, "image"):
+            self.image = image
 
     def focus_set(self) -> None:
         pass
@@ -112,7 +119,89 @@ class FakeLabel(_WidgetBase):
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.text = str(kwargs.get("text", ""))
+        self.image: object | None = None
         FakeLabel.instances.append(self)
+
+
+class FakePhotoImage(_WidgetBase):
+    """Doble de tkinter.PhotoImage (no lee ningun archivo)."""
+
+    instances: ClassVar[list[FakePhotoImage]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakePhotoImage.instances.append(self)
+
+
+class FakeTreeview(_WidgetBase):
+    """Doble de tkinter.ttk.Treeview: filas en memoria y seleccion programable."""
+
+    instances: ClassVar[list[FakeTreeview]] = []
+
+    def __init__(self, *args: object, columns: tuple[str, ...] = (), **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        self.columns = tuple(columns)
+        self.rows: dict[str, tuple[object, ...]] = {}
+        self.headings: dict[str, str] = {}
+        self.column_config: dict[str, dict[str, object]] = {}
+        self._selection: list[str] = []
+        FakeTreeview.instances.append(self)
+
+    def heading(self, key: str, *, text: str = "", **_kwargs: object) -> None:
+        self.headings[key] = text
+
+    def column(self, key: str, **kwargs: object) -> None:
+        self.column_config[key] = kwargs
+
+    def insert(self, _parent: str, _index: str, *, iid: str, values: object) -> None:
+        self.rows[iid] = tuple(values)  # type: ignore[arg-type]
+
+    def get_children(self) -> tuple[str, ...]:
+        return tuple(self.rows)
+
+    def delete(self, item: str) -> None:
+        self.rows.pop(item, None)
+
+    def selection(self) -> tuple[str, ...]:
+        return tuple(self._selection)
+
+    def set_selection(self, items: list[str]) -> None:
+        self._selection = list(items)
+
+    def yview(self, *_args: object) -> None:
+        pass
+
+
+class FakeScrollbar(_WidgetBase):
+    """Doble de tkinter.ttk.Scrollbar."""
+
+    instances: ClassVar[list[FakeScrollbar]] = []
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        super().__init__(*args, **kwargs)
+        FakeScrollbar.instances.append(self)
+
+    def set(self, *_args: object) -> None:
+        pass
+
+
+class FakeMessagebox:
+    """Doble de tkinter.messagebox con respuesta programable a askyesno."""
+
+    answer: ClassVar[bool] = True
+    calls: ClassVar[list[tuple[str, str]]] = []
+
+    @classmethod
+    def askyesno(cls, title: str, message: str, **_kwargs: object) -> bool:
+        cls.calls.append((title, message))
+        return cls.answer
+
+
+class FakeTtk:
+    """Doble del submodulo tkinter.ttk con los widgets usados por los paneles."""
+
+    Treeview = FakeTreeview
+    Scrollbar = FakeScrollbar
 
 
 class FakeButton(_WidgetBase):
@@ -213,12 +302,20 @@ def _install_face_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeEntry.instances.clear()
     FakeStringVar.instances.clear()
     FakeOptionMenu.instances.clear()
+    FakePhotoImage.instances.clear()
+    FakeTreeview.instances.clear()
+    FakeScrollbar.instances.clear()
+    FakeMessagebox.answer = True
+    FakeMessagebox.calls.clear()
     monkeypatch.setattr(tkinter, "Frame", FakeFrame)
     monkeypatch.setattr(tkinter, "Label", FakeLabel)
     monkeypatch.setattr(tkinter, "Button", FakeButton)
     monkeypatch.setattr(tkinter, "Entry", FakeEntry)
     monkeypatch.setattr(tkinter, "OptionMenu", FakeOptionMenu)
     monkeypatch.setattr(tkinter, "StringVar", FakeStringVar)
+    monkeypatch.setattr(tkinter, "PhotoImage", FakePhotoImage)
+    monkeypatch.setattr(tkinter, "ttk", FakeTtk, raising=False)
+    monkeypatch.setattr(tkinter, "messagebox", FakeMessagebox, raising=False)
 
 
 def _button_with_text(text: str) -> FakeButton:
@@ -462,6 +559,104 @@ def test_first_face_limits_roles_to_admin(tmp_path: Path, monkeypatch: pytest.Mo
     assert FakeOptionMenu.instances[0].options == ("admin",)
     notes = [label.text for label in FakeLabel.instances]
     assert face_menu_gui.FACE_FIRST_NOTE_TEXT in notes
+
+
+def test_face_submenu_visibility_follows_role_and_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.ADMIN)),
+        logger=TEST_LOGGER,
+    )
+
+    assert _button_with_text(face_menu_gui.FACE_ENROLL_TEXT).packed is True
+    assert _button_with_text(face_menu_gui.FACE_LOGIN_TEXT).packed is False
+    assert _button_with_text(face_menu_gui.FACE_LOGOUT_TEXT).packed is True
+    assert _button_with_text(face_menu_gui.FACE_USERS_TEXT).packed is True
+    assert _button_with_text(face_menu_gui.FACE_ACCESS_TEXT).packed is True
+    assert _button_with_text(face_menu_gui.FACE_MY_ACCESS_TEXT).packed is False
+
+
+def test_face_submenu_non_admin_sees_my_access_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_face_fakes(monkeypatch)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.OPERATOR)),
+        logger=TEST_LOGGER,
+    )
+
+    assert _button_with_text(face_menu_gui.FACE_USERS_TEXT).packed is False
+    assert _button_with_text(face_menu_gui.FACE_ACCESS_TEXT).packed is False
+    assert _button_with_text(face_menu_gui.FACE_MY_ACCESS_TEXT).packed is True
+
+
+def test_face_submenu_admin_opens_users_and_access_panels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+    from recognizer.cli import face_access_gui, face_users_gui
+
+    users_calls: list[dict[str, object]] = []
+    access_calls: list[dict[str, object]] = []
+
+    def fake_users(_request: AppRunRequest, **kwargs: object) -> int:
+        users_calls.append(kwargs)
+        return 0
+
+    def fake_access(_request: AppRunRequest, **kwargs: object) -> int:
+        access_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(face_users_gui, "run_users_panel", fake_users)
+    monkeypatch.setattr(face_access_gui, "run_access_panel", fake_access)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.ADMIN)),
+        logger=TEST_LOGGER,
+    )
+
+    _press(_button_with_text(face_menu_gui.FACE_USERS_TEXT).command)
+    _press(_button_with_text(face_menu_gui.FACE_ACCESS_TEXT).command)
+
+    assert len(users_calls) == 1
+    assert users_calls[0]["identity_provider"] is not None
+    assert len(access_calls) == 1
+    assert access_calls[0]["show_photos"] is True
+
+
+def test_face_submenu_non_admin_my_access_hides_photos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+    from recognizer.cli import face_access_gui
+
+    access_calls: list[dict[str, object]] = []
+
+    def fake_access(_request: AppRunRequest, **kwargs: object) -> int:
+        access_calls.append(kwargs)
+        return 0
+
+    monkeypatch.setattr(face_access_gui, "run_access_panel", fake_access)
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.OPERATOR)),
+        logger=TEST_LOGGER,
+    )
+
+    _press(_button_with_text(face_menu_gui.FACE_MY_ACCESS_TEXT).command)
+
+    assert len(access_calls) == 1
+    assert access_calls[0]["show_photos"] is False
 
 
 class FakeMenuRoot:

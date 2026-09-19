@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from recognizer.core.constants import (
+    DEFAULT_ACCESS_DIR,
     DEFAULT_ACTION_COOLDOWN_SECONDS,
     DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
@@ -33,6 +34,7 @@ from recognizer.core.constants import (
     DEFAULT_LINE_CONFIRM_FRAMES,
     DEFAULT_LINE_MARGIN,
     DEFAULT_LINE_POSITION,
+    DEFAULT_LOGIN_PHOTO_THRESHOLD,
     DEFAULT_MAX_FACE_WIDTH_RATIO,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
@@ -630,6 +632,10 @@ class FaceAuthConfig(BaseModel):
     (0 = sin expiracion); ``require_login`` filtra el menu por rol (false =
     modo abierto, sin sesion todo permitido); ``permissions`` es un override
     por app (``{app_id: [roles]}``) sobre la matriz por defecto.
+    ``access_dir`` guarda el registro de accesos (logins.jsonl + fotos);
+    ``login_photo_threshold`` es la distancia coseno maxima para elegir la foto
+    del login: mas estricta que ``match_threshold`` (menor distancia = mejor),
+    de modo que solo se guarda una imagen cuando la coincidencia es clara.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -644,9 +650,11 @@ class FaceAuthConfig(BaseModel):
     min_sharpness: float = Field(default=DEFAULT_MIN_FACE_SHARPNESS, ge=0)
     enrollment_samples: int = Field(default=DEFAULT_ENROLLMENT_SAMPLES, ge=1)
     match_threshold: float = Field(default=DEFAULT_FACE_MATCH_THRESHOLD, ge=0)
+    login_photo_threshold: float = Field(default=DEFAULT_LOGIN_PHOTO_THRESHOLD, ge=0)
     confirm_frames: int = Field(default=DEFAULT_FACE_CONFIRM_FRAMES, ge=1)
     release_frames: int = Field(default=DEFAULT_FACE_RELEASE_FRAMES, ge=1)
     store_dir: str = Field(default=DEFAULT_FACE_STORE_DIR, min_length=1)
+    access_dir: str = Field(default=DEFAULT_ACCESS_DIR, min_length=1)
     default_role: Role = Role(DEFAULT_FACE_DEFAULT_ROLE)
     session_timeout_seconds: int = Field(default=DEFAULT_SESSION_TIMEOUT_SECONDS, ge=0)
     require_login: bool = DEFAULT_REQUIRE_LOGIN
@@ -656,6 +664,16 @@ class FaceAuthConfig(BaseModel):
     def _validate_widths(self) -> Self:
         if self.min_face_width_ratio >= self.max_face_width_ratio:
             msg = "La captura facial requiere min_face_width_ratio < max_face_width_ratio."
+            raise ValueError(msg)
+        return self
+
+    @model_validator(mode="after")
+    def _validate_login_photo_threshold(self) -> Self:
+        if self.login_photo_threshold > self.match_threshold:
+            msg = (
+                "login_photo_threshold debe ser <= match_threshold (una distancia "
+                "coseno menor es una coincidencia mejor)."
+            )
             raise ValueError(msg)
         return self
 

@@ -12,14 +12,19 @@ import threading
 import time
 from collections.abc import Callable
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 
 import cv2
+import numpy as np
+from numpy.typing import NDArray
 
 from recognizer.adapters.alert_sound import SilentAlert
 from recognizer.adapters.camera_opencv import OpenCVCamera
+from recognizer.adapters.file_access_log_repository import FileAccessLogRepository
 from recognizer.adapters.file_face_repository import FileFaceRepository
 from recognizer.adapters.file_identity_provider import FileIdentityProvider
+from recognizer.adapters.image_codec import encode_png
 from recognizer.adapters.insightface_recognizer import InsightFaceRecognizer
 from recognizer.adapters.latest_frame_source import LatestFrameSource
 from recognizer.adapters.overlay_face import draw_face_overlay
@@ -33,6 +38,7 @@ from recognizer.core.constants import (
     FACE_WORKER_JOIN_TIMEOUT_SECONDS,
     FACE_WORKER_WAIT_TIMEOUT_SECONDS,
 )
+from recognizer.core.domain.access import AccessEvent
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.face import (
     CaptureGuidance,
@@ -45,6 +51,7 @@ from recognizer.core.domain.face import (
     LoginDebouncer,
     assess_capture,
 )
+from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.errors import FaceRecognizerError, RecognizerError
 from recognizer.core.pipeline.builder import PipelineBuilder
@@ -73,6 +80,7 @@ class _EnrollState:
     accepted: int = 0
     required: int = 0
     saved: bool = False
+    sample_frame: NDArray[np.uint8] | None = None
 
 
 @dataclass
@@ -84,6 +92,8 @@ class _LoginState:
     login_text: str = ""
     highlight_ok: bool = False
     greeted_id: str | None = None
+    login_photo_frame: NDArray[np.uint8] | None = None
+    login_photo_face_id: str | None = None
 
 
 class _RecognitionWorker:
@@ -100,7 +110,7 @@ class _RecognitionWorker:
         *,
         source: LatestFrameSource,
         recognizer: InsightFaceRecognizer,
-        process: Callable[[tuple[FaceObservation, ...]], None],
+        process: Callable[[Frame, tuple[FaceObservation, ...]], None],
         process_every_n_frames: int,
         logger: logging.Logger,
         max_inference_fps: float = 0.0,
@@ -150,7 +160,7 @@ class _RecognitionWorker:
                 return
             if self._stop.is_set():
                 return
-            self._process(observations)
+            self._process(frame, observations)
 
     def stop(self) -> None:
         """Detiene el hilo y espera a que termine."""
@@ -256,8 +266,19 @@ def _identity_provider(
     )
 
 
-def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
-    """Enrola un rostro nuevo con guia de angulos y distancia.
+def run_face_enroll(
+    request: AppRunRequest,
+    *,
+    reader: Callable[[str], str] | None = None,
+    face_id: str | None = None,
+) -> int:
+    """Enrola un rostro nuevo o re-enrola uno existente con guia de angulos.
+
+    Con ``face_id`` se re-enrola ese rostro: se conservan ``name``, ``role`` y
+    ``created_at`` y no se piden nombre ni rol (el panel de usuarios lo usa con
+    ``reader=lambda _p: ""``); se capturan muestras nuevas y se actualiza el
+    mismo id (embedding, muestras y foto). Sin ``face_id`` se crea un rostro
+    nuevo (el primer rostro del almacen es admin).
 
     Devuelve 0 si termino bien (ESC/q vuelve al menu), 1 si fallo.
     """
@@ -267,10 +288,6 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
         if not show_window and request.max_frames <= 0:
             msg = "Sin ventana no hay ESC: usa --frames > 0 junto con --no-window."
             raise RecognizerError(msg)
-        name = _request_name(reader=reader)
-        if not name:
-            LOGGER.error("Enrolamiento cancelado: se requiere un nombre no vacio.")
-            return 1
         with log_step(LOGGER, "Cargando configuracion"):
             config_path = prepare_workspace(request.config_path)
             app_config = load_config(config_path)
@@ -285,27 +302,47 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
             min_sharpness=face_config.min_sharpness,
         )
         repository = FileFaceRepository(face_config.store_dir)
-        operator = _identity_provider(face_config, repository).current_identity()
-        is_first = len(repository.list_all()) == 0
-        role = _resolve_enroll_role(
-            operator=operator, is_first=is_first, face_config=face_config, reader=reader
-        )
-        if role is None:
-            return 1
-        face_id = repository.next_id()
+        existing: EnrolledFace | None = None
+        if face_id is not None:
+            existing = repository.find_by_id(face_id)
+            if existing is None:
+                LOGGER.error("No existe el rostro %s para re-enrolar.", face_id)
+                return 1
+            # Re-enrolar reemplaza el embedding de otro usuario: solo admin.
+            operator = _identity_provider(face_config, repository).current_identity()
+            if operator.role is not Role.ADMIN:
+                LOGGER.error("Sin permiso: solo un admin puede re-enrolar a otro usuario.")
+                return 1
+            name = existing.name
+            role = existing.role
+            target_id = existing.face_id
+        else:
+            name = _request_name(reader=reader)
+            if not name:
+                LOGGER.error("Enrolamiento cancelado: se requiere un nombre no vacio.")
+                return 1
+            operator = _identity_provider(face_config, repository).current_identity()
+            is_first = len(repository.list_all()) == 0
+            resolved_role = _resolve_enroll_role(
+                operator=operator, is_first=is_first, face_config=face_config, reader=reader
+            )
+            if resolved_role is None:
+                return 1
+            role = resolved_role
+            target_id = repository.next_id()
         recognizer = InsightFaceRecognizer(face_config)
         pipeline = PipelineBuilder().build()
         state = _EnrollState(required=face_config.enrollment_samples)
         LOGGER.info(
             "Enrolando a %s (%s, rol %s): centra la cara y sigue las instrucciones.",
             name,
-            face_id,
+            target_id,
             role.value,
         )
 
         lock = threading.Lock()
 
-        def _process(observations: tuple[FaceObservation, ...]) -> None:
+        def _process(frame: Frame, observations: tuple[FaceObservation, ...]) -> None:
             """Actualiza el enrolamiento con las observaciones del worker."""
             with lock:
                 if not observations:
@@ -314,16 +351,31 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
                 else:
                     observation = observations[0]
                     state.boxes = (observation.box,)
-                    state.guidance = builder.add(observation)
+                    guidance = builder.add(observation)
+                    state.guidance = guidance
                     state.accepted = builder.accepted
+                    if guidance is None and state.sample_frame is None:
+                        # Primera muestra aceptada: sera la foto de enrolamiento.
+                        state.sample_frame = frame.data.copy()
                 if builder.is_complete and not state.saved:
-                    enrolled = builder.build(face_id, name, role=role)
-                    repository.save(enrolled)
+                    enrolled = builder.build(target_id, name, role=role)
+                    if existing is not None:
+                        # Re-enrolamiento: se conserva la fecha de alta original.
+                        enrolled = replace(enrolled, created_at=existing.created_at)
+                    if state.sample_frame is not None:
+                        preview_name = repository.save_preview(
+                            face_id=target_id, image=encode_png(state.sample_frame)
+                        )
+                        enrolled = replace(enrolled, preview=preview_name)
+                    if existing is not None:
+                        repository.update(enrolled)
+                    else:
+                        repository.save(enrolled)
                     state.saved = True
                     LOGGER.info(
                         "Rostro enrolado: %s (%s, rol %s). Pulsa ESC para volver.",
                         name,
-                        face_id,
+                        target_id,
                         role.value,
                     )
 
@@ -428,6 +480,7 @@ def run_face_login(request: AppRunRequest) -> int:
         if not enrolled:
             LOGGER.error("Sin rostros enrolados: usa primero la opcion Enrolar.")
             return 1
+        access_log = FileAccessLogRepository(face_config.access_dir)
         session_provider = _identity_provider(face_config, repository)
         matcher = FaceMatcher(threshold=face_config.match_threshold)
         debouncer = LoginDebouncer(
@@ -442,9 +495,10 @@ def run_face_login(request: AppRunRequest) -> int:
 
         lock = threading.Lock()
 
-        def _process(observations: tuple[FaceObservation, ...]) -> None:
-            """Actualiza el login (matching, debounce y sesion) en el worker."""
+        def _process(frame: Frame, observations: tuple[FaceObservation, ...]) -> None:
+            """Actualiza el login (matching, debounce, sesion y acceso) en el worker."""
             greet: EnrolledFace | None = None
+            photo_frame: NDArray[np.uint8] | None = None
             with lock:
                 if not observations:
                     state.boxes = ()
@@ -468,12 +522,26 @@ def run_face_login(request: AppRunRequest) -> int:
                         state.login_text = UNKNOWN_TEXT
                     elif identity is None:
                         state.login_text = RECOGNIZING_TEXT
+                    if (
+                        match.face is not None
+                        and match.distance <= face_config.login_photo_threshold
+                        and state.login_photo_face_id != match.face.face_id
+                    ):
+                        # Primera coincidencia nitida de ESA identidad: sera su
+                        # foto de acceso. Si aparece otra cara, se reemplaza para
+                        # no guardar la foto de una persona en el evento de otra.
+                        state.login_photo_frame = frame.data.copy()
+                        state.login_photo_face_id = match.face.face_id
                 if identity is not None:
                     state.highlight_ok = True
                     state.login_text = f"Bienvenido {identity.name} {identity.face_id}"
                     if state.greeted_id != identity.face_id:
                         state.greeted_id = identity.face_id
                         greet = identity
+                        if state.login_photo_face_id == identity.face_id:
+                            photo_frame = state.login_photo_frame
+                        state.login_photo_frame = None
+                        state.login_photo_face_id = None
                 elif not observations:
                     state.highlight_ok = False
                     state.login_text = ""
@@ -482,6 +550,8 @@ def run_face_login(request: AppRunRequest) -> int:
             if greet is not None:
                 # I/O a disco fuera del lock: no debe frenar el dibujo.
                 _write_login_session(session_provider, greet)
+                image = encode_png(photo_frame) if photo_frame is not None else None
+                _append_access_event(access_log, greet, image)
 
         def _on_context(context: FrameContext) -> None:
             if worker.error is not None:
@@ -562,6 +632,23 @@ def _write_login_session(session_provider: FileIdentityProvider, identity: Enrol
         return
     LOGGER.info("Bienvenido %s %s", identity.name, identity.face_id)
     LOGGER.info("Sesion iniciada: %s (%s)", identity.name, identity.role.value)
+
+
+def _append_access_event(
+    access_log: FileAccessLogRepository, identity: EnrolledFace, image: bytes | None
+) -> None:
+    """Registra el login en el historial de accesos; un fallo no corta la app."""
+    event = AccessEvent(
+        face_id=identity.face_id,
+        name=identity.name,
+        role=identity.role,
+        timestamp=datetime.now(UTC).isoformat(),
+        image="",
+    )
+    try:
+        access_log.append(event=event, image=image)
+    except RecognizerError as exc:
+        LOGGER.warning("No se pudo registrar el acceso (%s).", exc)
 
 
 def run_face_logout(request: AppRunRequest) -> int:

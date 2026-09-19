@@ -37,6 +37,14 @@ class FaceRepositoryError(RecognizerError):
     """El almacen de rostros enrolados no pudo leerse o escribirse."""
 
 
+class ImageEncodingError(RecognizerError):
+    """Una imagen no pudo codificarse a PNG en memoria."""
+
+
+class AccessLogError(RecognizerError):
+    """El registro de accesos no pudo leerse o escribirse."""
+
+
 class ActionError(RecognizerError):
     """La accion local no pudo ejecutarse."""
 

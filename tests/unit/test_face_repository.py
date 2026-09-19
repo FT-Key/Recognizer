@@ -2,21 +2,36 @@
 
 from pathlib import Path
 
+import pytest
+
 from recognizer.adapters.file_face_repository import FileFaceRepository
+from recognizer.core.constants import FACE_PREVIEW_SUFFIX
 from recognizer.core.domain.face import EnrolledFace, FaceEmbedding
+from recognizer.core.domain.identity import Role
+from recognizer.core.errors import FaceRepositoryError
 
 EMBEDDING: FaceEmbedding = (1.0, 0.0)
 OTHER_EMBEDDING: FaceEmbedding = (0.0, 1.0)
 CREATED_AT = "2026-09-19T00:00:00+00:00"
+PREVIEW_BYTES = b"\x89PNG\r\n\x1a\nfake"
+PREVIEW_NAME = f"F-0001{FACE_PREVIEW_SUFFIX}"
 
 
-def _face(face_id: str = "F-0001", name: str = "Ada") -> EnrolledFace:
+def _face(
+    face_id: str = "F-0001",
+    name: str = "Ada",
+    *,
+    role: Role = Role.OPERATOR,
+    preview: str = "",
+) -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
         name=name,
         embedding=EMBEDDING,
         samples=5,
         created_at=CREATED_AT,
+        role=role,
+        preview=preview,
     )
 
 
@@ -116,3 +131,208 @@ def test_legacy_index_with_non_face_ids_is_ignored(tmp_path: Path) -> None:
 
     assert [face.face_id for face in repo.list_all()] == ["F-0001"]
     assert repo.next_id() == "F-0002"
+
+
+def test_save_preview_without_json_writes_image_only(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    name = repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)
+
+    assert name == PREVIEW_NAME
+    assert repo.preview_path("F-0001") == repo.store_dir / PREVIEW_NAME
+    assert repo.find_by_id("F-0001") is None
+
+
+def test_save_preview_attaches_to_existing_face(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+    repo.save(_face())
+
+    name = repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)
+
+    found = repo.find_by_id("F-0001")
+    assert found is not None
+    assert found.preview == name
+    assert repo.preview_path("F-0001") == repo.store_dir / name
+
+
+def test_save_preview_is_idempotent(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+    repo.save(_face())
+
+    first = repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)
+    second = repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)
+
+    found = repo.find_by_id("F-0001")
+    assert first == second
+    assert found is not None
+    assert found.preview == first
+
+
+def test_preview_path_missing_returns_none(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    assert repo.preview_path("F-0001") is None
+
+
+def test_save_preview_invalid_face_id_raises(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    with pytest.raises(FaceRepositoryError, match="face_id invalido"):
+        repo.save_preview(face_id="../escape", image=PREVIEW_BYTES)
+
+
+def test_preview_roundtrip_persists_field(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    FileFaceRepository(store).save(_face(preview=PREVIEW_NAME))
+
+    found = FileFaceRepository(store).find_by_id("F-0001")
+
+    assert found is not None
+    assert found.preview == PREVIEW_NAME
+
+
+def test_update_changes_name_role_and_preview(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+    repo.save(_face())
+
+    repo.update(_face(name="Ada Lovelace", role=Role.ADMIN, preview=PREVIEW_NAME))
+
+    found = repo.find_by_id("F-0001")
+    assert found is not None
+    assert found.name == "Ada Lovelace"
+    assert found.role is Role.ADMIN
+    assert found.preview == PREVIEW_NAME
+    assert repo.next_id() == "F-0002"
+
+
+def test_delete_removes_json_and_preview(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    repo.save(_face())
+    repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)
+
+    repo.delete("F-0001")
+
+    assert repo.find_by_id("F-0001") is None
+    assert repo.preview_path("F-0001") is None
+    assert repo.list_all() == ()
+    assert not (store / "F-0001.json").exists()
+    assert not (store / PREVIEW_NAME).exists()
+
+
+def test_delete_removes_id_from_index(tmp_path: Path) -> None:
+    import json
+
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    repo.save(_face())
+
+    repo.delete("F-0001")
+
+    payload = json.loads((store / "index.json").read_text(encoding="utf-8"))
+    assert "F-0001" not in payload["faces"]
+
+
+def test_delete_missing_face_is_noop(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    repo.delete("F-0001")
+
+    assert repo.list_all() == ()
+
+
+def test_delete_invalid_face_id_raises(tmp_path: Path) -> None:
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    with pytest.raises(FaceRepositoryError, match="face_id invalido"):
+        repo.delete("../escape")
+
+
+def test_corrupt_index_is_rebuilt(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "index.json").write_text("no json", encoding="utf-8")
+
+    assert repo.list_all() == ()
+    assert repo.next_id() == "F-0001"
+
+
+def test_index_with_dict_entries_is_accepted(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "index.json").write_text(
+        '{"counter": 1, "faces": [{"face_id": "F-0001"}]}', encoding="utf-8"
+    )
+
+    assert repo.next_id() == "F-0002"
+    assert repo.list_all() == ()
+
+
+def test_corrupt_face_file_is_ignored(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "F-0001.json").write_text("no json", encoding="utf-8")
+
+    assert repo.find_by_id("F-0001") is None
+
+
+def test_non_dict_face_file_is_ignored(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "F-0001.json").write_text("[1, 2]", encoding="utf-8")
+
+    assert repo.find_by_id("F-0001") is None
+
+
+def test_face_with_invalid_embedding_is_ignored(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "F-0001.json").write_text(
+        (
+            '{"face_id": "F-0001", "name": "Ada", "embedding": ["x"], '
+            f'"samples": 5, "created_at": "{CREATED_AT}", "role": "admin"}}'
+        ),
+        encoding="utf-8",
+    )
+
+    assert repo.find_by_id("F-0001") is None
+
+
+def test_save_error_when_tempfile_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_args: object, **_kwargs: object) -> tuple[int, str]:
+        raise OSError("sin temporal")
+
+    monkeypatch.setattr("tempfile.mkstemp", _boom)
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    with pytest.raises(FaceRepositoryError, match="No se pudo escribir"):
+        repo.save(_face())
+
+
+def test_save_error_when_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(*_args: object, **_kwargs: object) -> object:
+        raise OSError("sin descriptor")
+
+    monkeypatch.setattr("os.fdopen", _boom)
+    repo = FileFaceRepository(tmp_path / "faces")
+
+    with pytest.raises(FaceRepositoryError, match="No se pudo escribir"):
+        repo.save(_face())
+
+
+def test_delete_error_when_face_path_is_directory(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / "F-0001.json").mkdir()
+
+    with pytest.raises(FaceRepositoryError, match="borrar"):
+        repo.delete("F-0001")
+
+
+def test_save_preview_error_when_target_is_directory(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    (store / PREVIEW_NAME).mkdir()
+
+    with pytest.raises(FaceRepositoryError, match="foto"):
+        repo.save_preview(face_id="F-0001", image=PREVIEW_BYTES)

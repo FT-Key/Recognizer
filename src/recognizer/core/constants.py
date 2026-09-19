@@ -130,6 +130,15 @@ DEFAULT_FACE_MATCH_THRESHOLD = 0.45
 DEFAULT_FACE_CONFIRM_FRAMES = 3
 DEFAULT_FACE_RELEASE_FRAMES = 5
 DEFAULT_FACE_STORE_DIR = "data/faces"
+# Foto de enrolamiento (<id>.png) junto al JSON de cada rostro.
+FACE_PREVIEW_SUFFIX = ".png"
+# Registro de accesos (logins): JSONL + imagenes de cada login.
+DEFAULT_ACCESS_DIR = "data/access"
+ACCESS_LOG_FILENAME = "logins.jsonl"
+ACCESS_IMAGES_DIRNAME = "images"
+# Distancia coseno maxima para elegir la foto del login: mas estricta que
+# match_threshold (menor distancia = mejor), para guardar una foto nitida.
+DEFAULT_LOGIN_PHOTO_THRESHOLD = 0.35
 DEFAULT_FACE_DET_SIZE = 640
 # Cada cuantos fotogramas se ejecuta la inferencia facial. 1 = todos. Subirlo
 # alivia CPUs lentas o camaras de red: la vista sigue fluida y la deteccion se
