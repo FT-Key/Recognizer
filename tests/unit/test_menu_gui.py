@@ -13,6 +13,7 @@ import sys
 import tkinter
 from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar, cast
 
 import pytest
@@ -34,7 +35,13 @@ from recognizer.cli.menu_gui import (
     run_gui_menu,
 )
 from recognizer.core.config import AppConfig, AppsConfig
-from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.app import (
+    AppAvailability,
+    AppCatalog,
+    AppId,
+    AppPreparation,
+    AppRunRequest,
+)
 
 REQUEST = AppRunRequest(config_path=Path("config.yaml"))
 TEST_LOGGER = logging.getLogger("recognizer.menu.gui.test")
@@ -195,6 +202,7 @@ class FakeCanvas(_WidgetBase):
         super().__init__(*args, **kwargs)
         self.windows: list[object] = []
         self.itemconfigure_calls: list[tuple[object, dict[str, object]]] = []
+        self.scroll_calls: list[tuple[int, str]] = []
         FakeCanvas.instances.append(self)
 
     def create_window(self, *_args: object, window: object = None, **_kwargs: object) -> int:
@@ -209,6 +217,9 @@ class FakeCanvas(_WidgetBase):
 
     def yview(self, *_args: object) -> None:
         pass
+
+    def yview_scroll(self, number: int, what: str) -> None:
+        self.scroll_calls.append((number, what))
 
 
 class FakeScrollbar(_WidgetBase):
@@ -302,9 +313,12 @@ def test_build_menu_rows_reflects_states_and_descriptions() -> None:
     assert by_id[AppId.ANTI_INTRUDER].selectable is True
     assert by_id[AppId.ANTI_INTRUDER].label == LABEL_AVAILABLE
     assert by_id[AppId.ANTI_INTRUDER].availability is AppAvailability.AVAILABLE
-    assert by_id[AppId.POSTURE].selectable is False
-    assert by_id[AppId.POSTURE].label == LABEL_COMING_SOON
-    assert by_id[AppId.POSTURE].availability is AppAvailability.COMING_SOON
+    assert by_id[AppId.POSTURE].selectable is True
+    assert by_id[AppId.POSTURE].label == LABEL_AVAILABLE
+    assert by_id[AppId.POSTURE].availability is AppAvailability.AVAILABLE
+    assert by_id[AppId.PPE_DETECTOR].selectable is False
+    assert LABEL_COMING_SOON in by_id[AppId.PPE_DETECTOR].label
+    assert by_id[AppId.PPE_DETECTOR].availability is AppAvailability.COMING_SOON
 
     disabled_config = AppsConfig(enabled={AppId.GESTURES: False})
     disabled = {row.app_id: row for row in build_menu_rows(AppCatalog(), disabled_config)}
@@ -415,9 +429,12 @@ def test_run_gui_menu_badges_use_contrast_foreground(monkeypatch: pytest.MonkeyP
         == 0
     )
 
+    training_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.TRAINING.value}"
+    enrollment_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.ENROLLMENT.value}"
     badges = {label.text: label for label in FakeLabel.instances}
     assert badges[LABEL_AVAILABLE].fg == DEFAULT_THEME.primary_contrast
-    assert badges[LABEL_COMING_SOON].fg == DEFAULT_THEME.text
+    assert badges[training_label].fg == DEFAULT_THEME.text
+    assert badges[enrollment_label].fg == DEFAULT_THEME.text
     assert badges[LABEL_DISABLED].fg == DEFAULT_THEME.text
 
 
@@ -511,7 +528,7 @@ def test_run_gui_menu_ignores_non_selectable_rows(
         return 0
 
     monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: fake_runner)
-    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(4).command)
+    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(5).command)
 
     result = run_gui_menu(
         request=REQUEST,
@@ -523,7 +540,7 @@ def test_run_gui_menu_ignores_non_selectable_rows(
     assert result == 0
     assert calls == []
     assert fake_root_cls.instances[0].withdraw_calls == 0
-    assert _app_button(4).state == menu_gui.STATE_DISABLED
+    assert _app_button(5).state == menu_gui.STATE_DISABLED
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -545,6 +562,33 @@ def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     root.bindings[menu_gui.EVENT_ESCAPE](None)
     _press(exit_command)
     assert root.destroy_calls == 3
+
+
+def test_mousewheel_over_any_widget_scrolls_the_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: None)
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=AppsConfig(),
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+    root = fake_root_cls.instances[0]
+    canvas = FakeCanvas.instances[0]
+    handler = root.bindings[menu_gui.EVENT_MOUSEWHEEL]
+
+    handler(SimpleNamespace(delta=menu_gui.WHEEL_DELTA))
+    handler(SimpleNamespace(delta=-menu_gui.WHEEL_DELTA))
+    handler(SimpleNamespace(delta=0))
+
+    assert canvas.scroll_calls == [(-1, menu_gui.SCROLL_UNITS), (1, menu_gui.SCROLL_UNITS)]
 
 
 def test_keyboard_interrupt_in_mainloop_returns_zero(
