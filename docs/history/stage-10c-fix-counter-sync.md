@@ -71,7 +71,7 @@ Modificados:
 - `uv run test` — **973 passed, 2 deselected**, cobertura **96.75%**
   (`core/domain/tracking.py` y `adapters/overlay_people.py` al 100%).
 - `uv run check-arch` — 3/3 contratos KEPT.
-- `uv run smoke` con cámara real — pendiente de verificación manual (hardware).
+- `uv run smoke --frames 30 --no-window` — OK (30 fotogramas, 9.8 FPS, 0 manos).
 
 ## Revisión (hallazgos y correcciones)
 
@@ -81,12 +81,13 @@ cuando `margin == 0`. El cuarto (docs) es esta actualización. Sin bloqueantes.
 
 ## Commits
 
-Cambios de la etapa en el árbol de trabajo sobre `stage/10c-fix-counter-sync` (HEAD en
-`74bad81`, merge de 12b a `dev`); pendientes de commit al cierre por git-ops.
+- `f5b439c` `fix(10c): banda muerta y purga de tracks en el contador de personas`
+- `fed0124` `test(10c): cobertura de banda muerta, purga y config del contador`
+- `4e579dc` `docs(10c-fix): history, arquitectura, pending-tests y STATE`
+- `40083c2` `merge: 10c-fix — conteo sincronizado (banda muerta + purga)` (en `dev`)
 
 ## Pendientes / riesgos
 
 - Calibrar `margin`, `position` y `track_timeout_frames` con cámara real.
 - El conteo Entradas==Salidas sigue sin garantizarse con una sola línea (limitación del
   modelo).
-- `uv run smoke` con cámara real pendiente de hardware.
