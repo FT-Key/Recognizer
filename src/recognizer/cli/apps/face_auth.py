@@ -356,9 +356,11 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
             )
 
         with ExitStack() as stack:
+            camera = OpenCVCamera(camera_config)
             with log_step(LOGGER, f"Abriendo camara (device={camera_config.device_index})"):
-                camera = stack.enter_context(OpenCVCamera(camera_config))
-            source = stack.enter_context(LatestFrameSource(camera))
+                # LatestFrameSource abre la camara y arranca el hilo de captura;
+                # no se entra la camara aparte (seria una doble apertura).
+                source = stack.enter_context(LatestFrameSource(camera))
             with log_step(LOGGER, f"Cargando modelo facial ({face_config.model_path})"):
                 stack.enter_context(recognizer)
             stack.enter_context(alert)
@@ -501,9 +503,11 @@ def run_face_login(request: AppRunRequest) -> int:
             )
 
         with ExitStack() as stack:
+            camera = OpenCVCamera(camera_config)
             with log_step(LOGGER, f"Abriendo camara (device={camera_config.device_index})"):
-                camera = stack.enter_context(OpenCVCamera(camera_config))
-            source = stack.enter_context(LatestFrameSource(camera))
+                # LatestFrameSource abre la camara y arranca el hilo de captura;
+                # no se entra la camara aparte (seria una doble apertura).
+                source = stack.enter_context(LatestFrameSource(camera))
             with log_step(LOGGER, f"Cargando modelo facial ({face_config.model_path})"):
                 stack.enter_context(recognizer)
             stack.enter_context(alert)
