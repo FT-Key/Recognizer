@@ -197,3 +197,41 @@ Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
 - Desktop tiene acciones que la web no puede hacer (mouse, teclado, apps)
 
 Ver `docs/WEB-PLAN.md` para detalles de la versión web.
+
+## Latencia y desacople de inferencia (app facial)
+
+Todas las apps comparten `cli/runtime.run_camera_loop`: lee un fotograma, ejecuta el
+pipeline y dibuja. El bucle es **single-thread**: el ritmo de lectura es el ritmo de
+inferencia.
+
+- **Apps rápidas** (gestos/MediaPipe, contador/anti-intrusos/postura/YOLO nano): la
+  inferencia va a ~10-30 FPS, así que el bucle lee la cámara casi tan rápido como llega el
+  stream. Con `CAP_PROP_BUFFERSIZE=1` alcanza para que no haya retraso.
+- **App facial** (InsightFace `buffalo_s` en CPU): la inferencia va a ~2-5 FPS. El bucle se
+  queda cientos de ms dentro del reconocedor sin leer, **no drena el stream** y la cámara de
+  red (teléfono/enlace móvil) acumula retraso hasta segundos; la app de enlace incluso avisa
+  *"calidad de red deficiente"*. `CAP_PROP_BUFFERSIZE=1` no lo evita porque ese búfer es
+  local; el búfer de red queda del lado del emisor.
+
+Solución en la app facial (solo ella, por ahora):
+
+1. `adapters/latest_frame_source.py` (`LatestFrameSource`): hilo daemon que **drena la
+   cámara sin parar** y guarda el último fotograma. `read()` espera al siguiente fotograma
+   nuevo y devuelve una copia (para dibujar); `wait_for_new(version)` permite al worker ver
+   el último sin consumirlo.
+2. `cli/apps/face_auth.py` (`_RecognitionWorker`): hilo que reconoce el último fotograma y
+   actualiza el estado (enrolamiento/login) bajo lock. El bucle principal **solo dibuja**,
+   así que la vista va a ritmo de cámara aunque la inferencia tarde.
+3. `face_auth.det_size` (320 por defecto) y `face_auth.process_every_n_frames` bajan el costo
+   de CPU de la inferencia.
+
+**Cuándo aplicar el mismo patrón a otras apps:** cuando la inferencia de una app sea más
+lenta que la cámara (FPS de inferencia < FPS de captura) o la cámara sea de red y aparezca
+retraso creciente / avisos de calidad. Se hace sin tocar `core`: envolver su `FrameSource`
+con `LatestFrameSource` y mover la inferencia a un worker que entregue resultados al bucle
+de dibujo. No hace falta para apps que ya corren en tiempo real (hoy, todas menos la facial).
+
+**Para qué sirve:** desacoplar la captura del cómputo. Garantiza (a) que el stream se drene
+siempre (sin retraso acumulado ni degradación de red), (b) que el usuario vea video en vivo
+con el último resultado disponible, y (c) que subir la carga de inferencia no congele la
+interfaz.
