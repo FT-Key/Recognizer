@@ -42,7 +42,7 @@ from recognizer.core.domain.detection import (
     count_people,
 )
 from recognizer.core.domain.frame import Frame
-from recognizer.core.domain.tracking import CountingLine, TrackedDetection
+from recognizer.core.domain.tracking import CountingLine, LineAxis, TrackedDetection
 from recognizer.core.errors import ConfigError, DetectorError
 from recognizer.core.ports.object_detector import DetectorConfig
 from recognizer.core.ports.object_tracker import ObjectTracker
@@ -682,10 +682,12 @@ def _patch_runner_env(
     return detector
 
 
-def _app_config_with_line(*, enabled: bool, confirm_frames: int = 1) -> AppConfig:
+def _app_config_with_line(
+    *, enabled: bool, confirm_frames: int = 1, axis: LineAxis = LineAxis.HORIZONTAL
+) -> AppConfig:
     return AppConfig(
         people_counter=PeopleCounterConfig(
-            line=CountingLineConfig(enabled=enabled, confirm_frames=confirm_frames)
+            line=CountingLineConfig(enabled=enabled, axis=axis, confirm_frames=confirm_frames)
         )
     )
 

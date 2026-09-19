@@ -480,7 +480,7 @@ class CountingLineConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     enabled: bool = True
-    axis: LineAxis = LineAxis.HORIZONTAL
+    axis: LineAxis = LineAxis.VERTICAL
     position: float = Field(default=DEFAULT_LINE_POSITION, gt=0, lt=1)
     margin: float = Field(default=DEFAULT_LINE_MARGIN, ge=0, lt=0.5)
     invert: bool = False

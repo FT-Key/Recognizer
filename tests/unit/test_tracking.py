@@ -359,7 +359,7 @@ def test_counting_line_config_defaults() -> None:
     config = CountingLineConfig()
 
     assert config.enabled is True
-    assert config.axis is LineAxis.HORIZONTAL
+    assert config.axis is LineAxis.VERTICAL
     assert config.position == DEFAULT_LINE_POSITION
     assert config.margin == DEFAULT_LINE_MARGIN
     assert config.invert is False

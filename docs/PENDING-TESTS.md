@@ -274,9 +274,10 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
 ### Etapa 10c — contador con tracking y línea
 
 - [ ] `uv run recognizer`, elegir `2`: se dibujan cajas con `#id`, la línea amarilla
-  horizontal (por defecto `position: 0.5`) y el HUD `Personas` / `Entradas` / `Salidas`.
-- [ ] Cruzar la línea de arriba abajo: aumenta `Entradas`; de abajo arriba: `Salidas`.
-  Con `people_counter.line.invert: true` se intercambian. Probar `axis: vertical`.
+  vertical (por defecto `axis: vertical`, `position: 0.5`) y el HUD `Personas` / `Entradas` / `Salidas`.
+- [ ] Cruzar la línea de izquierda a derecha: aumenta `Entradas`; de derecha a
+  izquierda: `Salidas`. Con `people_counter.line.invert: true` se intercambian.
+  Probar `axis: horizontal` (arriba abajo = entradas).
 - [ ] Anti-jitter: quedarse justo sobre la línea no debe sumar; `confirm_frames: 2`
   exige 2 fotogramas consecutivos al otro lado. Ajustar si hay doble conteo o cruces
   perdidos.
