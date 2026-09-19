@@ -27,7 +27,8 @@ GUIDE_SCALE = 0.8
 GUIDE_THICKNESS = 2
 GUIDE_MARGIN_PX = 20
 GUIDE_BOX_PADDING_PX = 8
-GUIDE_INSET_RATIO = 0.3
+TARGET_FRAME_LABEL = "llena este marco"
+TARGET_LABEL_MARGIN_PX = 6
 
 
 def _guidance_color(
@@ -70,22 +71,42 @@ def _draw_boxes(
         )
 
 
-def _draw_distance_guide(
+def _draw_target_frame(
     image: NDArray[np.uint8],
     *,
     width: int,
     height: int,
+    target_width_ratio: float,
     color: tuple[int, int, int],
 ) -> None:
-    """Guia de distancia: marco central donde debe quedar la cara."""
-    margin_x = int(width * GUIDE_INSET_RATIO)
-    margin_y = int(height * GUIDE_INSET_RATIO)
+    """Marco objetivo: cuadrado centrado donde debe encajar la cara.
+
+    El lado equivale a ``target_width_ratio * width`` (el mismo umbral que
+    exige ``assess_capture``): si la cara llena este marco, el enrolamiento
+    la acepta. Sin etiqueta decorativa adicional salvo su instruccion.
+    """
+    side = int(width * target_width_ratio)
+    if side <= 0:
+        return
+    x_min = max((width - side) // 2, 0)
+    y_min = max((height - side) // 2, 0)
+    x_max = min(x_min + side, width)
+    y_max = min(y_min + side, height)
     cv2.rectangle(
         image,
-        (margin_x, margin_y),
-        (width - margin_x, height - margin_y),
+        (x_min, y_min),
+        (x_max, y_max),
         color,
         GUIDE_BOX_THICKNESS,
+    )
+    cv2.putText(
+        image,
+        TARGET_FRAME_LABEL,
+        (x_min, max(y_min - TARGET_LABEL_MARGIN_PX, 0)),
+        LABEL_FONT,
+        LABEL_SCALE,
+        color,
+        LABEL_THICKNESS,
     )
 
 
@@ -97,11 +118,23 @@ def draw_face_overlay(
     progress_text: str,
     login_text: str,
     highlight_ok: bool,
+    target_width_ratio: float | None = None,
 ) -> None:
-    """Dibuja cajas faciales, HUD superior (login + progreso) y guia inferior."""
+    """Dibuja cajas faciales, HUD superior (login + progreso) y guia inferior.
+
+    Con ``target_width_ratio`` dibuja el marco objetivo (cuadrado centrado de
+    lado ``target_width_ratio * W``); con ``None`` no dibuja ningun marco.
+    """
     height, width = image.shape[:2]
     color = _guidance_color(guidance, highlight_ok=highlight_ok)
-    _draw_distance_guide(image, width=width, height=height, color=SURFACE_COLOR_BGR)
+    if target_width_ratio is not None:
+        _draw_target_frame(
+            image,
+            width=width,
+            height=height,
+            target_width_ratio=target_width_ratio,
+            color=SURFACE_COLOR_BGR,
+        )
     _draw_boxes(image, boxes=boxes, width=width, height=height, color=color)
     if login_text:
         cv2.putText(

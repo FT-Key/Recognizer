@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import TYPE_CHECKING, Final
 
@@ -36,12 +36,14 @@ from recognizer.cli.menu import LABEL_NO_PERMISSION, availability_label
 from recognizer.cli.paths import desktop_icon_path, desktop_logo_path, display_font_paths
 from recognizer.core.config import AppsConfig
 from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.camera import CameraInfo
 from recognizer.core.domain.identity import (
     AllowAllPolicy,
     AppPolicy,
     Identity,
     anonymous_identity,
 )
+from recognizer.core.ports.camera_discovery import CameraEnumerator
 from recognizer.core.ports.identity_provider import IdentityProvider
 
 if TYPE_CHECKING:
@@ -58,6 +60,10 @@ GUI_HEADER_SUBTITLE = "control por camara · elige una aplicacion"
 GUI_APPS_SECTION = "APLICACIONES"
 GUI_FOOTER_HINT = "Enter: abrir · ESC: salir"
 BUTTON_TEXT_TEMPLATE = "{number}. {title}\n{description}"
+GUI_CAMERA_LABEL = "Cámara"
+GUI_CAMERA_DETECT_TEXT = "Detectar"
+GUI_CAMERA_AUTO_TEXT = "auto"
+GUI_CAMERA_LOG_TEMPLATE = "Camaras detectadas: {count}."
 
 # --- Geometria --------------------------------------------------------------
 WINDOW_WIDTH = 760
@@ -147,6 +153,8 @@ ANCHOR_NORTH_WEST: Final = "nw"
 EVENT_CONFIGURE: Final = "<Configure>"
 EVENT_CLOSE_WINDOW: Final = "WM_DELETE_WINDOW"
 EVENT_ESCAPE: Final = "<Escape>"
+EVENT_KEY_Q: Final = "<q>"
+EVENT_KEY_Q_UPPER: Final = "<Q>"
 EVENT_RETURN: Final = "<Return>"
 EVENT_SPACE: Final = "<space>"
 EVENT_UP: Final = "<Up>"
@@ -525,6 +533,7 @@ def run_gui_menu(
     tk_factory: Callable[[], tkinter.Tk] | None = None,
     identity_provider: IdentityProvider | None = None,
     policy: AppPolicy | None = None,
+    camera_enumerator: CameraEnumerator | None = None,
 ) -> int:
     """Muestra el menu grafico y abre apps hasta que el usuario sale (0).
 
@@ -533,7 +542,8 @@ def run_gui_menu(
     `tk_factory` inyecta la clase Tk en tests (sin display real). Con
     `identity_provider` y `policy` (los inyecta el launcher real) las apps sin
     permiso se muestran con `[sin permiso]` y no se pueden abrir; sin ambas,
-    el menu es el historico (sin filtro).
+    el menu es el historico (sin filtro). `camera_enumerator` inyecta el
+    descubridor de camaras en tests; por defecto se usa OpenCV (perezoso).
     """
     import tkinter
 
@@ -567,6 +577,14 @@ def run_gui_menu(
 
     focusable: list[tuple[MenuRow, tkinter.Button]] = []
     focused_index = 0
+    cameras: list[CameraInfo] = []
+    selected_device: int | None = None
+
+    def effective_request() -> AppRunRequest:
+        """Request con la camara elegida en el selector (`device`)."""
+        if selected_device is None:
+            return request
+        return replace(request, device=selected_device)
 
     def open_row(row: MenuRow) -> None:
         if row.app_id is None or not row.selectable:
@@ -585,6 +603,21 @@ def run_gui_menu(
                     fresh.role.value,
                 )
                 return
+        if row.app_id is AppId.FACE_AUTH:
+            from recognizer.cli.face_menu_gui import run_face_submenu
+
+            logger.info("Abriendo '%s'... (ESC para volver al menu)", row.title)
+            root.withdraw()
+            try:
+                run_face_submenu(
+                    effective_request(),
+                    identity_provider=identity_provider,
+                    logger=logger,
+                )
+            finally:
+                root.deiconify()
+            logger.info("Volviendo al menu principal.")
+            return
         runner = resolve_runner(row.app_id)
         if runner is None:
             logger.error("No hay runner para '%s'.", row.app_id.value)
@@ -592,7 +625,7 @@ def run_gui_menu(
         logger.info("Abriendo '%s'... (ESC/q para volver al menu)", row.title)
         root.withdraw()
         try:
-            runner(request)
+            runner(effective_request())
         finally:
             root.deiconify()
         logger.info("Volviendo al menu principal.")
@@ -642,6 +675,100 @@ def run_gui_menu(
         bg=theme.primary,
         anchor=ANCHOR_WEST,
     ).pack(fill=FILL_X)
+
+    def detect_cameras() -> None:
+        """Enumera las camaras (OpenCV perezoso) y selecciona la primera."""
+        nonlocal selected_device
+        if camera_enumerator is not None:
+            enumerator: CameraEnumerator = camera_enumerator
+        else:
+            from recognizer.adapters.camera_discovery import OpenCVCameraEnumerator
+
+            enumerator = OpenCVCameraEnumerator()
+        try:
+            found = enumerator.list_cameras()
+        except Exception as exc:  # detectar jamas tumba el menu
+            logger.warning("No se pudieron detectar las camaras (%s).", exc)
+            return
+        cameras.clear()
+        cameras.extend(found)
+        logger.info(GUI_CAMERA_LOG_TEMPLATE.format(count=len(cameras)))
+        if cameras:
+            selected_device = cameras[0].index
+            cycle_button.configure(text=str(selected_device))
+        else:
+            selected_device = None
+            cycle_button.configure(text=GUI_CAMERA_AUTO_TEXT)
+
+    def cycle_camera() -> None:
+        """Rota la camara seleccionada entre las detectadas."""
+        nonlocal selected_device
+        if not cameras:
+            logger.info("Sin camaras detectadas; pulsa Detectar primero.")
+            return
+        indices = [info.index for info in cameras]
+        if selected_device not in indices:
+            selected_device = indices[0]
+        else:
+            selected_device = indices[(indices.index(selected_device) + 1) % len(indices)]
+        cycle_button.configure(text=str(selected_device))
+
+    camera_box = tkinter.Frame(header, bg=theme.primary)
+    camera_box.pack(side=SIDE_RIGHT, padx=(BORDER_NONE, theme.pad_header), pady=theme.space_3)
+    tkinter.Label(
+        camera_box,
+        text=GUI_CAMERA_LABEL,
+        font=(body_family, theme.size_body_small, FONT_WEIGHT_BOLD),
+        fg=theme.primary_contrast,
+        bg=theme.primary,
+        anchor=ANCHOR_WEST,
+    ).pack(fill=FILL_X)
+    camera_buttons = tkinter.Frame(camera_box, bg=theme.primary)
+    camera_buttons.pack(fill=FILL_X)
+    cycle_button = tkinter.Button(
+        camera_buttons,
+        text=GUI_CAMERA_AUTO_TEXT,
+        command=cycle_camera,
+        relief=RELIEF_RAISED,
+        bd=BUTTON_BORDER_WIDTH,
+        padx=theme.pad_button_x,
+        pady=theme.space_1,
+        font=(body_family, theme.size_body_small, FONT_WEIGHT_BOLD),
+        bg=theme.surface_alt,
+        fg=theme.text,
+        activebackground=theme.surface,
+        activeforeground=theme.text,
+        cursor=CURSOR_HAND,
+        takefocus=True,
+        highlightthickness=FOCUS_HIGHLIGHT_WIDTH,
+        highlightbackground=theme.primary,
+        highlightcolor=theme.primary_contrast,
+    )
+    cycle_button.pack(side=SIDE_LEFT)
+    detect_button = tkinter.Button(
+        camera_buttons,
+        text=GUI_CAMERA_DETECT_TEXT,
+        command=detect_cameras,
+        relief=RELIEF_RAISED,
+        bd=BUTTON_BORDER_WIDTH,
+        padx=theme.pad_button_x,
+        pady=theme.space_1,
+        font=(body_family, theme.size_body_small, FONT_WEIGHT_BOLD),
+        bg=theme.surface_alt,
+        fg=theme.text,
+        activebackground=theme.surface,
+        activeforeground=theme.text,
+        cursor=CURSOR_HAND,
+        takefocus=True,
+        highlightthickness=FOCUS_HIGHLIGHT_WIDTH,
+        highlightbackground=theme.primary,
+        highlightcolor=theme.primary_contrast,
+    )
+    detect_button.pack(side=SIDE_LEFT, padx=(theme.space_1, BORDER_NONE))
+    cycle_button.bind(EVENT_RETURN, _event_handler(cycle_camera, consume=True))
+    cycle_button.bind(EVENT_SPACE, _event_handler(cycle_camera, consume=True))
+    detect_button.bind(EVENT_RETURN, _event_handler(detect_cameras, consume=True))
+    detect_button.bind(EVENT_SPACE, _event_handler(detect_cameras, consume=True))
 
     footer = tkinter.Frame(root, bg=theme.surface_alt)
     footer.pack(side=SIDE_BOTTOM, fill=FILL_X)
