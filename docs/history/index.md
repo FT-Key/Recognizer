@@ -39,3 +39,4 @@ etapa que se necesite.
 | 15b-lat | Fix facial: latencia con cámara del teléfono | completada | [stage-15b-fix4-face-latency.md](stage-15b-fix4-face-latency.md) |
 | 15b-async | Fix facial: captura asíncrona + worker de inferencia | completada | [stage-15b-fix5-face-async.md](stage-15b-fix5-face-async.md) |
 | 15b-open | Fix facial: doble apertura de cámara | completada | [stage-15b-fix6-face-double-open.md](stage-15b-fix6-face-double-open.md) |
+| 15b-cost | Fix facial: modelos extra y tope de FPS | completada | [stage-15b-fix7-face-infer-cost.md](stage-15b-fix7-face-infer-cost.md) |

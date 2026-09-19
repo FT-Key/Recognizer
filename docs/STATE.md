@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** fix 15b-open (doble apertura de cámara facial) completado; siguiente: 13 (EPP) o 15c (DB distribuida)
-- **Rama:** `stage/15b-fix6-face-double-open`
+- **Fase actual:** fix 15b-cost (modelos faciales extra + tope de FPS) completado; siguiente: 13 (EPP) o 15c (DB distribuida)
+- **Rama:** `stage/15b-fix7-face-infer-cost`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -45,7 +45,9 @@
 - Fix 15b-async: app facial desacoplada de la captura (`LatestFrameSource` drena la cámara en un hilo + `_RecognitionWorker` infiere en otro; el bucle solo dibuja); `det_size: 320`; patrón y diferencia vs otras apps documentados en `docs/ARCHITECTURE.md`. Solo facial.
 - Gate fix 15b-async verde: lint OK, mypy strict 186, pytest **1130 passed** (94.65%), check-arch 3/3.
 - Fix 15b-open: el runner facial entraba la cámara al stack y `LatestFrameSource` la abría otra vez (`CameraError: La camara ya esta abierta`); ahora solo `LatestFrameSource` abre/libera.
-- Gate fix 15b-open verde: lint OK, mypy strict 186, pytest **1130 passed** (94.69%), check-arch 3/3. Commits pendientes `git-ops`.
+- Gate fix 15b-open verde: lint OK, mypy strict 186, pytest **1130 passed** (94.69%), check-arch 3/3.
+- Fix 15b-cost: `allowed_modules=["detection","recognition"]` (se descartan landmarks/género-edad que corrían por cara) + `face_auth.max_inference_fps` (5 FPS) en el worker.
+- Gate fix 15b-cost verde: lint OK, mypy strict 187, pytest **1133 passed** (94.88%), check-arch 3/3. Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
