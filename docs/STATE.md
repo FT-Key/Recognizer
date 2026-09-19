@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 15a (enrolamiento + login facial) completada; siguiente: 15b (roles) o 13 (EPP, requiere entrenamiento)
-- **Rama:** `stage/15a-face-enroll-login` (base `dev` en `594f9af`; commits pendientes de `git-ops`)
+- **Fase actual:** etapa 15b (roles/permisos sobre login facial) completada; siguiente: 13 (EPP, requiere entrenamiento) o 15c (DB distribuida)
+- **Rama:** `stage/15b-face-roles` (merge pendiente de `git-ops`)
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -32,14 +32,17 @@
 - Fix 10c-fix2 (contador): eje `vertical` por defecto en `people_counter.line` (paso lateral izquierda derecha = entradas; con `invert` se intercambian); el eje horizontal sigue con `axis: horizontal`.
 - Etapa 15a: enrolamiento + login facial con archivos locales (`data/faces/`, ID secuencial F-0001 en `index.json`); `FaceRepository` como seam para DB futura; InsightFace `buffalo_s` CPU una sola vía, 5 ángulos + distancia 0.25-0.55, login con debounce; `AppId.FACE_AUTH` `implemented=True`.
 - Gate 15a verde: pytest **1033 passed** (94.63%), mypy strict 169 archivos, ruff, check-arch 3/3; facial `[disponible]`. Reviewer: apta para merge (mayores corregidos: path-traversal + chmod 0700). Commits pendientes `git-ops`.
+- Etapa 15b: roles `admin > operator > viewer` sobre login 15a (`core/domain/identity.py` + `PolicyEngine`, puerto `IdentityProvider`, `FileIdentityProvider` con sesión `session.json` + expiración); `EnrolledFace.role` + migración legado→operator (primer usuario→admin, inválido→viewer); enroll/login/logout con rol; menú (`menu.py`/`menu_gui.py`) filtra por rol y revalida al clic; `FaceAuthConfig` (`require_login: false` por defecto, invitado viewer) + `AuthError`.
+- Gate 15b verde: pytest **1099 passed** (94.65%), mypy strict 177 archivos, ruff, check-arch 3/3. Reviewer: apta para merge (corregidos: TOCTOU GUI + fallback viewer + `mkstemp` envuelto). Merge pendiente `git-ops`.
 
-## Siguiente (etapa 15b — roles/permisos, o 13 — Detector EPP de obra)
-- 15b: `IdentityProvider`/`PolicyEngine` sobre el login 15a. 13 EPP y 14 inventario requieren entrenamiento. Roadmap y checklist en `docs/WORKFLOW.md` (skill `new-app`).
+## Siguiente (etapa 13 — Detector EPP de obra, o 15c — identidad distribuida)
+- 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap y checklist en `docs/WORKFLOW.md` (skill `new-app`).
 
 ## Bloqueos / notas
 - Usuario verifica manual: ESC/q+X, ventana del menú con cámara real y **aspecto visual del rediseño 10d**.
 - Calibrar con cámara real: `posture.calibration_frames` y `posture.tolerances` (o los umbrales absolutos si `calibration_frames: 0`), `anti_intruder.zone` y `alert.repeat_seconds`, `people_counter.line` (`axis`, `position`, `margin` y `track_timeout_frames`), `min_confidence` y `swap_handedness`.
 - Calibrar facial 15a con cámara real: `face_auth.match_threshold` y `min_face_sharpness`; descargar `buffalo_s` (`uv run python scripts/download_models.py`).
+- Calibrar roles 15b: `session_timeout_seconds` y decidir `require_login: true` donde aplique.
 - Verificación del `.exe` con YOLO/torch, YOLO pose e insightface/onnxruntime pendiente (bundle crece, excluido tangencialmente); regenerar `.exe` para probar assets/icono.
 - "Cabeza adelante" solo mide desvío horizontal en 2D (limitación conocida).
 - `PENDING-TESTS.md`: verificaciones manuales de etapas 0-9b las hace el usuario.
