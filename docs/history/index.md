@@ -24,7 +24,7 @@ etapa que se necesite.
 | 10d | Rediseño UX/UI del menú (estética Vintage + logo/icono) | completada | [stage-10d-menu-ui.md](stage-10d-menu-ui.md) |
 | 10c | Contador de personas: tracking, zona/línea y overlay | completada | [stage-10c-people-counter-tracking.md](stage-10c-people-counter-tracking.md) |
 | 11 | Anti-intrusos (zona + alerta) | completada | [stage-11-anti-intruder.md](stage-11-anti-intruder.md) |
-| 12 | Postura ergonómica (YOLO pose) | pendiente | - |
+| 12 | Postura ergonómica (YOLO pose) | completada | [stage-12-posture.md](stage-12-posture.md) |
 | 13 | Detector EPP de obra (requiere entrenamiento) | pendiente | - |
 | 14 | Inventario por cámara (requiere entrenamiento) | pendiente | - |
 | 15 | Reconocimiento facial (enrolamiento, login y roles) | pendiente | - |
