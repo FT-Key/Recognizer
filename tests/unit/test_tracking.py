@@ -10,13 +10,16 @@ from pydantic import ValidationError
 from recognizer.core.config import AppConfig, CountingLineConfig, PeopleCounterConfig
 from recognizer.core.constants import (
     DEFAULT_LINE_CONFIRM_FRAMES,
+    DEFAULT_LINE_MARGIN,
     DEFAULT_LINE_POSITION,
+    DEFAULT_TRACK_TIMEOUT_FRAMES,
     PERSON_LABEL,
 )
 from recognizer.core.domain.detection import BoundingBox, Detection
 from recognizer.core.domain.tracking import (
     SIDE_NEGATIVE,
     SIDE_POSITIVE,
+    SIDE_UNKNOWN,
     CountingLine,
     LineAxis,
     LineCrossingCounter,
@@ -52,6 +55,11 @@ def _right() -> BoundingBox:
     return _bbox(x_min=0.7, y_min=0.4, x_max=0.9, y_max=0.6)
 
 
+def _in_band() -> BoundingBox:
+    """Caja con centro en Y = 0.5, dentro de la banda muerta de la linea."""
+    return _bbox(x_min=0.4, y_min=0.4, x_max=0.6, y_max=0.6)
+
+
 def _detection(
     *,
     bbox: BoundingBox | None = None,
@@ -69,8 +77,18 @@ def _horizontal() -> CountingLine:
     return CountingLine(axis=LineAxis.HORIZONTAL, position=LINE_POSITION)
 
 
-def _counter(*, invert: bool = False, confirm_frames: int = 1) -> LineCrossingCounter:
-    return LineCrossingCounter(line=_horizontal(), invert=invert, confirm_frames=confirm_frames)
+def _counter(
+    *,
+    invert: bool = False,
+    confirm_frames: int = 1,
+    track_timeout_frames: int = DEFAULT_TRACK_TIMEOUT_FRAMES,
+) -> LineCrossingCounter:
+    return LineCrossingCounter(
+        line=_horizontal(),
+        invert=invert,
+        confirm_frames=confirm_frames,
+        track_timeout_frames=track_timeout_frames,
+    )
 
 
 # --- BoundingBox: centro ---
@@ -124,20 +142,66 @@ def test_counting_line_vertical_uses_center_x() -> None:
     assert line.coordinate(bbox=_right()) == pytest.approx(0.8)
 
 
-def test_counting_line_side_is_positive_over_the_line() -> None:
+def test_counting_line_zone_is_positive_over_the_line() -> None:
     horizontal = _horizontal()
     vertical = CountingLine(axis=LineAxis.VERTICAL, position=LINE_POSITION)
 
-    assert horizontal.side(bbox=_below()) == SIDE_POSITIVE
-    assert horizontal.side(bbox=_above()) == SIDE_NEGATIVE
-    assert vertical.side(bbox=_right()) == SIDE_POSITIVE
-    assert vertical.side(bbox=_left()) == SIDE_NEGATIVE
+    assert horizontal.zone(bbox=_below()) == SIDE_POSITIVE
+    assert horizontal.zone(bbox=_above()) == SIDE_NEGATIVE
+    assert vertical.zone(bbox=_right()) == SIDE_POSITIVE
+    assert vertical.zone(bbox=_left()) == SIDE_NEGATIVE
 
 
-def test_counting_line_center_on_line_counts_as_negative_side() -> None:
+def test_counting_line_center_on_line_is_unknown() -> None:
     on_line = _bbox(x_min=0.4, y_min=0.4, x_max=0.6, y_max=0.6)
 
-    assert _horizontal().side(bbox=on_line) == SIDE_NEGATIVE
+    assert _horizontal().zone(bbox=on_line) == SIDE_UNKNOWN
+
+
+@pytest.mark.parametrize(
+    ("center_y", "expected"),
+    [
+        (0.39, SIDE_NEGATIVE),
+        (0.40, SIDE_UNKNOWN),
+        (0.45, SIDE_UNKNOWN),
+        (0.50, SIDE_UNKNOWN),
+        (0.55, SIDE_UNKNOWN),
+        (0.60, SIDE_UNKNOWN),
+        (0.61, SIDE_POSITIVE),
+    ],
+)
+def test_counting_line_horizontal_zone_respects_margin_band(
+    center_y: float,
+    expected: int,
+) -> None:
+    line = CountingLine(axis=LineAxis.HORIZONTAL, position=LINE_POSITION, margin=0.1)
+    bbox = _bbox(x_min=0.4, y_min=center_y - 0.01, x_max=0.6, y_max=center_y + 0.01)
+
+    assert line.zone(bbox=bbox) == expected
+
+
+def test_counting_line_vertical_zone_respects_margin_band() -> None:
+    line = CountingLine(axis=LineAxis.VERTICAL, position=LINE_POSITION, margin=0.1)
+    inside = _bbox(x_min=0.5, y_min=0.4, x_max=0.6, y_max=0.6)
+    outside = _bbox(x_min=0.6, y_min=0.4, x_max=0.62, y_max=0.6)
+
+    assert line.zone(bbox=inside) == SIDE_UNKNOWN
+    assert line.zone(bbox=outside) == SIDE_POSITIVE
+
+
+@pytest.mark.parametrize("margin", [-0.1, -0.01])
+def test_counting_line_rejects_negative_margin(margin: float) -> None:
+    with pytest.raises(ConfigError, match="margin"):
+        CountingLine(axis=LineAxis.HORIZONTAL, position=LINE_POSITION, margin=margin)
+
+
+@pytest.mark.parametrize(
+    ("position", "margin"),
+    [(0.5, 0.5), (0.2, 0.2), (0.8, 0.2), (0.2, 0.9)],
+)
+def test_counting_line_rejects_margin_too_large(position: float, margin: float) -> None:
+    with pytest.raises(ConfigError, match="margin"):
+        CountingLine(axis=LineAxis.HORIZONTAL, position=position, margin=margin)
 
 
 # --- LineCrossingCounter ---
@@ -150,6 +214,31 @@ def test_counter_new_track_does_not_count() -> None:
 
     assert (snapshot.entries, snapshot.exits) == (0, 0)
     assert (counter.entries, counter.exits) == (0, 0)
+
+
+def test_counter_track_born_in_band_sets_side_without_counting() -> None:
+    counter = _counter()
+
+    first = counter.update((_tracked(bbox=_in_band()),))
+    second = counter.update((_tracked(bbox=_below()),))
+
+    assert (first.entries, first.exits) == (0, 0)
+    assert (second.entries, second.exits) == (0, 0)
+
+    snapshot = counter.update((_tracked(bbox=_above()),))
+    assert (snapshot.entries, snapshot.exits) == (0, 1)
+
+
+def test_counter_jitter_inside_band_does_not_change_side_or_count() -> None:
+    counter = _counter()
+    counter.update((_tracked(bbox=_above()),))
+
+    for _ in range(3):
+        snapshot = counter.update((_tracked(bbox=_in_band()),))
+
+    assert (snapshot.entries, snapshot.exits) == (0, 0)
+    snapshot = counter.update((_tracked(bbox=_below()),))
+    assert (snapshot.entries, snapshot.exits) == (1, 0)
 
 
 def test_counter_negative_to_positive_counts_entry() -> None:
@@ -227,10 +316,40 @@ def test_counter_reset_clears_counters_and_state() -> None:
     assert (snapshot.entries, snapshot.exits) == (0, 1)
 
 
+def test_counter_purges_track_after_timeout_frames() -> None:
+    counter = _counter(track_timeout_frames=2)
+    counter.update((_tracked(bbox=_above()),))
+
+    counter.update(())
+    counter.update(())
+
+    snapshot = counter.update((_tracked(bbox=_below()),))
+
+    assert (snapshot.entries, snapshot.exits) == (0, 0)
+
+
+def test_counter_track_survives_within_timeout_frames() -> None:
+    counter = _counter(track_timeout_frames=3)
+    counter.update((_tracked(bbox=_above()),))
+
+    counter.update(())
+    counter.update(())
+
+    snapshot = counter.update((_tracked(bbox=_below()),))
+
+    assert (snapshot.entries, snapshot.exits) == (1, 0)
+
+
 @pytest.mark.parametrize("confirm_frames", [0, -1])
 def test_counter_rejects_non_positive_confirm_frames(confirm_frames: int) -> None:
     with pytest.raises(ConfigError, match="confirm_frames >= 1"):
         _counter(confirm_frames=confirm_frames)
+
+
+@pytest.mark.parametrize("track_timeout_frames", [0, -1])
+def test_counter_rejects_non_positive_track_timeout(track_timeout_frames: int) -> None:
+    with pytest.raises(ConfigError, match="track_timeout_frames >= 1"):
+        _counter(track_timeout_frames=track_timeout_frames)
 
 
 # --- Configuracion de la linea ---
@@ -242,8 +361,10 @@ def test_counting_line_config_defaults() -> None:
     assert config.enabled is True
     assert config.axis is LineAxis.HORIZONTAL
     assert config.position == DEFAULT_LINE_POSITION
+    assert config.margin == DEFAULT_LINE_MARGIN
     assert config.invert is False
     assert config.confirm_frames == DEFAULT_LINE_CONFIRM_FRAMES
+    assert config.track_timeout_frames == DEFAULT_TRACK_TIMEOUT_FRAMES
 
 
 @pytest.mark.parametrize("position", [-0.1, 0.0, 1.0, 1.1])
@@ -257,6 +378,20 @@ def test_counting_line_config_rejects_zero_confirm_frames() -> None:
         CountingLineConfig(confirm_frames=0)
 
 
+@pytest.mark.parametrize("margin", [-0.1, 0.5, 0.6])
+def test_counting_line_config_rejects_bad_margin(margin: float) -> None:
+    with pytest.raises(ValidationError):
+        CountingLineConfig(margin=margin)
+
+
+@pytest.mark.parametrize("track_timeout_frames", [0, -1])
+def test_counting_line_config_rejects_non_positive_track_timeout(
+    track_timeout_frames: int,
+) -> None:
+    with pytest.raises(ValidationError):
+        CountingLineConfig(track_timeout_frames=track_timeout_frames)
+
+
 def test_people_counter_config_includes_line() -> None:
     assert PeopleCounterConfig().line == CountingLineConfig()
 
@@ -268,8 +403,10 @@ def test_app_config_parses_people_counter_line() -> None:
                 "line": {
                     "axis": "vertical",
                     "position": 0.25,
+                    "margin": 0.1,
                     "invert": True,
                     "confirm_frames": 3,
+                    "track_timeout_frames": 12,
                 }
             }
         }
@@ -277,5 +414,7 @@ def test_app_config_parses_people_counter_line() -> None:
 
     assert parsed.people_counter.line.axis is LineAxis.VERTICAL
     assert parsed.people_counter.line.position == 0.25
+    assert parsed.people_counter.line.margin == 0.1
     assert parsed.people_counter.line.invert is True
     assert parsed.people_counter.line.confirm_frames == 3
+    assert parsed.people_counter.line.track_timeout_frames == 12
