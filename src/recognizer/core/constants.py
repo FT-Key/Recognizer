@@ -9,6 +9,10 @@ DEFAULT_CAMERA_ENUMERATOR_MAX_INDEX = 8
 DEFAULT_FRAME_WIDTH = 640
 DEFAULT_FRAME_HEIGHT = 480
 DEFAULT_TARGET_FPS = 30
+# Búfer de captura mínimo: evita acumular fotogramas viejos cuando la
+# inferencia es más lenta que la cámara (retraso creciente en cámaras de red o
+# del teléfono). 1 = procesar siempre el fotograma más reciente.
+DEFAULT_CAPTURE_BUFFER_SIZE = 1
 
 DEFAULT_HAND_MODEL_PATH = "models/hand_landmarker.task"
 DEFAULT_MAX_HANDS = 2
@@ -118,6 +122,10 @@ DEFAULT_FACE_CONFIRM_FRAMES = 3
 DEFAULT_FACE_RELEASE_FRAMES = 5
 DEFAULT_FACE_STORE_DIR = "data/faces"
 DEFAULT_FACE_DET_SIZE = 640
+# Cada cuantos fotogramas se ejecuta la inferencia facial. 1 = todos. Subirlo
+# alivia CPUs lentas o camaras de red: la vista sigue fluida y la deteccion se
+# repite cada N fotogramas reutilizando el ultimo resultado.
+DEFAULT_FACE_PROCESS_EVERY_N_FRAMES = 1
 DEFAULT_FACE_CENTER_TOLERANCE = 0.15
 FACE_ID_PREFIX = "F-"
 FACE_ID_WIDTH = 4

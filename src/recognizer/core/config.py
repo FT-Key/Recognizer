@@ -13,7 +13,9 @@ from recognizer.core.constants import (
     DEFAULT_FACE_CONFIDENCE,
     DEFAULT_FACE_CONFIRM_FRAMES,
     DEFAULT_FACE_DEFAULT_ROLE,
+    DEFAULT_FACE_DET_SIZE,
     DEFAULT_FACE_MATCH_THRESHOLD,
+    DEFAULT_FACE_PROCESS_EVERY_N_FRAMES,
     DEFAULT_FACE_RELEASE_FRAMES,
     DEFAULT_FACE_STORE_DIR,
     DEFAULT_FRAME_HEIGHT,
@@ -633,6 +635,8 @@ class FaceAuthConfig(BaseModel):
 
     model_path: str = Field(default=FACE_AUTH_MODEL_PATH, min_length=1)
     min_confidence: float = Field(default=DEFAULT_FACE_CONFIDENCE, ge=0, le=1)
+    det_size: int = Field(default=DEFAULT_FACE_DET_SIZE, ge=128, le=1280)
+    process_every_n_frames: int = Field(default=DEFAULT_FACE_PROCESS_EVERY_N_FRAMES, ge=1)
     min_face_width_ratio: float = Field(default=DEFAULT_MIN_FACE_WIDTH_RATIO, ge=0, le=1)
     max_face_width_ratio: float = Field(default=DEFAULT_MAX_FACE_WIDTH_RATIO, ge=0, le=1)
     min_sharpness: float = Field(default=DEFAULT_MIN_FACE_SHARPNESS, ge=0)

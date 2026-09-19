@@ -284,9 +284,16 @@ posture:
 # distancia coseno maxima aceptada (bajalo si hay falsos positivos, subelo si
 # no reconoce); confirm/release_frames son el debounce del login; store_dir
 # guarda index.json + <id>.json por cara.
+# det_size: lado de entrada del detector (px). 640 = mas preciso; bajalo a 320
+#   si la inferencia va lenta en CPU (p. ej. camara del telefono / enlace movil).
+# process_every_n_frames: cada cuantos fotogramas se ejecuta la inferencia.
+#   1 = todos. Subilo a 2 o 3 en CPU lenta: la vista sigue fluida y la deteccion
+#   se repite reutilizando el ultimo resultado.
 face_auth:
   model_path: models/buffalo_s
   min_confidence: 0.5
+  det_size: 640
+  process_every_n_frames: 1
   min_face_width_ratio: 0.18
   max_face_width_ratio: 0.55
   min_sharpness: 80.0

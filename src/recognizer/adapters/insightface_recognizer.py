@@ -10,7 +10,6 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-from recognizer.core.constants import DEFAULT_FACE_DET_SIZE
 from recognizer.core.domain.face import FaceBox, FaceObservation
 from recognizer.core.domain.frame import Frame
 from recognizer.core.errors import FaceRecognizerError
@@ -161,11 +160,9 @@ def _map_face(
 class InsightFaceFacade:
     """Fachada real sobre InsightFace (import perezoso, solo CPU)."""
 
-    def __init__(
-        self, config: FaceRecognizerConfig, *, det_size: int = DEFAULT_FACE_DET_SIZE
-    ) -> None:
+    def __init__(self, config: FaceRecognizerConfig, *, det_size: int | None = None) -> None:
         self._config = config
-        self._det_size = det_size
+        self._det_size = det_size if det_size is not None else config.det_size
         self._analysis: _AnalysisLike | None = None
 
     def open(self) -> None:
