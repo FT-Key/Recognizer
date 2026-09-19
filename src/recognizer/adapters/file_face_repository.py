@@ -171,12 +171,21 @@ class FileFaceRepository(FaceRepository):
             return None
 
     def _known_ids(self) -> list[str]:
-        """Ids del indice mas los archivos sueltos en disco."""
+        """Ids del indice mas los archivos sueltos en disco.
+
+        Solo se aceptan nombres con formato de id facial (``F-0001``), de modo
+        que ``index.json``, ``session.json`` u otros JSON del directorio no se
+        confundan con rostros.
+        """
         _, indexed = self._read_index()
         on_disk = [
-            path.stem for path in self._store_dir.glob(f"*{FACE_SUFFIX}") if path.stem != "index"
+            path.stem
+            for path in self._store_dir.glob(f"*{FACE_SUFFIX}")
+            if re.match(FACE_ID_PATTERN, path.stem) is not None
         ]
-        return sorted(set(indexed) | set(on_disk))
+        return sorted(
+            name for name in set(indexed) | set(on_disk) if re.match(FACE_ID_PATTERN, name)
+        )
 
     def next_id(self) -> str:
         """Siguiente id secuencial persistente (maximo en disco + 1)."""

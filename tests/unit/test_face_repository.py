@@ -93,3 +93,26 @@ def test_save_updates_existing_face(tmp_path: Path) -> None:
     repo.save(updated)
     assert repo.find_by_id("F-0001") == updated
     assert repo.next_id() == "F-0002"
+
+
+def test_session_json_is_not_treated_as_face(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    repo.save(_face("F-0001", "Ada"))
+    (store / "session.json").write_text('{"face_id": "F-0001"}', encoding="utf-8")
+
+    assert [face.face_id for face in repo.list_all()] == ["F-0001"]
+    assert repo.next_id() == "F-0002"
+    assert repo.find_by_name("session") == ()
+
+
+def test_legacy_index_with_non_face_ids_is_ignored(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    repo = FileFaceRepository(store)
+    repo.save(_face("F-0001", "Ada"))
+    (store / "index.json").write_text(
+        '{"counter": 1, "faces": ["F-0001", "session"]}', encoding="utf-8"
+    )
+
+    assert [face.face_id for face in repo.list_all()] == ["F-0001"]
+    assert repo.next_id() == "F-0002"
