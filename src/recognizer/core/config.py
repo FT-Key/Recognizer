@@ -9,6 +9,12 @@ from recognizer.core.constants import (
     DEFAULT_ACTION_COOLDOWN_SECONDS,
     DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
+    DEFAULT_ENROLLMENT_SAMPLES,
+    DEFAULT_FACE_CONFIDENCE,
+    DEFAULT_FACE_CONFIRM_FRAMES,
+    DEFAULT_FACE_MATCH_THRESHOLD,
+    DEFAULT_FACE_RELEASE_FRAMES,
+    DEFAULT_FACE_STORE_DIR,
     DEFAULT_FRAME_HEIGHT,
     DEFAULT_FRAME_WIDTH,
     DEFAULT_GESTURE_MODEL_PATH,
@@ -23,8 +29,11 @@ from recognizer.core.constants import (
     DEFAULT_LINE_CONFIRM_FRAMES,
     DEFAULT_LINE_MARGIN,
     DEFAULT_LINE_POSITION,
+    DEFAULT_MAX_FACE_WIDTH_RATIO,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
+    DEFAULT_MIN_FACE_SHARPNESS,
+    DEFAULT_MIN_FACE_WIDTH_RATIO,
     DEFAULT_MIN_GESTURE_CONFIDENCE,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
@@ -58,6 +67,7 @@ from recognizer.core.constants import (
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
     DEFAULT_TRACK_TIMEOUT_FRAMES,
+    FACE_AUTH_MODEL_PATH,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
     PERSON_LABEL,
@@ -601,9 +611,38 @@ class PostureConfig(BaseModel):
     alert: PostureAlertConfig = Field(default_factory=PostureAlertConfig)
 
 
+class FaceAuthConfig(BaseModel):
+    """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
+
+    ``min_confidence`` filtra detecciones debiles; ``min_face_width_ratio`` y
+    ``max_face_width_ratio`` guian la distancia; ``min_sharpness`` exige
+    quietud; ``enrollment_samples`` fija las muestras del enrolamiento;
+    ``match_threshold`` es la distancia coseno maxima aceptada.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=FACE_AUTH_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_FACE_CONFIDENCE, ge=0, le=1)
+    min_face_width_ratio: float = Field(default=DEFAULT_MIN_FACE_WIDTH_RATIO, ge=0, le=1)
+    max_face_width_ratio: float = Field(default=DEFAULT_MAX_FACE_WIDTH_RATIO, ge=0, le=1)
+    min_sharpness: float = Field(default=DEFAULT_MIN_FACE_SHARPNESS, ge=0)
+    enrollment_samples: int = Field(default=DEFAULT_ENROLLMENT_SAMPLES, ge=1)
+    match_threshold: float = Field(default=DEFAULT_FACE_MATCH_THRESHOLD, ge=0)
+    confirm_frames: int = Field(default=DEFAULT_FACE_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_FACE_RELEASE_FRAMES, ge=1)
+    store_dir: str = Field(default=DEFAULT_FACE_STORE_DIR, min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_widths(self) -> Self:
+        if self.min_face_width_ratio >= self.max_face_width_ratio:
+            msg = "La captura facial requiere min_face_width_ratio < max_face_width_ratio."
+            raise ValueError(msg)
+        return self
+
+
 class AppsConfig(BaseModel):
     """Habilitacion de apps del launcher (override sobre el catalogo).
-
     Solo afecta a apps implementadas: las que aun no existen se muestran como
     "proximamente" independientemente de este valor.
     """
@@ -631,6 +670,7 @@ class AppConfig(BaseModel):
     people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
     anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
     posture: PostureConfig = Field(default_factory=PostureConfig)
+    face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:

@@ -22,6 +22,12 @@ MODELS: dict[str, str] = {
         "https://storage.googleapis.com/mediapipe-models/face_detector/"
         "blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
     ),
+    # Pack facial buffalo_s de InsightFace (se ubica en models/buffalo_s/).
+    # InsightFace tambien lo descarga solo al primer uso; aqui se deja el .zip
+    # listo y se omite si ya existe.
+    "buffalo_s.zip": (
+        "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_s.zip"
+    ),
 }
 
 MEGABYTE = 1_048_576

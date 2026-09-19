@@ -13,7 +13,7 @@ apps:
     posture: true
     # ppe_detector: true
     # inventory: true
-    # face_auth: true
+    face_auth: true
 
 # La ventana de cada app muestra el fotograma a su resolucion nativa: sube
 # width/height para una imagen mas grande (la inferencia sera mas lenta).
@@ -270,6 +270,27 @@ posture:
   alert:
     enabled: true
     repeat_seconds: 2.0
+
+# Reconocimiento facial (etapa 15a): enrolamiento + login con InsightFace.
+# model_path es la carpeta del pack buffalo (root/nombre: models + buffalo_s);
+# InsightFace lo descarga solo si falta. min_confidence filtra detecciones
+# debiles; min/max_face_width_ratio guian la distancia (acercate/alejate);
+# min_sharpness exige quietud (varianza del Laplaciano); enrollment_samples
+# fija las muestras por rostro; match_threshold es la distancia coseno maxima
+# aceptada (bajalo si hay falsos positivos, subelo si no reconoce);
+# confirm/release_frames son el debounce del login; store_dir guarda index.json
+# + <id>.json por cara.
+face_auth:
+  model_path: models/buffalo_s
+  min_confidence: 0.5
+  min_face_width_ratio: 0.25
+  max_face_width_ratio: 0.55
+  min_sharpness: 80.0
+  enrollment_samples: 5
+  match_threshold: 0.45
+  confirm_frames: 3
+  release_frames: 5
+  store_dir: data/faces
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla
