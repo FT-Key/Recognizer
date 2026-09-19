@@ -28,6 +28,13 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Protocol
 
 from recognizer.cli import menu_gui
+from recognizer.core.constants import (
+    DEFAULT_MIN_PASSWORD_LENGTH,
+    FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
+    FACE_ENROLL_PASSWORD_PROMPT,
+    FACE_ENROLL_ROLE_PROMPT,
+)
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.ports.identity_provider import IdentityProvider
 
@@ -38,18 +45,26 @@ LOGGER = logging.getLogger("recognizer.menu.face.enroll")
 
 ENROLL_WINDOW_TITLE = "Enrolamiento facial"
 ENROLL_HEADER_TITLE = "ENROLAR"
-ENROLL_HEADER_SUBTITLE = "asigna nombre y rol al nuevo rostro"
+ENROLL_HEADER_SUBTITLE = "asigna nombre, rol y clave al nuevo rostro"
 ENROLL_NAME_LABEL = "Nombre"
 ENROLL_ROLE_LABEL = "Rol"
+ENROLL_PASSWORD_LABEL = "Clave"
+ENROLL_PASSWORD_CONFIRM_LABEL = "Confirmar clave"
 ENROLL_TEXT = "Enrolar"
 ENROLL_BACK_TEXT = "Volver"
 ENROLL_FIRST_NOTE_TEXT = "nota: el primer rostro = admin"
 ENROLL_NO_PERMISSION_TEXT = "sin permiso: se requiere operator o admin"
 ENROLL_FOOTER_HINT = "Enter: activar · ESC: volver"
 ENROLL_EMPTY_NAME_MESSAGE = "Enrolamiento cancelado: escribe un nombre primero."
+ENROLL_EMPTY_PASSWORD_MESSAGE = "Enrolamiento cancelado: escribe una clave."
+ENROLL_PASSWORD_MISMATCH_MESSAGE = "Enrolamiento cancelado: las claves no coinciden."
+ENROLL_PASSWORD_SHORT_TEMPLATE = (
+    "Enrolamiento cancelado: la clave requiere al menos {min_length} caracteres."
+)
 ENROLL_START_LOG = "Enrolando '%s'... (ESC/q para volver)"
 ENROLL_ROLE_FALLBACK_LOG = "Rol no permitido %r; se usa %s."
 ENROLL_NAME_READ_ERROR = "No se pudo leer el nombre (%s)."
+ENROLL_PASSWORD_READ_ERROR = "No se pudo leer la clave (%s)."
 ENROLL_ROLE_READ_ERROR = "Sin rol elegido (%s); se usa el primero permitido."
 ENROLL_DISABLE_ERROR = "No se pudo deshabilitar Enrolar (%s)."
 ENROLL_FOCUS_ERROR = "Sin foco inicial del nombre (%s)."
@@ -93,6 +108,7 @@ def run_enroll_form(
         allowed_roles,
         default_enroll_role,
         default_identity_provider,
+        load_face_config,
         store_is_empty,
     )
 
@@ -105,6 +121,10 @@ def run_enroll_form(
     current = provider.current_identity()
     is_first = store_is_empty(provider)
     roles = allowed_roles(is_first=is_first, role=current.role)
+    face_config = load_face_config(request, logger=logger)
+    min_password_length = (
+        face_config.min_password_length if face_config is not None else DEFAULT_MIN_PASSWORD_LENGTH
+    )
 
     tk_cls = tk_factory if tk_factory is not None else tkinter.Toplevel
     window = tk_cls()
@@ -234,6 +254,27 @@ def run_enroll_form(
             anchor=menu_gui.ANCHOR_WEST,
         ).pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
 
+    tkinter.Label(
+        body,
+        text=ENROLL_PASSWORD_LABEL,
+        font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+        fg=theme.text,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    ).pack(fill=menu_gui.FILL_X)
+    password_entry = tkinter.Entry(body, show=menu_gui.PASSWORD_SHOW)
+    password_entry.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
+    tkinter.Label(
+        body,
+        text=ENROLL_PASSWORD_CONFIRM_LABEL,
+        font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+        fg=theme.text,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    ).pack(fill=menu_gui.FILL_X)
+    confirm_entry = tkinter.Entry(body, show=menu_gui.PASSWORD_SHOW)
+    confirm_entry.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
+
     def do_enroll() -> None:
         if not roles:
             logger.warning(ENROLL_NO_PERMISSION_TEXT)
@@ -254,10 +295,32 @@ def run_enroll_form(
         if role_text not in {role.value for role in roles}:
             logger.warning(ENROLL_ROLE_FALLBACK_LOG, role_text, roles[0].value)
             role_text = roles[0].value
-        queue: list[str] = [name, role_text]
+        try:
+            password = password_entry.get()
+            confirm = confirm_entry.get()
+        except Exception as exc:  # el fake o Tk sin display pueden fallar
+            logger.warning(ENROLL_PASSWORD_READ_ERROR, exc)
+            return
+        if not password:
+            logger.error(ENROLL_EMPTY_PASSWORD_MESSAGE)
+            return
+        if len(password) < min_password_length:
+            logger.error(ENROLL_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
+            return
+        if password != confirm:
+            logger.error(ENROLL_PASSWORD_MISMATCH_MESSAGE)
+            return
+        # El lector mapea por prompt: el runner pide nombre, rol, clave y
+        # confirmacion; el rol puede no pedirse (primer rostro = admin).
+        answers = {
+            FACE_ENROLL_NAME_PROMPT: name,
+            FACE_ENROLL_ROLE_PROMPT: role_text,
+            FACE_ENROLL_PASSWORD_PROMPT: password,
+            FACE_ENROLL_PASSWORD_CONFIRM_PROMPT: confirm,
+        }
 
-        def queue_reader(_prompt: str) -> str:
-            return queue.pop(0) if queue else ""
+        def queue_reader(prompt: str) -> str:
+            return answers.get(prompt, "")
 
         runner = enroll_runner if enroll_runner is not None else _default_enroll_runner()
         logger.info(ENROLL_START_LOG, name)

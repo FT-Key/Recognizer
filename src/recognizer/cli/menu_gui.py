@@ -165,6 +165,7 @@ EVENT_TREE_SELECT: Final = "<<TreeviewSelect>>"
 SCROLL_UNITS: Final = "units"
 TREE_SHOW_HEADINGS: Final = "headings"
 TREE_SELECT_BROWSE: Final = "browse"
+PASSWORD_SHOW: Final = "*"
 WHEEL_DELTA: Final = 120
 TK_BREAK: Final = "break"
 TK_ALL: Final = "all"

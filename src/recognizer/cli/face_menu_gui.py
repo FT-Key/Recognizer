@@ -51,6 +51,7 @@ FACE_SESSION_DETAIL_TEMPLATE = "Rol: {role} · ID: {face_id}"
 FACE_LOGIN_PROMPT = "Inicia sesión con tu rostro"
 FACE_ENROLL_TEXT = "Enrolar"
 FACE_LOGIN_TEXT = "Iniciar sesión"
+FACE_PASSWORD_LOGIN_TEXT = "Entrar con clave"
 FACE_LOGOUT_TEXT = "Cerrar sesión"
 FACE_LOGOUT_CONFIRM_TITLE = "Cerrar sesión"
 FACE_LOGOUT_CONFIRM_TEXT = "¿Seguro que quieres cerrar la sesión?"
@@ -62,6 +63,7 @@ FACE_FOOTER_HINT = "Enter: activar · ESC: volver"
 FACE_UNKNOWN_ROLE = "?"
 FACE_ENROLL_DENIED_TEMPLATE = "Enrolar sin permiso (tu rol: {role})."
 FACE_ENROLL_LOG = "Abriendo formulario de enrolamiento... (ESC/q para volver)"
+FACE_PASSWORD_LOGIN_LOG = "Login con clave... (ESC/q para volver)"
 FACE_USERS_LOG = "Abriendo panel de usuarios... (ESC/q para volver)"
 FACE_ACCESS_LOG = "Abriendo panel de accesos... (ESC/q para volver)"
 FACE_SESSION_REFRESH_ERROR = "No se pudo refrescar la sesion visible (%s)."
@@ -120,6 +122,7 @@ def run_face_submenu(
     enroll_runner: EnrollRunner | None = None,
     login_runner: FaceActionRunner | None = None,
     logout_runner: FaceActionRunner | None = None,
+    password_login_form: Callable[[AppRunRequest], int] | None = None,
     identity_provider: IdentityProvider | None = None,
     logger: logging.Logger = LOGGER,
 ) -> int:
@@ -326,6 +329,21 @@ def run_face_submenu(
             window.deiconify()
         refresh_session()
 
+    def do_password_login() -> None:
+        if password_login_form is not None:
+            form = password_login_form
+        else:
+            from recognizer.cli.face_password_gui import run_password_login
+
+            form = run_password_login
+        logger.info(FACE_PASSWORD_LOGIN_LOG)
+        window.withdraw()
+        try:
+            form(replace(request))
+        finally:
+            window.deiconify()
+        refresh_session()
+
     def do_logout() -> None:
         from tkinter import messagebox
 
@@ -388,6 +406,9 @@ def run_face_submenu(
     access_button = _make_button(actions, FACE_ACCESS_TEXT, do_access, primary=False)
     my_access_button = _make_button(actions, FACE_MY_ACCESS_TEXT, do_my_access, primary=False)
     login_button = _make_button(session_card, FACE_LOGIN_TEXT, do_login, primary=True)
+    password_button = _make_button(
+        session_card, FACE_PASSWORD_LOGIN_TEXT, do_password_login, primary=False
+    )
 
     footer = tkinter.Frame(window, bg=theme.surface_alt)
     footer.pack(side=menu_gui.SIDE_BOTTOM, fill=menu_gui.FILL_X)
@@ -420,6 +441,7 @@ def run_face_submenu(
             if logged_in:
                 login_prompt_label.pack_forget()
                 login_button.pack_forget()
+                password_button.pack_forget()
             else:
                 login_prompt_label.pack(
                     fill=menu_gui.FILL_X,
@@ -427,6 +449,11 @@ def run_face_submenu(
                     pady=(theme.space_1, menu_gui.BORDER_NONE),
                 )
                 login_button.pack(fill=menu_gui.FILL_X, padx=theme.space_3, pady=theme.space_2)
+                password_button.pack(
+                    fill=menu_gui.FILL_X,
+                    padx=theme.space_3,
+                    pady=(menu_gui.BORDER_NONE, theme.space_2),
+                )
         except Exception as exc:  # el refresco jamas tumba el submenu
             logger.debug(FACE_SESSION_REFRESH_ERROR, exc)
 
@@ -502,6 +529,7 @@ def run_face_submenu(
     for button, action in (
         (enroll_button, do_enroll),
         (login_button, do_login),
+        (password_button, do_password_login),
         (logout_button, do_logout),
         (users_button, do_users),
         (access_button, do_access),
