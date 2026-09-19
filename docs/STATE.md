@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** fix 15c-ux (redirección tras login + visor de foto modal) completado; siguiente: 13 (EPP) o 15d (identidad distribuida)
-- **Rama:** `stage/15c-fix-login-redirect`
+- **Fase actual:** fix 15c-form (formulario de enrolamiento coherente + "Ver detalle") completado; siguiente: 13 (EPP) o 15d (identidad distribuida)
+- **Rama:** `stage/15c-fix-enroll-form`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -52,7 +52,9 @@
 - Etapa 15c: gestión de usuarios y accesos. Submenú facial coherente (Login/Logout según sesión, selector de rol visible), foto de enrolamiento (`<id>.png`), foto del primer login reconocido, `AccessEvent` + `AccessLogRepository` (`data/access/logins.jsonl`), paneles admin **Usuarios** (editar/re-enrolar/eliminar) y **Accesos** (admin con foto; no-admin solo sus logins sin foto).
 - Gate 15c verde: lint OK, mypy strict 199, pytest **1198 passed** (95.53%), check-arch 3/3. Reviewer: apta tras correcciones (foto por identidad, gating admin, anti path-traversal, validador umbral).
 - Fix 15c-ux: login con cuenta regresiva ("Redirigiendo en 3.. 2.. 1..") y vuelta automática al menú (`RuntimeCallbacks.should_stop` + `face_auth.login_redirect_seconds`); panel de accesos con botón **Ver imagen** que abre un modal (`grab_set`) con foto y datos (antes la foto inline se veía como una franja).
-- Gate 15c-ux verde: lint OK, mypy strict 199, pytest **1199 passed** (95.53%), check-arch 3/3. Commits pendientes `git-ops`.
+- Gate 15c-ux verde: lint OK, mypy strict 199, pytest **1199 passed** (95.53%), check-arch 3/3.
+- Fix 15c-form: el formulario Nombre/Rol del submenú facial se muestra solo con permiso de enrolar (antes quedaba visible sin el botón Enrolar); selector de rol se recrea si cambian los roles; botón "Ver detalle" en accesos.
+- Gate 15c-form verde: lint OK, mypy strict 199, pytest **1201 passed** (95.53%), check-arch 3/3. Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
