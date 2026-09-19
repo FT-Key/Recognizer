@@ -9,6 +9,7 @@ del telefono). Al salir (ESC/q) devuelve el control al launcher.
 
 import logging
 import threading
+import time
 from collections.abc import Callable
 from contextlib import ExitStack
 from dataclasses import dataclass
@@ -102,11 +103,14 @@ class _RecognitionWorker:
         process: Callable[[tuple[FaceObservation, ...]], None],
         process_every_n_frames: int,
         logger: logging.Logger,
+        max_inference_fps: float = 0.0,
     ) -> None:
         self._source = source
         self._recognizer = recognizer
         self._process = process
         self._every = max(1, process_every_n_frames)
+        self._min_interval = 1.0 / max_inference_fps if max_inference_fps > 0 else 0.0
+        self._last_inference = 0.0
         self._logger = logger
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -128,6 +132,10 @@ class _RecognitionWorker:
             seen += 1
             if seen % self._every != 0:
                 continue
+            now = time.monotonic()
+            if self._min_interval > 0 and now - self._last_inference < self._min_interval:
+                continue
+            self._last_inference = now
             try:
                 observations = self._recognizer.recognize(frame)
             except Exception as exc:  # el hilo no debe morir en silencio
@@ -371,6 +379,7 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
                     process=_process,
                     process_every_n_frames=face_config.process_every_n_frames,
                     logger=LOGGER,
+                    max_inference_fps=face_config.max_inference_fps,
                 )
             )
             LOGGER.info("Listo. Pulsa ESC o q para volver al menu.")
@@ -518,6 +527,7 @@ def run_face_login(request: AppRunRequest) -> int:
                     process=_process,
                     process_every_n_frames=face_config.process_every_n_frames,
                     logger=LOGGER,
+                    max_inference_fps=face_config.max_inference_fps,
                 )
             )
             LOGGER.info("Listo. Pulsa ESC o q para volver al menu.")

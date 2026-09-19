@@ -135,6 +135,10 @@ DEFAULT_FACE_DET_SIZE = 640
 # alivia CPUs lentas o camaras de red: la vista sigue fluida y la deteccion se
 # repite cada N fotogramas reutilizando el ultimo resultado.
 DEFAULT_FACE_PROCESS_EVERY_N_FRAMES = 1
+# Tope de inferencias por segundo (0 = sin tope). Acota la CPU: con rostro en
+# camara la inferencia es mas cara y, sin tope, satura el equipo y traba el
+# stream/dibujo. 5 FPS alcanza para login y enrolamiento.
+DEFAULT_FACE_MAX_INFERENCE_FPS = 5.0
 DEFAULT_FACE_CENTER_TOLERANCE = 0.15
 FACE_ID_PREFIX = "F-"
 FACE_ID_WIDTH = 4

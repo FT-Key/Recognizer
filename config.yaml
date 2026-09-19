@@ -290,11 +290,15 @@ posture:
 # process_every_n_frames: cada cuantos fotogramas reconoce el worker facial.
 #   1 = todos. Subilo a 2 o 3 en CPU lenta para bajar el uso de CPU; la vista
 #   sigue fluida porque el dibujo va aparte (captura asincrona + worker).
+# max_inference_fps: tope de reconocimientos por segundo (0 = sin tope). Con
+#   rostro en camara la inferencia es mas cara; el tope evita saturar la CPU y
+#   trabar el stream/dibujo. 5 FPS alcanza para login y enrolamiento.
 face_auth:
   model_path: models/buffalo_s
   min_confidence: 0.5
   det_size: 320
   process_every_n_frames: 1
+  max_inference_fps: 5.0
   min_face_width_ratio: 0.18
   max_face_width_ratio: 0.55
   min_sharpness: 80.0
