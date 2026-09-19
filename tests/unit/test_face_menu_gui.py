@@ -543,6 +543,31 @@ def test_face_submenu_login_and_logout_run_without_reader(
     assert len(logouts) == 1
 
 
+def test_face_submenu_logout_cancel_does_not_run_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_face_fakes(monkeypatch)
+    FakeMessagebox.answer = False
+    logouts: list[AppRunRequest] = []
+
+    def fake_logout(request: AppRunRequest) -> int:
+        logouts.append(request)
+        return 0
+
+    run_face_submenu(
+        REQUEST,
+        tk_factory=_tk_factory(),
+        logout_runner=fake_logout,
+        identity_provider=cast("IdentityProvider", FakeProvider(Role.OPERATOR)),
+        logger=TEST_LOGGER,
+    )
+
+    _press(_button_with_text(face_menu_gui.FACE_LOGOUT_TEXT).command)
+
+    assert logouts == []
+    assert FakeMessagebox.calls
+
+
 def test_face_submenu_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_face_fakes(monkeypatch)
 
