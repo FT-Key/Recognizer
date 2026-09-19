@@ -180,8 +180,13 @@ actions:
 # line: divide el fotograma y cuenta entradas/salidas al cruzarla.
 #   axis: horizontal (arriba/abajo) | vertical (izquierda/derecha).
 #   position: coordenada 0..1 de la linea en su eje.
+#   margin: banda muerta alrededor de la linea (el centro del objeto debe
+#     superarla para confirmar un lado). Evita el jitter del centro y los
+#     cruces fantasma de tracks que nacen junto a la linea.
 #   invert: intercambia entradas/salidas (positivo = abajo/derecha por defecto).
 #   confirm_frames: fotogramas consecutivos al otro lado para confirmar el cruce.
+#   track_timeout_frames: fotogramas sin ver un track antes de purgar su estado
+#     (evita que IDs muertos queden en memoria).
 people_counter:
   model_path: models/yolo26n.pt
   min_confidence: 0.5
@@ -190,8 +195,10 @@ people_counter:
     enabled: true
     axis: horizontal
     position: 0.5
+    margin: 0.05
     invert: false
     confirm_frames: 2
+    track_timeout_frames: 30
 
 # Anti-intrusos (etapa 11): tracking YOLO + zona de intrusion + alerta sonora.
 # zone: rectangulo normalizado 0..1 sobre el fotograma. Un objeto se considera

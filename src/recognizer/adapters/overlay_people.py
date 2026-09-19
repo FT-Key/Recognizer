@@ -4,6 +4,10 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
+from recognizer.core.domain.detection import (
+    MAX_NORMALIZED_COORDINATE,
+    MIN_NORMALIZED_COORDINATE,
+)
 from recognizer.core.domain.tracking import CountingLine, LineAxis, TrackedDetection
 
 BOX_COLOR_BGR = (0, 200, 0)
@@ -15,6 +19,8 @@ LABEL_MARGIN_PX = 6
 LABEL_TEMPLATE = "#{track_id} {label} {confidence:.2f}"
 LINE_COLOR_BGR = (0, 215, 255)
 LINE_THICKNESS = 2
+LINE_MARGIN_COLOR_BGR = (0, 120, 140)
+LINE_MARGIN_THICKNESS = 1
 HUD_FONT = cv2.FONT_HERSHEY_SIMPLEX
 HUD_SCALE = 0.9
 HUD_THICKNESS = 2
@@ -25,6 +31,11 @@ HUD_CURRENT_TEMPLATE = "Personas: {current}"
 HUD_COUNTS_TEMPLATE = "Entradas: {entries}  Salidas: {exits}"
 
 
+def _clamp_unit(value: float) -> float:
+    """Recorta una coordenada normalizada al rango 0..1."""
+    return max(MIN_NORMALIZED_COORDINATE, min(MAX_NORMALIZED_COORDINATE, value))
+
+
 def _draw_line(
     image: NDArray[np.uint8],
     *,
@@ -32,12 +43,34 @@ def _draw_line(
     width: int,
     height: int,
 ) -> None:
+    lower = _clamp_unit(line.position - line.margin)
+    upper = _clamp_unit(line.position + line.margin)
     if line.axis is LineAxis.HORIZONTAL:
         y = int(line.position * height)
         cv2.line(image, (0, y), (width, y), LINE_COLOR_BGR, LINE_THICKNESS)
+        if line.margin > MIN_NORMALIZED_COORDINATE:
+            for offset in (lower, upper):
+                y_margin = int(offset * height)
+                cv2.line(
+                    image,
+                    (0, y_margin),
+                    (width, y_margin),
+                    LINE_MARGIN_COLOR_BGR,
+                    LINE_MARGIN_THICKNESS,
+                )
     else:
         x = int(line.position * width)
         cv2.line(image, (x, 0), (x, height), LINE_COLOR_BGR, LINE_THICKNESS)
+        if line.margin > MIN_NORMALIZED_COORDINATE:
+            for offset in (lower, upper):
+                x_margin = int(offset * width)
+                cv2.line(
+                    image,
+                    (x_margin, 0),
+                    (x_margin, height),
+                    LINE_MARGIN_COLOR_BGR,
+                    LINE_MARGIN_THICKNESS,
+                )
 
 
 def _draw_tracked(

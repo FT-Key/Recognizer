@@ -60,7 +60,11 @@ def run_people_counter(request: AppRunRequest) -> int:
             people_config = app_config.people_counter
         line_config = people_config.line
         line_obj = (
-            CountingLine(axis=line_config.axis, position=line_config.position)
+            CountingLine(
+                axis=line_config.axis,
+                position=line_config.position,
+                margin=line_config.margin,
+            )
             if line_config.enabled
             else None
         )
@@ -69,6 +73,7 @@ def run_people_counter(request: AppRunRequest) -> int:
                 line=line_obj,
                 invert=line_config.invert,
                 confirm_frames=line_config.confirm_frames,
+                track_timeout_frames=line_config.track_timeout_frames,
             )
             if line_obj is not None
             else None
