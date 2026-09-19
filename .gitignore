@@ -30,10 +30,13 @@ models/*
 data/
 dataset/
 
+# Perfil aislado del navegador controlado por CDP (se regenera solo)
+browser-profile/
+
 # Secretos y archivos locales
 .env
 *.local
 
 # Salida de scripts de ejemplo del usuario
 scripts/actions/gesture_log.txt
-scripts/actions/video_start.log
+scripts/actions/*.log

@@ -11,13 +11,17 @@ requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "FT-Key" }]
 dependencies = [
+    "insightface>=0.7.1",
     "mediapipe>=1.0.1",
     "numpy>=2.5.3",
+    "onnxruntime>=1.17.1",
     "opencv-python>=5.0.0.93",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
     "pynput>=1.8.2",
     "pyyaml>=6.0.3",
+    "ultralytics>=8.4.155",
+    "websocket-client>=1.8.0",
 ]
 
 [project.scripts]
@@ -46,6 +50,8 @@ dev = [
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# `docs/` es material ilustrativo: sus bloques de Python no son codigo del gate.
+extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 select = [
@@ -85,6 +91,22 @@ show_error_codes = true
 module = ["cv2", "cv2.*", "mediapipe", "mediapipe.*", "pynput", "pynput.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["ultralytics", "ultralytics.*", "torch", "torch.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["insightface", "insightface.*", "onnxruntime", "onnxruntime.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["websocket", "websocket.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = '-q -m "not integration" --cov=recognizer --cov-report=term-missing --cov-fail-under=80'
@@ -119,7 +141,7 @@ forbidden_modules = [
 name = "core no depende de infraestructura"
 type = "forbidden"
 source_modules = ["recognizer.core"]
-forbidden_modules = ["cv2", "mediapipe", "pynput", "yaml", "fastapi"]
+forbidden_modules = ["cv2", "mediapipe", "pynput", "yaml", "fastapi", "ultralytics", "torch", "insightface", "onnxruntime"]
 
 [[tool.importlinter.contracts]]
 name = "adapters no dependen de cli ni settings"

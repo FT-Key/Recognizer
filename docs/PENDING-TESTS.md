@@ -1,4 +1,4 @@
-# Tests pendientes (etapas 0-8) — verificación manual del usuario
+# Tests pendientes (etapas 0-10d) — verificación manual del usuario
 
 El cierre de la etapa 4 se hizo con el gate automático verde (lint, mypy strict, 290 tests
 con 98.61% de cobertura, check-arch 3/3 y smoke real), pero las verificaciones
@@ -200,6 +200,27 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   se puede añadir otra con solo config.
 - [ ] Overlay: al sostener el modificador izquierdo, ver el nombre del menú y sus opciones.
 
+### Etapa 9b — navegador controlado (CDP)
+
+- [ ] Auto-detección: ejecutar `uv run recognizer --verbose` sin Chrome abierto y verificar
+  en el log que detecta el navegador Chromium instalado (Chrome, Edge, Brave, etc.) y lo
+  lanza en `--remote-debugging-port=9222`. Con el navegador ya corriendo, verificar que lo
+  reutiliza sin lanzar otro proceso.
+- [ ] `ILoveYou` abre pestaña: con el navegador corriendo, hacer el gesto `ILoveYou` y
+  comprobar que se abre (o enfoca) una pestaña de YouTube con el video configurado. Si la
+  pestaña ya existe, debe enfocarla y reproducir; si no, crearla.
+- [ ] Menú Replay (izquierda `Pointing_Up`) con las 3 opciones CDP:
+  - `Pointing_Up` → `tab_seek` fracción 0.0 → video al inicio.
+  - `Victory` → `tab_seek` fracción 0.4 → video al 40%.
+  - `OK_Sign` → `tab_seek` fracción 0.7 → video al 70%.
+  Verificar que el salto funciona y el video sigue reproduciéndose tras cada seek.
+- [ ] `tab_press`: configurar una acción `tab_press` con teclas `["space"]` y comprobar que
+  pausa/reproduce el video de la pestaña activa via CDP.
+- [ ] Error controlado: sin navegador Chromium instalado, ejecutar y comprobar que la app
+  registra un `WARNING` y sigue corriendo sin caerse.
+- [ ] Perfil aislado: verificar que se crea `browser-profile/<familia>/` junto a config.yaml
+  y que el login de YouTube es opcional (el video funciona sin cuenta).
+
 ### Ajustes post-etapa 8 — arranque rápido y menú Replay
 
 - [ ] Arranque rápido: `uv run smoke --frames 30 --no-window` debe abrir la cámara en
@@ -220,6 +241,85 @@ Ejecutar en este orden y anotar el resultado real de cada comando:
   medio/anular/meñique extendidos; la distancia se normaliza por el tamaño de la mano
   (`distance.max_ratio: 0.35`). Verificar en el overlay que se detecta al hacer la señal OK;
   si no dispara, subir `max_ratio` (o bajarlo si hay falsos positivos).
+
+### Etapa 10a — launcher multi-app (menú)
+
+- [ ] `uv run recognizer` sin argumentos abre el menú con las 7 apps en orden: 1 gestos
+  `[disponible]`, 2-4 `[proximamente]` (sin entrenamiento) y 5-7
+  `[proximamente] - requiere entrenamiento/enrolamiento`.
+- [ ] `uv run recognizer --list-apps` lista el menú y sale sin abrir la cámara.
+- [ ] Seleccionar `1`: abre la app de gestos; `ESC`/`q` vuelve al menú principal (no cierra
+  el programa) y se registra `Volviendo al menu principal.`.
+- [ ] Seleccionar `2`, `3` o `4`: avisa `aun no esta implementada (proximamente)` y sigue en
+  el menú, sin abrir cámara.
+- [ ] Seleccionar `5`, `6` o `7`: avisa que requiere entrenamiento/enrolamiento y sigue en
+  el menú.
+- [ ] Opción inválida (`abc`, `99`, vacío) y `0`/`q`/`salir`/`exit`: mensaje y salida limpia.
+- [ ] `apps.enabled.gestures: false` en `config.yaml`: la opción 1 pasa a
+  `[deshabilitada]` y no se puede lanzar; restaurar a `true` al terminar.
+- [ ] Rendimiento: abrir el menú no debe cargar MediaPipe ni abrir la cámara; el arranque es
+  inmediato (sin espera de inferencia). Anotar si el primer `1` tarda lo esperado.
+- [ ] `.exe`: doble clic abre el menú en consola; `ESC`/`q` dentro de gestos vuelve al menú.
+
+### Etapa 10b — contador de personas (YOLO)
+
+- [ ] `uv run recognizer`, elegir `2` (Contador de personas): debe abrir la cámara, cargar
+  `yolo26n.pt` (se autodescarga a `models/` si falta) y dibujar cajas + HUD `Personas: N`.
+- [ ] `ESC`/`q` (o la X) vuelve al menú; anotar FPS con 0/1/2 personas en cuadro.
+- [ ] Calibrar `people_counter.min_confidence` en `config.yaml` (0.5 por defecto): bajarlo si
+  no detecta, subirlo si hay falsos positivos.
+- [ ] `.exe`: pendiente de regenerar con `assets`/icono; verificar que el contador arranca
+  (torch/YOLO siguen excluidos del bundle, bundle ~1 GB).
+
+### Etapa 10c — contador con tracking y línea
+
+- [ ] `uv run recognizer`, elegir `2`: se dibujan cajas con `#id`, la línea amarilla
+  vertical (por defecto `axis: vertical`, `position: 0.5`) y el HUD `Personas` / `Entradas` / `Salidas`.
+- [ ] Cruzar la línea de izquierda a derecha: aumenta `Entradas`; de derecha a
+  izquierda: `Salidas`. Con `people_counter.line.invert: true` se intercambian.
+  Probar `axis: horizontal` (arriba abajo = entradas).
+- [ ] Anti-jitter: quedarse justo sobre la línea no debe sumar; `confirm_frames: 2`
+  exige 2 fotogramas consecutivos al otro lado. Ajustar si hay doble conteo o cruces
+  perdidos.
+- [ ] Banda muerta (`people_counter.line.margin`, 0.05 por defecto): el overlay dibuja la
+  línea amarilla y, a ambos lados, una banda tenue. Detenerse y oscilar el centro dentro de
+  la banda no debe cambiar el conteo; solo se cuenta al superar el borde de la banda.
+- [ ] Un track que aparece ya dentro de la banda no debe contar hasta confirmar un lado
+  (sin cruce fantasma al alejarse); comprobar en el HUD que `Entradas`/`Salidas` no suman
+  con solo aparecer junto a la línea.
+- [ ] Calibrar `margin`: subirlo si el jitter sobre la línea sigue contando, bajarlo si
+  cruces reales cerca de la línea no se cuentan. Con `margin: 0` no se dibuja la banda.
+- [ ] Purga por timeout (`people_counter.line.track_timeout_frames`, 30): tapar y descubrir
+  a una persona o salir y volver a entrar rápido; el ID debe renovarse y no contar un cruce
+  fantasma al reaparecer. Subir/bajar el valor si quedan IDs muertos o se purgan tracks
+  reales.
+- [ ] `ESC`/`q`/`X` vuelve al menú; el resumen final reporta personas, entradas y
+  salidas. Anotar FPS con 0/1/2 personas.
+- [ ] Nota: durante el warm-up del tracker el HUD puede mostrar `Personas: 0` hasta
+  que YOLO asigna IDs.
+
+### Etapa 10b-fix — salida a menú y menú GUI
+
+- [ ] Dentro de cualquier app (`1` gestos, `2` contador), `ESC`/`q` vuelve al menú **con la
+  ventana de la cámara enfocada**; la `X` de la ventana también vuelve al menú.
+- [ ] `uv run recognizer` sin argumentos abre la ventana del menú (tkinter); al elegir una app
+  y salir, la ventana del menú reaparece.
+- [ ] `uv run recognizer --no-gui` usa el menú de consola; sin display también cae a consola.
+
+### Etapa 10d — rediseño visual del menú (Vintage)
+
+- [ ] Aspecto general: ventana amplia y centrada, colores teal/plata, biseles retro, textos
+  legibles; **todas las apps visibles** (si la pantalla es baja, scroll vertical).
+- [ ] Cada app es un **botón**; las no implementadas se ven deshabilitadas con su badge
+  (`PRÓXIMAMENTE`/`DESHABILITADA`) y no se pueden abrir.
+- [ ] **Icono del logo** (mismo `minilogo` de la web) visible en la barra de título y en la
+  barra de tareas de Windows.
+- [ ] Tipografía pixel (Silkscreen) en título/secciones/badges; si no se registra, cae a una
+  monoespaciada (anotar qué se ve).
+- [ ] Teclado: flechas ↑/↓ mueven el foco entre apps, `Enter`/espacio abren la enfocada, `ESC`
+  cierra, `Tab` navega; el foco se ve resaltado.
+- [ ] Contraste: los textos sobre badges y cabecera se leen bien (sin gris sobre gris).
+- [ ] Regenerar assets si cambia el logo de la web: `uv run python scripts/build_assets.py`.
 
 ## Notas de registro
 

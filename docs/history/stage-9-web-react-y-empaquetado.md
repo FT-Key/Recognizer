@@ -180,6 +180,14 @@ Tras desplegar en Vercel y probar con cámara real aparecieron tres fallos:
   principal, se paso a "tutor/mentor" y se sumaron MercadoPago, Oracle Cloud (VPS),
   Cloudflare R2, GraphQL, SQL Server y Neon.
 
+### Marca y distribucion
+- **Logo de marca:** `web/public/logo.png` (emblema con fondo transparente) en el navbar
+  sobre un plato claro con bisel (para que se lea en tema claro y oscuro), y
+  `web/public/minilogo.png` como favicon y apple-touch-icon.
+- **Release de escritorio:** publicada como `v0.1.0` en GitHub Releases. El botón
+  "Descargar para Windows" enlaza a `releases/latest`, así que las versiones nuevas no
+  requieren tocar el código. Proceso documentado en `docs/DESKTOP-APP-PLAN.md`.
+
 ## Pendientes / riesgos
 - Verificación manual con cámara real de la web (gestos, YouTube, tema, banner) y del
   `.exe` con ventana (overlay, acciones).

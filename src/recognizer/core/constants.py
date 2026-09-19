@@ -5,9 +5,23 @@ Los valores configurables por el usuario pertenecen a config.yaml.
 """
 
 DEFAULT_CAMERA_DEVICE_INDEX = 0
+DEFAULT_CAMERA_ENUMERATOR_MAX_INDEX = 8
 DEFAULT_FRAME_WIDTH = 640
 DEFAULT_FRAME_HEIGHT = 480
 DEFAULT_TARGET_FPS = 30
+# Búfer de captura mínimo: evita acumular fotogramas viejos cuando la
+# inferencia es más lenta que la cámara (retraso creciente en cámaras de red o
+# del teléfono). 1 = procesar siempre el fotograma más reciente.
+DEFAULT_CAPTURE_BUFFER_SIZE = 1
+# Captura asíncrona (`LatestFrameSource`): un hilo drena la cámara y el bucle
+# de dibujo espera al siguiente fotograma nuevo. Evita que la inferencia lenta
+# (facial) frene la lectura y sature el stream de red.
+LATEST_FRAME_READ_TIMEOUT_SECONDS = 1.0
+LATEST_FRAME_JOIN_TIMEOUT_SECONDS = 2.0
+LATEST_FRAME_FAILURE_SLEEP_SECONDS = 0.01
+# Worker de inferencia facial: espera a un fotograma nuevo y se detiene limpio.
+FACE_WORKER_WAIT_TIMEOUT_SECONDS = 0.2
+FACE_WORKER_JOIN_TIMEOUT_SECONDS = 2.0
 
 DEFAULT_HAND_MODEL_PATH = "models/hand_landmarker.task"
 DEFAULT_MAX_HANDS = 2
@@ -42,6 +56,11 @@ DEFAULT_POINTER_MIRROR_X = True
 DEFAULT_POINTER_SMOOTHING_ALPHA = 0.35
 DEFAULT_THUMB_OPEN_THRESHOLD = 0.5
 
+DEFAULT_SCROLL_LINES = 3
+DEFAULT_SCROLL_REPEAT_SECONDS = 0.15
+MIN_SCROLL_LINES = 1
+SCROLL_FIXED_AXIS = 0
+
 MIN_ANGLE_DEG = 0.0
 MAX_ANGLE_DEG = 180.0
 DEFAULT_RULE_STRAIGHT_ANGLE_DEG = 160.0
@@ -54,3 +73,81 @@ MIN_ELAPSED_SECONDS = 1e-9
 MAX_CONSECUTIVE_READ_FAILURES = 30
 FPS_LOG_INTERVAL = 30
 ESC_KEY = 27
+WINDOW_TOPMOST_ENABLED = 1
+WINDOW_TOPMOST_DISABLED = 0
+WINDOW_MIN_VISIBLE_VALUE = 1.0
+
+PERSON_LABEL = "person"
+DEFAULT_PEOPLE_MODEL_PATH = "models/yolo26n.pt"
+DEFAULT_PEOPLE_CONFIDENCE = 0.5
+
+DEFAULT_LINE_POSITION = 0.5
+DEFAULT_LINE_CONFIRM_FRAMES = 2
+DEFAULT_LINE_MARGIN = 0.05
+DEFAULT_TRACK_TIMEOUT_FRAMES = 30
+DEFAULT_TRACKER_CONFIG = "bytetrack.yaml"
+
+DEFAULT_INTRUSION_ZONE_X_MIN = 0.25
+DEFAULT_INTRUSION_ZONE_Y_MIN = 0.4
+DEFAULT_INTRUSION_ZONE_X_MAX = 0.75
+DEFAULT_INTRUSION_ZONE_Y_MAX = 0.9
+DEFAULT_INTRUSION_CONFIRM_FRAMES = 3
+DEFAULT_INTRUSION_RELEASE_FRAMES = 5
+DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS = 2.0
+
+DEFAULT_POSTURE_MODEL_PATH = "models/yolo26n-pose.pt"
+DEFAULT_POSTURE_KEYPOINT_CONFIDENCE = 0.5
+DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO = 0.35
+DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO = 0.7
+DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG = 15.0
+DEFAULT_POSTURE_MAX_SHOULDER_TILT_RATIO = 0.15
+DEFAULT_POSTURE_CONFIRM_FRAMES = 5
+DEFAULT_POSTURE_RELEASE_FRAMES = 10
+# Calibracion: fotogramas que se promedian para aprender la postura correcta.
+DEFAULT_POSTURE_CALIBRATION_FRAMES = 60
+# Tolerancias de desvio respecto a la linea base calibrada.
+DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET = 0.15
+DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT = 0.2
+DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG = 8.0
+DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT = 0.1
+# Si el ancho de hombros cae por debajo de esta fraccion del torso (vista de
+# perfil) se usa el largo del torso como escala en vez del ancho de hombros.
+POSTURE_PROFILE_SHOULDER_RATIO = 0.5
+
+DEFAULT_BROWSER_DEBUGGING_PORT: int = 9222
+DEFAULT_CDP_CONNECT_TIMEOUT: float = 2.0
+DEFAULT_CDP_COMMAND_TIMEOUT: float = 3.0
+CDP_CHROME_LAUNCH_TIMEOUT: float = 5.0
+CDP_POLL_INTERVAL: float = 0.5
+
+FACE_AUTH_MODEL_PATH = "models/buffalo_s"
+DEFAULT_FACE_CONFIDENCE = 0.5
+DEFAULT_MIN_FACE_WIDTH_RATIO = 0.18
+DEFAULT_MAX_FACE_WIDTH_RATIO = 0.55
+DEFAULT_MIN_FACE_SHARPNESS = 80.0
+DEFAULT_ENROLLMENT_SAMPLES = 5
+DEFAULT_FACE_MATCH_THRESHOLD = 0.45
+DEFAULT_FACE_CONFIRM_FRAMES = 3
+DEFAULT_FACE_RELEASE_FRAMES = 5
+DEFAULT_FACE_STORE_DIR = "data/faces"
+DEFAULT_FACE_DET_SIZE = 640
+# Cada cuantos fotogramas se ejecuta la inferencia facial. 1 = todos. Subirlo
+# alivia CPUs lentas o camaras de red: la vista sigue fluida y la deteccion se
+# repite cada N fotogramas reutilizando el ultimo resultado.
+DEFAULT_FACE_PROCESS_EVERY_N_FRAMES = 1
+# Tope de inferencias por segundo (0 = sin tope). Acota la CPU: con rostro en
+# camara la inferencia es mas cara y, sin tope, satura el equipo y traba el
+# stream/dibujo. 5 FPS alcanza para login y enrolamiento.
+DEFAULT_FACE_MAX_INFERENCE_FPS = 5.0
+DEFAULT_FACE_CENTER_TOLERANCE = 0.15
+FACE_ID_PREFIX = "F-"
+FACE_ID_WIDTH = 4
+FACE_MAX_COSINE_DISTANCE = 2.0
+DEFAULT_FACE_DEFAULT_ROLE = "operator"
+DEFAULT_SESSION_TIMEOUT_SECONDS = 8 * 3600
+SESSION_FILENAME = "session.json"
+ANONYMOUS_FACE_ID = "anonimo"
+ANONYMOUS_NAME = "invitado"
+DEFAULT_REQUIRE_LOGIN = False
+LOCAL_IDENTITY_FACE_ID = "local"
+LOCAL_IDENTITY_NAME = "local"

@@ -1,83 +1,61 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 9 (app web React + empaquetado de escritorio con PyInstaller)
-  implementada en el árbol de trabajo (sin commit/merge); siguiente: etapa 10
-  (enrolamiento facial, roles y despliegue web)
-- **Rama:** `dev` (trabajo de etapa 9 sin commitear; ver `git status`)
-- **Actualizado:** 2026-09-15
+- **Fase actual:** release **v0.2.0** publicada (launcher + YOLO + facial/roles); siguiente: 13 (EPP) o 15c (DB distribuida)
+- **Rama:** `dev`
+- **Actualizado:** 2026-09-19
 
 ## Hecho
-- Repo git: `main` inicial, `dev`, `stage/0-setup`; remoto `FT-Key/Recognizer` configurado.
-- uv + Python 3.12.14; dependencias runtime y dev instaladas (mediapipe 1.0.1, opencv 5,
-  pydantic 2.13, pynput, pytest, ruff, mypy, import-linter).
-- Core base: `Frame`, puerto `FrameSource`, `AppConfig`/`CameraConfig`, errores del dominio.
-- Adaptador `OpenCVCamera` (inyectable, testeable), CLI `smoke` y modelos en `models/`.
-- Etapa 0 con gate verde: pytest 21 tests, 98% cobertura y smoke real a 29.3 FPS.
-- Etapa 1 (manos): puerto `HandTracker` + `MediaPipeHandTracker`, `EventBus` tipado +
-  `HandsDetected`, `PipelineBuilder` + `HandDetectionProcessor` y overlay OpenCV.
-- Etapa 2 (gestos): `GestureRecognizer` de MediaPipe, puerto `GestureClassifier`,
-  `GestureDetectionProcessor` + `GestureStabilizerProcessor` (N=5/M=5), eventos
-  `GestureDetected`/`GestureReleased` y `GestureOverlay`.
-- Etapa 3 (acciones locales): `Action`/`MediaKey`/`ActionContext`, puertos `KeySender` y
-  `CommandRunner`, acciones media key/hotkey/command/no-op con
-  `Gated(Debounced(Logged(...)))`, dispatcher con fallback no-op, `ActionsConfig` en
-  `config.yaml`, adaptadores pynput/subprocess y entrypoint `recognizer` con HUD (tecla `a`).
-- Etapa 4 (puntero virtual): `PointerPosition`/`PointerCalibration` y evento
-  `PointerMoved`; `PointerDetectionProcessor` (landmark 8 con gesto estable) y
-  `PointerMover` con gate compartido; Strategy de suavizado `none`/`ema` (alpha 0.35);
-  puerto `MouseController` + `PynputMouseController`; `PointerConfig`/`ActiveZoneConfig`
-  en `config.yaml` (zona 0.2-0.8, `mirror_x`), `PointerOverlay` y flag `--no-pointer`.
-- Gate de etapa 4 en verde: lint (109 archivos), mypy strict (83), pytest (290 tests,
-  98.61%), check-arch 3/3 y smoke real OK (30 fotogramas, 4.6 FPS con CPU cargada).
-- Etapa 5 (gestos personalizados): vocabulario abierto (`GestureId` + `GestureCatalog`)
-  en vez del enum cerrado; reglas geométricas de landmarks en `config.yaml`
-  (`gestures.rules`, `rules_priority`, `rule_thresholds`) con `LandmarkRuleProcessor`;
-  `gestures.custom_labels` para modelos MediaPipe custom; `config.yaml` con ejemplos
-  comentados. Gate verde: pytest 342 tests, 98.72%, mypy 87, check-arch 3/3, smoke 13.7 FPS.
-- Etapa 6 (acciones script): puerto `ScriptRunner` + `SubprocessScriptRunner` (intérprete
-  por formato `.py/.ps1/.bat/.cmd/.sh`, bloqueante/no bloqueante, `timeout_seconds`
-  obligatorio si bloqueante, contexto `RECOGNIZER_*` opt-in) y acción `script` en
-  `config.yaml`. Gate verde: pytest 378 tests, 98.81%, mypy 92, check-arch 3/3, smoke 11.5 FPS.
-- Etapa 7 (abrir enlaces): puerto `LinkOpener` + `ChromeLinkOpener` (autodetección de
-  Chrome; `chrome.exe <url>` abre pestaña o lanza el navegador) y acción `open_links` con
-  playlist secuencial rotatoria; `ILoveYou` mapeado a un enlace de YouTube. Ejemplo de
-  script de usuario en `scripts/actions/log_gesture.py`. Gate verde: pytest 399 tests,
-  98.86%, mypy 97, check-arch 3/3, smoke 17.1 FPS.
-- Etapa 8 (gestos compuestos): menús por mano (`actions.menus`) con `HandGestureTracker` y
-  resolución en el dispatcher (consume trigger, anti-repetición), puntero desactivado con
-  2 manos, `gestures.swap_handedness`, `MenuOverlay` y script `scripts/actions/video_start.ps1`
-  (vuelve el video de Chrome al inicio). Gate verde: pytest 442 tests, 98.94%, mypy 99,
-  check-arch 3/3, smoke 13.3 FPS.
-- Merges `--no-ff` a `dev` y push: etapa 0 (b613aeb), etapa 1 (c57e425), etapa 2
-  (c23da42), etapa 3 (15e5fb9), etapa 4 (4da3e35), etapa 5 (a266db7), etapa 6 (1e5f36e)
-  y etapa 7 (656478a).
-- Documentación: arquitectura, workflow, web-plan, historial; opencode con 5 subagentes,
-  2 skills y 4 comandos.
-- Etapa 9 (web React + empaquetado): app web en `web/` migrada a React 19 + Vite con
-  MediaPipe en **Web Worker** (fallback GPU→CPU), lógica pura en `src/lib`, hooks y
-  componentes; tema claro/oscuro persistente; **banner dinámico** que detecta la app de
-  escritorio vía `http://127.0.0.1:8765/health`; gestos personalizados con
-  `scripts/train_gesture_model.py` (Model Maker). Escritorio empaquetado con PyInstaller
-  (`packaging/recognizer.spec` onedir + `scripts/build_exe.py` → `dist/Recognizer/`),
-  servidor de salud local (`adapters/health_server.py`) y resolución de rutas junto al
-  `.exe`. Gate verde: pytest 492 tests, 98.38%, mypy 107 archivos, check-arch 3/3;
-  `npm run build` OK; `.exe` verificado (`--help`, frames headless y `GET /health`).
-  El `.exe` escribe `logs/recognizer.log` junto al ejecutable (config, pantalla, modelo y
-  crashes). Bug del puntero en el `.exe` corregido: faltaba `tkinter` en el bundle (lo usa
-  `pynput_mouse` para el tamaño de pantalla) y los fallos inesperados de acción/puntero ya
-  no tumban la app. Web desplegada en Vercel y corregida: shim de `importScripts` para
-  MediaPipe en Web Worker, estabilizador con transición entre gestos, overlay espejado y
-  textos con escapes `\uXXXX`. Ver `docs/history/stage-9-web-react-y-empaquetado.md`,
-  `docs/WEB-PLAN.md` y `docs/DESKTOP-APP-PLAN.md`.
+- Repo `FT-Key/Recognizer` (`main`/`dev`); uv + Python 3.12; deps (+`ultralytics`).
+- Core base (`Frame`, puertos, config, errores), `OpenCVCamera`, CLI `smoke`.
+- Etapas 1-2: manos (MediaPipe + `EventBus`) y gestos + estabilizador + overlay.
+- Etapa 3: acciones locales (media/hotkey/command/script) con dispatcher + HUD.
+- Etapa 4: puntero virtual (suavizado ema, zona 0.2-0.8, `MouseController`).
+- Etapa 5: gestos personalizados (reglas de landmarks en `config.yaml`).
+- Etapa 6: acciones script (`.py/.ps1/.bat/.cmd/.sh`, `RECOGNIZER_*` opt-in).
+- Etapa 7: `open_links` + ejemplo `scripts/actions/log_gesture.py`.
+- Etapa 8: menús compuestos por mano + `gestures.swap_handedness`.
+- Etapa 9: web React 19 + Vite (Vercel) y `.exe` PyInstaller + `/health`.
+- Etapas 9b-9c: navegador CDP (`open_tab`/`tab_seek`/`tab_press`), fix Chrome 152 y scroll `Victory`/`Closed_Fist` + mute.
+- Etapa 10a: launcher multi-app (menú, import perezoso, `ESC`/`q`); merge `c8c8b9f`.
+- Etapa 10b: contador YOLO (`yolo26n.pt` nano CPU); dominio + puerto + `UltralyticsDetector` + HUD `Personas: N`; `.spec` sin torch.
+- Etapa 10b-fix: salida ESC/q+X a menú (topmost + `WND_PROP_VISIBLE`, tolerante a `cv2.error`); menú tkinter perezoso + `--no-gui`/`TclError`.
+- Etapa 10d: rediseño vintage del menú (`MenuTheme`, badges, logo/icono, Silkscreen en `assets/`); `paths.py` (`_MEIPASS`).
+- Etapa 10c: tracking YOLO (ByteTrack `persist=True`), `domain/tracking.py`, puerto `ObjectTracker`, `overlay_people.py` y `people_counter.line`; HUD Personas/Entradas/Salidas.
+- Etapa 11: anti-intrusos (`domain/intrusion.py`, puerto `AlertSink`, `alert_sound`/`overlay_intrusion`, runner `anti_intruder.py`); zona + alerta edge-triggered.
+- Etapa 12: postura YOLO pose (una vía `model.predict` `yolo26n-pose.pt`); `pose.py` + `posture.py`, puerto `pose_estimator`, `ultralytics_pose`, `overlay_posture`, runner `posture.py`.
+- Fixes menú (12): rueda sobre cualquier opción (`<MouseWheel>`, `WHEEL_DELTA`) y padding badge/filas; cámara 1280x720.
+- Gate 12 verde: pytest **904 passed** (96.76%), mypy 158, ruff, check-arch 3/3, smoke 9.7 FPS. Reviewer: apta (menores aplicados).
+- Fix 12b: `measure_posture` parcial + calibración en `PostureMonitor` (mediana); `PostureSnapshot.calibrating` + HUD "Calibrando"; debounce tolerante.
+- Gate 12b verde: pytest **946 passed** (96.67%), mypy 158, ruff, check-arch 3/3; postura headless EXIT 0. Reviewer: apta.
+- Fix 10c-fix: `CountingLine` con banda muerta `margin` (hysteresis, `zone()`); lado inicial inmediato, `confirm_frames` en cambios y purga `track_timeout_frames`; config `margin` 0.05.
+- Gate 10c-fix verde: pytest **973 passed** (96.75%), mypy 158, ruff, check-arch 3/3; `tracking.py` y `overlay_people.py` 100%. Reviewer: apta.
+- Fix 10c-fix2: eje `vertical` por defecto en `people_counter.line` (paso lateral = entradas; `invert` intercambia); horizontal con `axis: horizontal`.
+- Etapa 15a: enrolamiento + login facial local (`data/faces/`, F-0001 en `index.json`); `FaceRepository` como seam; InsightFace `buffalo_s` CPU, 5 ángulos + distancia 0.25-0.55, debounce.
+- Gate 15a verde: pytest **1033 passed** (94.63%), mypy 169, ruff, check-arch 3/3; facial `[disponible]`. Reviewer: apta (path-traversal + chmod 0700).
+- Etapa 15b: roles `admin > operator > viewer` (`identity.py` + `PolicyEngine`, `IdentityProvider`, `FileIdentityProvider` con `session.json`); `EnrolledFace.role` + migración legado; menú filtra por rol y revalida; `FaceAuthConfig` + `AuthError`; merge `fcb7c23`.
+- Gate 15b verde: pytest **1099 passed** (94.65%), mypy 177, ruff, check-arch 3/3. Reviewer: apta (TOCTOU GUI + fallback viewer + `mkstemp`).
+- Fix 15b-face-ux: submenú facial vintage (`face_menu_gui.py` + nombre/rol), selector cámara en header (`CameraEnumerator`, `device` vía `replace(request)`), marco objetivo en `overlay_face` ligado a `min_face_width_ratio` (default 0.18 + MAX); tests `test_face_menu_gui`/`test_camera_discovery`/`test_face_overlay`.
+- Gate fix 15b-face-ux verde: lint OK, mypy strict 183, pytest **1119 passed** (94.59%), check-arch 3/3. Reviewer: apta (refresh permisos + `q`).
+- Fix 15b-ux2: overlay facial legible (paneles oscuros + texto claro) y cierre del submenú con `Toplevel.wait_window()` (antes `mainloop()` anidado dejaba el proceso colgado sin interfaz).
+- Gate fix 15b-ux2 verde: lint OK, mypy strict 183, pytest **1119 passed** (94.67%), check-arch 3/3.
+- Fix 15b-ux3: `FileFaceRepository._known_ids` ignora JSON que no son ids `F-0001` (`session.json` del login rompía `list_all` al reabrir la app).
+- Gate fix 15b-ux3 verde: lint OK, mypy strict 183, pytest **1121 passed** (94.60%), check-arch 3/3.
+- Fix 15b-lat: búfer de captura mínimo (`CAP_PROP_BUFFERSIZE=1`) + `face_auth.det_size` y `process_every_n_frames` (frame skipping reutilizando la última detección) para cámaras lentas (teléfono/enlace móvil).
+- Gate fix 15b-lat verde: lint OK, mypy strict 183, pytest **1123 passed** (94.68%), check-arch 3/3.
+- Fix 15b-async: app facial desacoplada de la captura (`LatestFrameSource` drena la cámara en un hilo + `_RecognitionWorker` infiere en otro; el bucle solo dibuja); `det_size: 320`; patrón y diferencia vs otras apps documentados en `docs/ARCHITECTURE.md`. Solo facial.
+- Gate fix 15b-async verde: lint OK, mypy strict 186, pytest **1130 passed** (94.65%), check-arch 3/3.
+- Fix 15b-open: el runner facial entraba la cámara al stack y `LatestFrameSource` la abría otra vez (`CameraError: La camara ya esta abierta`); ahora solo `LatestFrameSource` abre/libera.
+- Gate fix 15b-open verde: lint OK, mypy strict 186, pytest **1130 passed** (94.69%), check-arch 3/3.
+- Fix 15b-cost: `allowed_modules=["detection","recognition"]` (se descartan landmarks/género-edad que corrían por cara) + `face_auth.max_inference_fps` (5 FPS) en el worker.
+- Gate fix 15b-cost verde: lint OK, mypy strict 187, pytest **1133 passed** (94.88%), check-arch 3/3.
+- Release **v0.2.0** publicada en GitHub (launcher multi-app + contador/anti-intrusos/postura + facial con roles). El `.exe` ahora incluye YOLO/torch e InsightFace; descripción en `docs/RELEASE-v0.2.0.md`; `recognizer.spec` con `ultralytics`/`torch`/`torchvision` y `hiddenimports` de `face_menu_gui`/`camera_discovery`.
 
-## Siguiente (etapa 10 — enrolamiento y despliegue)
-- Enrolamiento facial, roles/permisos por gesto y despliegue web (Vercel/GitHub Pages).
+## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
+- 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
 
 ## Bloqueos / notas
-- Verificaciones manuales de etapas 0-8 (gestos, acciones reales, puntero, reglas de
-  landmarks, scripts, enlaces, menús compuestos y FPS) consolidadas en
-  `docs/PENDING-TESTS.md`; las ejecuta el usuario cuando pueda.
-- Calibrar `gestures.swap_handedness` con la cámara real (izquierda/derecha).
-- Pendiente decidir la nueva funcionalidad de los gestos `Pointing_Up` y `Victory`.
-- Tras editar `opencode.json`, agentes, skills o comandos: reiniciar opencode.
-- `uv` no está en el PATH de sesiones ya abiertas; una terminal nueva lo tendrá.
+- Usuario verifica manual: ESC/q+X, ventana del menú con cámara real y aspecto visual 10d.
+- Calibrar con cámara real: `face_auth.min_face_width_ratio` y `match_threshold`; probar selector con 2 cámaras; `posture.*`, `anti_intruder.zone`, `people_counter.line`, `min_confidence`, `swap_handedness`.
+- Verificación manual del `.exe` v0.2.0 (YOLO, YOLO pose, facial y selector de cámara) pendiente del usuario.
+- "Cabeza adelante" solo mide desvío horizontal en 2D (limitación conocida).
+- Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.

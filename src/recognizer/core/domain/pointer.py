@@ -18,6 +18,13 @@ class SmoothingKind(StrEnum):
     EMA = "ema"
 
 
+class ScrollDirection(StrEnum):
+    """Direcciones de desplazamiento vertical por gestos sostenidos."""
+
+    UP = "up"
+    DOWN = "down"
+
+
 @dataclass(frozen=True, slots=True)
 class PointerPosition:
     """Posicion del puntero normalizada respecto a la pantalla."""

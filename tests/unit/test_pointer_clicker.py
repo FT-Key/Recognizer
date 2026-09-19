@@ -28,12 +28,16 @@ class RecordingMouseController:
 
     def __init__(self) -> None:
         self.clicks = 0
+        self.scrolls: list[tuple[int, int]] = []
 
     def move_to(self, *, x: float, y: float) -> None:
         pass
 
     def click(self) -> None:
         self.clicks += 1
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        self.scrolls.append((dx, dy))
 
 
 class FailingMouseController:
@@ -43,6 +47,11 @@ class FailingMouseController:
         pass
 
     def click(self) -> None:
+        msg = "sin mouse"
+        raise ActionError(msg)
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        del dx, dy
         msg = "sin mouse"
         raise ActionError(msg)
 

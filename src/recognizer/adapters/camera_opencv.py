@@ -1,5 +1,6 @@
 """Adaptador de camara basado en OpenCV."""
 
+import threading
 from collections.abc import Callable
 from time import perf_counter
 from typing import Protocol, cast
@@ -9,6 +10,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from recognizer.core.config import CameraConfig
+from recognizer.core.constants import DEFAULT_CAPTURE_BUFFER_SIZE
 from recognizer.core.domain.frame import Frame
 from recognizer.core.errors import CameraError
 from recognizer.core.ports.frame_source import FrameSource
@@ -56,6 +58,9 @@ class OpenCVCamera(FrameSource):
         self._config = config
         self._capture_factory = capture_factory or _default_capture_factory
         self._capture: CaptureDevice | None = None
+        # Serializa read/release: con captura asincrona (`LatestFrameSource`) un
+        # hilo puede estar leyendo mientras el principal libera la camara.
+        self._lock = threading.Lock()
 
     def open(self) -> None:
         """Abre el dispositivo y aplica resolucion y fps configurados.
@@ -79,6 +84,9 @@ class OpenCVCamera(FrameSource):
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self._config.width))
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self._config.height))
         capture.set(cv2.CAP_PROP_FPS, float(self._config.target_fps))
+        # Búfer mínimo: con inferencia más lenta que la cámara (p. ej. facial en
+        # CPU) el búfer acumula segundos de retraso; así se usa el frame actual.
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, float(DEFAULT_CAPTURE_BUFFER_SIZE))
         self._capture = capture
 
     def read(self) -> Frame | None:
@@ -87,20 +95,23 @@ class OpenCVCamera(FrameSource):
         Raises:
             CameraError: si se intenta leer sin haber abierto la camara.
         """
-        if self._capture is None:
-            msg = "La camara no esta abierta: llama a open() antes de read()."
-            raise CameraError(msg)
-
-        ok, data = self._capture.read()
+        with self._lock:
+            capture = self._capture
+            if capture is None:
+                msg = "La camara no esta abierta: llama a open() antes de read()."
+                raise CameraError(msg)
+            ok, data = capture.read()
         if not ok or data is None:
             return None
         return Frame(data=data, timestamp=perf_counter())
 
     def release(self) -> None:
-        """Libera el dispositivo si esta abierto."""
-        if self._capture is not None:
-            self._capture.release()
-            self._capture = None
+        """Libera el dispositivo si esta abierto (espera a un read en curso)."""
+        with self._lock:
+            capture = self._capture
+            if capture is not None:
+                capture.release()
+                self._capture = None
 
     @property
     def is_open(self) -> bool:

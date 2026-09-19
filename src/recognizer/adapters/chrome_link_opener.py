@@ -1,40 +1,19 @@
-"""Adaptador que abre enlaces en Google Chrome en Windows."""
+"""Adaptador que abre enlaces en el navegador Chromium en Windows."""
 
-import os
-import shutil
 import subprocess
 from collections.abc import Callable, Sequence
-from pathlib import Path
 
+from recognizer.adapters.chromium import autodetect_browser
 from recognizer.core.errors import ActionError
 from recognizer.core.ports.link_opener import LinkOpener
 
-CHROME_EXECUTABLE_NAME = "chrome.exe"
-CHROME_COMMAND_NAME = "chrome"
-PROGRAMFILES_ENV = "PROGRAMFILES"
-PROGRAMFILES_X86_ENV = "PROGRAMFILES(X86)"
-LOCALAPPDATA_ENV = "LOCALAPPDATA"
-CHROME_RELATIVE_PATH = Path("Google") / "Chrome" / "Application" / CHROME_EXECUTABLE_NAME
-CHROME_ENV_ROOTS = (PROGRAMFILES_ENV, PROGRAMFILES_X86_ENV, LOCALAPPDATA_ENV)
 
-
-def _common_chrome_paths() -> tuple[Path, ...]:
-    paths: list[Path] = []
-    for env_var in CHROME_ENV_ROOTS:
-        root = os.environ.get(env_var)
-        if root:
-            paths.append(Path(root) / CHROME_RELATIVE_PATH)
-    return tuple(paths)
-
-
-def _autodetect_chrome() -> str | None:
-    found = shutil.which(CHROME_COMMAND_NAME)
-    if found is not None:
-        return found
-    for candidate in _common_chrome_paths():
-        if candidate.is_file():
-            return str(candidate)
-    return None
+def autodetect_chrome() -> str | None:
+    """Detecta un navegador Chromium en el sistema y devuelve su ejecutable."""
+    detected = autodetect_browser()
+    if detected is None:
+        return None
+    return detected.executable
 
 
 def _default_popen(argv: Sequence[str]) -> object:
@@ -72,7 +51,7 @@ class ChromeLinkOpener(LinkOpener):
             ActionError: si no se encuentra Chrome o si el sistema no puede
                 lanzarlo.
         """
-        executable = self._executable or _autodetect_chrome()
+        executable = self._executable or autodetect_chrome()
         if executable is None:
             msg = "No se encontro Chrome; define `browser` en la configuracion."
             raise ActionError(msg)

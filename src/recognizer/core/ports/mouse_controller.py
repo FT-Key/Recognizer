@@ -13,3 +13,7 @@ class MouseController(Protocol):
     def click(self) -> None:
         """Realiza un click izquierdo en la posicion actual del puntero."""
         ...
+
+    def scroll_by(self, *, dx: int, dy: int) -> None:
+        """Desplaza la rueda del raton (dy positivo = arriba)."""
+        ...

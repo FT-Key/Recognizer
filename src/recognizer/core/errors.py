@@ -21,5 +21,25 @@ class GestureClassifierError(RecognizerError):
     """El clasificador de gestos no pudo abrirse o fallo."""
 
 
+class DetectorError(RecognizerError):
+    """El detector de objetos no pudo abrirse o fallo."""
+
+
+class PoseEstimatorError(RecognizerError):
+    """El estimador de pose no pudo abrirse o fallo."""
+
+
+class FaceRecognizerError(RecognizerError):
+    """El reconocedor facial no pudo abrirse o fallo."""
+
+
+class FaceRepositoryError(RecognizerError):
+    """El almacen de rostros enrolados no pudo leerse o escribirse."""
+
+
 class ActionError(RecognizerError):
     """La accion local no pudo ejecutarse."""
+
+
+class AuthError(RecognizerError):
+    """Sin permiso para la accion o sesion requerida (rol insuficiente)."""

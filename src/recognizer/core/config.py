@@ -7,33 +7,80 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from recognizer.core.constants import (
     DEFAULT_ACTION_COOLDOWN_SECONDS,
+    DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
+    DEFAULT_ENROLLMENT_SAMPLES,
+    DEFAULT_FACE_CONFIDENCE,
+    DEFAULT_FACE_CONFIRM_FRAMES,
+    DEFAULT_FACE_DEFAULT_ROLE,
+    DEFAULT_FACE_DET_SIZE,
+    DEFAULT_FACE_MATCH_THRESHOLD,
+    DEFAULT_FACE_MAX_INFERENCE_FPS,
+    DEFAULT_FACE_PROCESS_EVERY_N_FRAMES,
+    DEFAULT_FACE_RELEASE_FRAMES,
+    DEFAULT_FACE_STORE_DIR,
     DEFAULT_FRAME_HEIGHT,
     DEFAULT_FRAME_WIDTH,
     DEFAULT_GESTURE_MODEL_PATH,
     DEFAULT_HAND_MODEL_PATH,
+    DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS,
+    DEFAULT_INTRUSION_CONFIRM_FRAMES,
+    DEFAULT_INTRUSION_RELEASE_FRAMES,
+    DEFAULT_INTRUSION_ZONE_X_MAX,
+    DEFAULT_INTRUSION_ZONE_X_MIN,
+    DEFAULT_INTRUSION_ZONE_Y_MAX,
+    DEFAULT_INTRUSION_ZONE_Y_MIN,
+    DEFAULT_LINE_CONFIRM_FRAMES,
+    DEFAULT_LINE_MARGIN,
+    DEFAULT_LINE_POSITION,
+    DEFAULT_MAX_FACE_WIDTH_RATIO,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
+    DEFAULT_MIN_FACE_SHARPNESS,
+    DEFAULT_MIN_FACE_WIDTH_RATIO,
     DEFAULT_MIN_GESTURE_CONFIDENCE,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
+    DEFAULT_PEOPLE_CONFIDENCE,
+    DEFAULT_PEOPLE_MODEL_PATH,
     DEFAULT_POINTER_ACTIVE_ZONE_MAX,
     DEFAULT_POINTER_ACTIVE_ZONE_MIN,
     DEFAULT_POINTER_ENABLED,
     DEFAULT_POINTER_MIRROR_X,
     DEFAULT_POINTER_SMOOTHING_ALPHA,
+    DEFAULT_POSTURE_CALIBRATION_FRAMES,
+    DEFAULT_POSTURE_CONFIRM_FRAMES,
+    DEFAULT_POSTURE_KEYPOINT_CONFIDENCE,
+    DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO,
+    DEFAULT_POSTURE_MAX_SHOULDER_TILT_RATIO,
+    DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG,
+    DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO,
+    DEFAULT_POSTURE_MODEL_PATH,
+    DEFAULT_POSTURE_RELEASE_FRAMES,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT,
+    DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET,
+    DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT,
+    DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
+    DEFAULT_REQUIRE_LOGIN,
     DEFAULT_RULE_DIRECTION_TOLERANCE_DEG,
     DEFAULT_RULE_STRAIGHT_ANGLE_DEG,
+    DEFAULT_SCROLL_LINES,
+    DEFAULT_SCROLL_REPEAT_SECONDS,
+    DEFAULT_SESSION_TIMEOUT_SECONDS,
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
+    DEFAULT_TRACK_TIMEOUT_FRAMES,
+    FACE_AUTH_MODEL_PATH,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
+    PERSON_LABEL,
     URL_PREFIXES,
 )
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
+from recognizer.core.domain.app import AppId
 from recognizer.core.domain.gesture import (
     GESTURE_NONE,
     GESTURE_POINTING_UP,
@@ -43,7 +90,9 @@ from recognizer.core.domain.gesture import (
     RulesPriority,
 )
 from recognizer.core.domain.hand import Handedness
-from recognizer.core.domain.pointer import SmoothingKind
+from recognizer.core.domain.identity import Role
+from recognizer.core.domain.pointer import ScrollDirection, SmoothingKind
+from recognizer.core.domain.tracking import LineAxis
 from recognizer.core.errors import ConfigError
 
 
@@ -265,12 +314,68 @@ class OpenLinksActionConfig(BaseModel):
         return urls
 
 
+class OpenTabActionConfig(BaseModel):
+    """Accion que abre o enfoca una pestana en el navegador controlado."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["open_tab"] = "open_tab"
+    tab: str = Field(min_length=1)
+    urls: tuple[str, ...] = ()
+
+    @field_validator("urls")
+    @classmethod
+    def _validate_urls(cls, urls: tuple[str, ...]) -> tuple[str, ...]:
+        for url in urls:
+            parsed = urlparse(url)
+            if not url.startswith(URL_PREFIXES) or not parsed.netloc:
+                msg = f"La URL debe ser http(s) con host valido: {url}"
+                raise ValueError(msg)
+        return urls
+
+
+class TabSeekActionConfig(BaseModel):
+    """Accion que posiciona el video de una pestana."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["tab_seek"] = "tab_seek"
+    tab: str = Field(min_length=1)
+    fraction: float = Field(ge=0.0, le=1.0)
+
+
+class TabPressActionConfig(BaseModel):
+    """Accion que envia teclas a una pestana."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["tab_press"] = "tab_press"
+    tab: str = Field(min_length=1)
+    keys: tuple[str, ...] = Field(min_length=1)
+
+
+class ScrollActionConfig(BaseModel):
+    """Accion que desplaza la rueda del raton ante un gesto sostenido."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: Literal["scroll"] = "scroll"
+    direction: ScrollDirection
+    lines: int = Field(default=DEFAULT_SCROLL_LINES, ge=1)
+    repeat_seconds: float = Field(default=DEFAULT_SCROLL_REPEAT_SECONDS, ge=0)
+    cooldown_seconds: float | None = Field(default=None, ge=0)
+
+
 ActionConfig = Annotated[
     MediaKeyActionConfig
     | HotkeyActionConfig
     | CommandActionConfig
     | ScriptActionConfig
-    | OpenLinksActionConfig,
+    | OpenLinksActionConfig
+    | OpenTabActionConfig
+    | TabSeekActionConfig
+    | TabPressActionConfig
+    | ScrollActionConfig,
     Field(discriminator="type"),
 ]
 
@@ -305,6 +410,42 @@ class ActionsConfig(BaseModel):
             msg = "El gesto None no puede mapearse a una accion."
             raise ValueError(msg)
         return mappings
+
+
+class BrowserTabConfig(BaseModel):
+    """Pestana registrada en el navegador controlado."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    url: str
+    match: str = ""
+
+    @model_validator(mode="after")
+    def _default_match(self) -> Self:
+        if not self.match:
+            parsed = urlparse(self.url)
+            object.__setattr__(self, "match", parsed.netloc)
+        return self
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, url: str) -> str:
+        parsed = urlparse(url)
+        if not url.startswith(URL_PREFIXES) or not parsed.netloc:
+            msg = f"La URL debe ser http(s) con host valido: {url}"
+            raise ValueError(msg)
+        return url
+
+
+class BrowserConfig(BaseModel):
+    """Navegador controlado: instancia Chromium aislada para acciones."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    executable: str | None = None
+    debugging_port: int = Field(default=DEFAULT_BROWSER_DEBUGGING_PORT, gt=0, le=65535)
+    user_data_dir: str | None = None
+    tabs: dict[str, BrowserTabConfig] = Field(default_factory=dict)
 
 
 class ActiveZoneConfig(BaseModel):
@@ -350,6 +491,200 @@ class PointerConfig(BaseModel):
         return gesture
 
 
+class CountingLineConfig(BaseModel):
+    """Linea de conteo del contador de personas (entradas/salidas)."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    axis: LineAxis = LineAxis.VERTICAL
+    position: float = Field(default=DEFAULT_LINE_POSITION, gt=0, lt=1)
+    margin: float = Field(default=DEFAULT_LINE_MARGIN, ge=0, lt=0.5)
+    invert: bool = False
+    confirm_frames: int = Field(default=DEFAULT_LINE_CONFIRM_FRAMES, ge=1)
+    track_timeout_frames: int = Field(default=DEFAULT_TRACK_TIMEOUT_FRAMES, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_margin(self) -> Self:
+        if self.margin >= min(self.position, 1 - self.position):
+            msg = "La linea requiere margin < min(position, 1-position)."
+            raise ValueError(msg)
+        return self
+
+
+class PeopleCounterConfig(BaseModel):
+    """Contador de personas: modelo YOLO, umbrales y linea de conteo."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    line: CountingLineConfig = Field(default_factory=CountingLineConfig)
+
+
+class IntrusionZoneConfig(BaseModel):
+    """Zona de intrusion del anti-intrusos: rectangulo normalizado 0..1."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    x_min: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MIN, ge=0, le=1)
+    y_min: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MIN, ge=0, le=1)
+    x_max: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MAX, ge=0, le=1)
+    y_max: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MAX, ge=0, le=1)
+    confirm_frames: int = Field(default=DEFAULT_INTRUSION_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_INTRUSION_RELEASE_FRAMES, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_rectangle(self) -> Self:
+        if self.x_min >= self.x_max:
+            msg = "La zona de intrusion requiere x_min < x_max."
+            raise ValueError(msg)
+        if self.y_min >= self.y_max:
+            msg = "La zona de intrusion requiere y_min < y_max."
+            raise ValueError(msg)
+        return self
+
+
+class IntrusionAlertConfig(BaseModel):
+    """Alerta sonora del anti-intrusos: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class AntiIntruderConfig(BaseModel):
+    """Anti-intrusos: modelo YOLO, umbrales, zona de intrusion y alerta."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    zone: IntrusionZoneConfig = Field(default_factory=IntrusionZoneConfig)
+    alert: IntrusionAlertConfig = Field(default_factory=IntrusionAlertConfig)
+
+
+class PostureAlertConfig(BaseModel):
+    """Alerta sonora de postura: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class PostureTolerancesConfig(BaseModel):
+    """Desvio admitido respecto a la linea base calibrada."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    head_offset: float = Field(default=DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET, ge=0)
+    head_height: float = Field(default=DEFAULT_POSTURE_TOLERANCE_HEAD_HEIGHT, ge=0)
+    torso_angle_deg: float = Field(
+        default=DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG, ge=0, le=MAX_ANGLE_DEG
+    )
+    shoulder_tilt: float = Field(default=DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT, ge=0)
+
+
+class PostureConfig(BaseModel):
+    """Postura ergonomica: modelo YOLO pose, calibracion, umbrales y debounce.
+
+    Con ``calibration_frames > 0`` la app aprende la postura correcta al inicio
+    (el usuario se sienta derecho unos segundos) y luego avisa de los desvios
+    respecto a esa linea base usando ``tolerances``. Con ``calibration_frames: 0``
+    se usan los umbrales absolutos. Las metricas se normalizan por una escala
+    corporal (ancho de hombros o largo del torso en perfil).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_POSTURE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    min_keypoint_confidence: float = Field(default=DEFAULT_POSTURE_KEYPOINT_CONFIDENCE, ge=0, le=1)
+    calibration_frames: int = Field(default=DEFAULT_POSTURE_CALIBRATION_FRAMES, ge=0)
+    tolerances: PostureTolerancesConfig = Field(default_factory=PostureTolerancesConfig)
+    max_head_offset_ratio: float = Field(default=DEFAULT_POSTURE_MAX_HEAD_OFFSET_RATIO, gt=0)
+    min_head_height_ratio: float = Field(default=DEFAULT_POSTURE_MIN_HEAD_HEIGHT_RATIO, ge=0)
+    max_torso_angle_deg: float = Field(
+        default=DEFAULT_POSTURE_MAX_TORSO_ANGLE_DEG, ge=MIN_ANGLE_DEG, le=MAX_ANGLE_DEG
+    )
+    max_shoulder_tilt_ratio: float = Field(default=DEFAULT_POSTURE_MAX_SHOULDER_TILT_RATIO, gt=0)
+    confirm_frames: int = Field(default=DEFAULT_POSTURE_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_POSTURE_RELEASE_FRAMES, ge=1)
+    alert: PostureAlertConfig = Field(default_factory=PostureAlertConfig)
+
+
+class FaceAuthConfig(BaseModel):
+    """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
+
+    ``min_confidence`` filtra detecciones debiles; ``min_face_width_ratio`` y
+    ``max_face_width_ratio`` guian la distancia; ``min_sharpness`` exige
+    quietud; ``enrollment_samples`` fija las muestras del enrolamiento;
+    ``match_threshold`` es la distancia coseno maxima aceptada.
+    ``default_role`` es el rol de los nuevos enrolados (el primero es admin);
+    ``session_timeout_seconds`` es la vigencia de la sesion tras el login
+    (0 = sin expiracion); ``require_login`` filtra el menu por rol (false =
+    modo abierto, sin sesion todo permitido); ``permissions`` es un override
+    por app (``{app_id: [roles]}``) sobre la matriz por defecto.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=FACE_AUTH_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_FACE_CONFIDENCE, ge=0, le=1)
+    det_size: int = Field(default=DEFAULT_FACE_DET_SIZE, ge=128, le=1280)
+    process_every_n_frames: int = Field(default=DEFAULT_FACE_PROCESS_EVERY_N_FRAMES, ge=1)
+    max_inference_fps: float = Field(default=DEFAULT_FACE_MAX_INFERENCE_FPS, ge=0)
+    min_face_width_ratio: float = Field(default=DEFAULT_MIN_FACE_WIDTH_RATIO, ge=0, le=1)
+    max_face_width_ratio: float = Field(default=DEFAULT_MAX_FACE_WIDTH_RATIO, ge=0, le=1)
+    min_sharpness: float = Field(default=DEFAULT_MIN_FACE_SHARPNESS, ge=0)
+    enrollment_samples: int = Field(default=DEFAULT_ENROLLMENT_SAMPLES, ge=1)
+    match_threshold: float = Field(default=DEFAULT_FACE_MATCH_THRESHOLD, ge=0)
+    confirm_frames: int = Field(default=DEFAULT_FACE_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_FACE_RELEASE_FRAMES, ge=1)
+    store_dir: str = Field(default=DEFAULT_FACE_STORE_DIR, min_length=1)
+    default_role: Role = Role(DEFAULT_FACE_DEFAULT_ROLE)
+    session_timeout_seconds: int = Field(default=DEFAULT_SESSION_TIMEOUT_SECONDS, ge=0)
+    require_login: bool = DEFAULT_REQUIRE_LOGIN
+    permissions: dict[str, list[Role]] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def _validate_widths(self) -> Self:
+        if self.min_face_width_ratio >= self.max_face_width_ratio:
+            msg = "La captura facial requiere min_face_width_ratio < max_face_width_ratio."
+            raise ValueError(msg)
+        return self
+
+    @field_validator("permissions")
+    @classmethod
+    def _validate_permission_apps(cls, permissions: dict[str, list[Role]]) -> dict[str, list[Role]]:
+        known = {app.value for app in AppId}
+        for key in permissions:
+            if key not in known:
+                msg = f"Permiso para aplicacion desconocida: {key}"
+                raise ValueError(msg)
+        return permissions
+
+
+class AppsConfig(BaseModel):
+    """Habilitacion de apps del launcher (override sobre el catalogo).
+    Solo afecta a apps implementadas: las que aun no existen se muestran como
+    "proximamente" independientemente de este valor.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: dict[AppId, bool] = Field(default_factory=dict)
+
+    def is_enabled(self, app_id: AppId) -> bool:
+        """Indica si la app esta habilitada; por defecto, si."""
+        return self.enabled.get(app_id, True)
+
+
 class AppConfig(BaseModel):
     """Configuracion raiz de la aplicacion."""
 
@@ -360,6 +695,12 @@ class AppConfig(BaseModel):
     gestures: GestureConfig = Field(default_factory=GestureConfig)
     pointer: PointerConfig = Field(default_factory=PointerConfig)
     actions: ActionsConfig = Field(default_factory=ActionsConfig)
+    browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
+    anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
+    posture: PostureConfig = Field(default_factory=PostureConfig)
+    face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
+    apps: AppsConfig = Field(default_factory=AppsConfig)
 
     def gesture_catalog(self) -> GestureCatalog:
         """Reconstruye el catalogo de gestos declarado por la configuracion."""
@@ -381,4 +722,26 @@ class AppConfig(BaseModel):
             catalog.require(self.pointer.activation_gesture)
         except ConfigError as exc:
             raise ValueError(str(exc)) from exc
+        return self
+
+    @model_validator(mode="after")
+    def _validate_browser_tab_references(self) -> Self:
+        tab_names = set(self.browser.tabs)
+        for label, spec in self.actions.mappings.items():
+            tab_ref = getattr(spec, "tab", None)
+            if tab_ref is not None and tab_ref not in tab_names:
+                msg = (
+                    f"La accion '{label}' referencia la pestana '{tab_ref}' "
+                    f"que no esta definida en browser.tabs."
+                )
+                raise ValueError(msg)
+        for menu_name, menu_config in self.actions.menus.items():
+            for opt_label, spec in menu_config.options.items():
+                tab_ref = getattr(spec, "tab", None)
+                if tab_ref is not None and tab_ref not in tab_names:
+                    msg = (
+                        f"La opcion '{opt_label}' del menu '{menu_name}' "
+                        f"referencia la pestana '{tab_ref}' que no esta en browser.tabs."
+                    )
+                    raise ValueError(msg)
         return self

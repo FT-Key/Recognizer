@@ -15,12 +15,16 @@ from recognizer.core.config import (
     MediaKeyActionConfig,
     MenuConfig,
     OpenLinksActionConfig,
+    OpenTabActionConfig,
     ScriptActionConfig,
+    ScrollActionConfig,
+    TabSeekActionConfig,
 )
 from recognizer.core.constants import DEFAULT_ACTION_COOLDOWN_SECONDS
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
 from recognizer.core.domain.gesture import Finger
 from recognizer.core.domain.hand import Handedness
+from recognizer.core.domain.pointer import ScrollDirection
 from recognizer.settings import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -335,12 +339,20 @@ def test_repo_config_loads_expected_mappings() -> None:
     assert mappings["Thumb_Down"] == MediaKeyActionConfig(
         key=MediaKey.VOLUME_DOWN, repeat_seconds=0.5
     )
-    assert mappings["Closed_Fist"] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
-    assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
-    assert mappings["Victory"] == HotkeyActionConfig(keys=("ctrl", "shift", "m"))
-    assert mappings["ILoveYou"] == OpenLinksActionConfig(
-        urls=("https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s",)
+    assert mappings["Closed_Fist"] == ScrollActionConfig(
+        direction=ScrollDirection.DOWN,
+        lines=3,
+        repeat_seconds=0.15,
+        cooldown_seconds=0.12,
     )
+    assert mappings["Open_Palm"] == MediaKeyActionConfig(key=MediaKey.PLAY_PAUSE)
+    assert mappings["Victory"] == ScrollActionConfig(
+        direction=ScrollDirection.UP,
+        lines=3,
+        repeat_seconds=0.15,
+        cooldown_seconds=0.12,
+    )
+    assert mappings["ILoveYou"] == OpenTabActionConfig(tab="video")
 
 
 def test_repo_config_loads_replay_menu() -> None:
@@ -351,22 +363,21 @@ def test_repo_config_loads_replay_menu() -> None:
     assert menu.modifier == "Pointing_Up"
     assert menu.consume_trigger is True
     assert set(menu.options) == {"Pointing_Up", "Victory", "OK_Sign"}
-    assert menu.options["Pointing_Up"] == ScriptActionConfig(
-        path="scripts/actions/video_start.ps1",
-        args=("-Key", "0"),
-        interpreter=ScriptInterpreter.POWERSHELL,
-    )
-    assert menu.options["Victory"] == ScriptActionConfig(
-        path="scripts/actions/video_start.ps1",
-        args=("-Key", "4"),
-        interpreter=ScriptInterpreter.POWERSHELL,
-    )
-    assert menu.options["OK_Sign"] == ScriptActionConfig(
-        path="scripts/actions/video_start.ps1",
-        args=("-Key", "7"),
-        interpreter=ScriptInterpreter.POWERSHELL,
-    )
+    assert menu.options["Pointing_Up"] == TabSeekActionConfig(tab="video", fraction=0.0)
+    assert menu.options["Victory"] == TabSeekActionConfig(tab="video", fraction=0.4)
+    assert menu.options["OK_Sign"] == TabSeekActionConfig(tab="video", fraction=0.7)
     assert app_config.gestures.swap_handedness is False
+
+
+def test_repo_config_loads_system_menu() -> None:
+    app_config = load_config(CONFIG_PATH)
+    menu = app_config.actions.menus["System"]
+
+    assert menu.hand is Handedness.LEFT
+    assert menu.modifier == "Pointing_Up"
+    assert menu.consume_trigger is True
+    assert set(menu.options) == {"Closed_Fist"}
+    assert menu.options["Closed_Fist"] == MediaKeyActionConfig(key=MediaKey.VOLUME_MUTE)
 
 
 def test_repo_config_declares_ok_sign_rule() -> None:

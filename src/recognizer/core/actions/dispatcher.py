@@ -113,6 +113,27 @@ class GestureActionDispatcher:
             ):
                 if gesture == GESTURE_NONE:
                     return
+                # Solo lectura: no se actualiza el tracker en Held. Con un
+                # modificador sostenido los ticks no deben ejecutar la accion
+                # global (p. ej. scroll) sino la opcion del menu que corresponda.
+                found = find_menu_match(menus=self._menus, tracker=self._tracker)
+                if found is None:
+                    if modifier_is_held(menus=self._menus, tracker=self._tracker):
+                        return
+                    self._run_global(
+                        gesture=gesture,
+                        confidence=confidence,
+                        handedness=handedness,
+                        timestamp=event.timestamp,
+                    )
+                    return
+                self._run_menu_match(
+                    found=found,
+                    confidence=confidence,
+                    timestamp=event.timestamp,
+                )
+                if found.menu.consume_trigger:
+                    return
                 self._run_global(
                     gesture=gesture,
                     confidence=confidence,

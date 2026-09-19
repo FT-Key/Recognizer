@@ -13,9 +13,11 @@ frame -> [HandPipeline] -> GestureStabilizer -> EventBus -> ActionSink (decorado
 ## Capas y contrato de dependencias
 
 - `core/domain`: vocabulario (enums), objetos de valor (`Frame`), eventos frozen, acciones.
-- `core/ports`: Protocols que el núcleo necesita (`FrameSource`, `HandTracker`, `EventBus`...).
+- `core/ports`: Protocols que el núcleo necesita (`FrameSource`, `HandTracker`, `EventBus`,
+  `BrowserTabs`...).
 - `core/pipeline`: processors + `PipelineBuilder` (pipes & filters).
-- `adapters/`: OpenCV, MediaPipe, pynput, subprocess, persistencia, red (futuro).
+- `adapters/`: OpenCV, MediaPipe, pynput, subprocess, persistencia, red (futuro),
+  Chromium CDP (`ChromiumCdpBrowser`).
 - `settings.py`, `bootstrap.py`, `cli/`: composición y entrada.
 - Contratos verificados por import-linter en `pyproject.toml`: el core no importa capas
   externas ni infraestructura; los adapters no importan cli/settings.
@@ -27,6 +29,7 @@ frame -> [HandPipeline] -> GestureStabilizer -> EventBus -> ActionSink (decorado
 3. Identidad: sin enrolamiento -> rol/perfil con permisos.
 4. Persistencia: ninguna -> embeddings de rostro / dataset de gestos.
 5. Interfaz: overlay OpenCV -> UI de escritorio -> web.
+6. Producto: una sola app de gestos -> launcher con varias apps de visión.
 
 ## Patrones y regla de admisión
 
@@ -95,10 +98,72 @@ consume el gesto disparador (`consume_trigger`) y evita repeticiones hasta liber
 El puntero se desactiva con más de una mano visible (`PointerDetectionProcessor`). La
 lateralidad del modelo se puede corregir con `gestures.swap_handedness`.
 
+## Navegador controlado via CDP (etapa 9b)
+
+El puerto `BrowserTabs` (`core/ports/browser_tabs.py`) define `ensure`, `seek_media` y
+`press_keys` para controlar pestañas del navegador Chromium. La implementación es
+`ChromiumCdpBrowser` (`adapters/chromium_cdp.py`), que usa `CdpClient`
+(`adapters/cdp_client.py`) para la comunicación CDP: transporte HTTP (`UrllibCdpTransport`)
+para listar/crear targets y transporte WebSocket (`WebsocketCdpTransport`) para comandos
+(`Page.navigate`, `Runtime.evaluate`, `Input.dispatchKeyEvent`).
+
+`ChromiumCdpBrowser` auto-detecta el navegador Chromium instalado (Chrome > Edge > Brave >
+Vivaldi > Opera > Chromium) via `chromium.py`, lanza una instancia con perfil aislado
+(`browser-profile/<familia>/`) en `--remote-debugging-port=9222` si no está corriendo, y
+busca pestañas por matching de URL (`TabSpec.match`). Las acciones `open_tab`
+(playlist rotatoria via `TabKey`), `tab_seek` (fracción 0..1 de `<video>`) y
+`tab_press` (teclas via CDP) se configuran en `config.yaml` bajo `browser.tabs`.
+
 ## Gate
 
 `uv run lint` · `uv run typecheck` · `uv run test` (cobertura >= 80%) ·
 `uv run check-arch` · `uv run smoke --frames 30 --no-window`.
+
+## Launcher multi-app y modularidad (etapa 10a)
+
+`recognizer` sin argumentos abre un **menú de aplicaciones**; con flags ejecuta la app de
+gestos directamente (compatibilidad con scripts y `smoke`). El catalogo de apps es
+vocabulario puro del dominio:
+
+- `core/domain/app.py`: `AppId`, `AppInfo` (título, descripción, `implemented`,
+  `preparation`), `AppAvailability` y `AppCatalog` (orden, resolución por id/número y
+  estado). `AppRunRequest` transporta las opciones comunes de arranque.
+- `core/config.py`: `AppsConfig` (`apps.enabled`) es un override de habilitación; solo
+  aplica a apps implementadas.
+- `cli/menu.py`: render del menú y bucle interactivo (imperative shell). Resuelve el runner
+  de cada app de forma **perezosa** dentro de `resolve_runner`.
+- `cli/app.py`: `run_gestures(request, ...)` es el runner de gestos; `main` decide entre
+  menú (sin args) y ejecución directa.
+- `cli/paths.py`: resolución de rutas y modo `frozen` sin importar `cv2`/`mediapipe`, para
+  que abrir el menú no cargue librerías de visión.
+
+**Reglas de rendimiento (no negociables):**
+
+1. **Carga perezosa por app.** Cada runner importa sus dependencias pesadas dentro de su
+   módulo y solo al lanzarse. Abrir el menú no importa MediaPipe/YOLO ni abre la cámara.
+2. **Sin doble procesamiento.** Una app usa una sola vía de inferencia; no se agrega un
+   detector de respaldo que reprocese el mismo fotograma (p. ej. MediaPipe + YOLO a la vez).
+3. **Salida al menú.** Toda app termina con `ESC`/`q` y devuelve el control al launcher;
+   nunca cierra el proceso por sí misma.
+4. **Una dependencia pesada por etapa.** Se añade `ultralytics`/`torch` solo cuando exista
+   una app que lo use, y se declara en el contrato de import-linter del core.
+
+## Contador de personas con tracking (etapa 10c)
+
+La app del contador usa una sola vía de inferencia: `UltralyticsDetector.track`
+(`model.track` con `persist=True` y tracker ByteTrack) cubre detección + tracking, y
+`detect` queda como capacidad genérica del puerto `ObjectDetector`. El puerto
+`ObjectTracker` (`core/ports/object_tracker.py`) expone `open`/`track`/`close`.
+
+El conteo es dominio puro en `core/domain/tracking.py`: `TrackedDetection` (frozen)
+compone `Detection` + `track_id`; `CountingLine` (eje horizontal/vertical y `position`
+normalizada) divide el fotograma; `LineCrossingCounter` registra cruces por track con
+debounce `confirm_frames` e `invert`, sin importar infraestructura. La línea admite una
+banda muerta (hysteresis) `margin` alrededor de `position` que evita cruces fantasma y el
+jitter del centro, y `track_timeout_frames` purga el estado de los tracks no vistos para
+que un ID muerto no cuente al reaparecer. El overlay vive en `adapters/overlay_people.py`
+(`draw_people_overlay`: cajas+ID, línea, banda muerta y HUD). La línea se configura en
+`people_counter.line` (`config.yaml`).
 
 ## Arquitectura dual: Web + Desktop
 
@@ -132,3 +197,43 @@ Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
 - Desktop tiene acciones que la web no puede hacer (mouse, teclado, apps)
 
 Ver `docs/WEB-PLAN.md` para detalles de la versión web.
+
+## Latencia y desacople de inferencia (app facial)
+
+Todas las apps comparten `cli/runtime.run_camera_loop`: lee un fotograma, ejecuta el
+pipeline y dibuja. El bucle es **single-thread**: el ritmo de lectura es el ritmo de
+inferencia.
+
+- **Apps rápidas** (gestos/MediaPipe, contador/anti-intrusos/postura/YOLO nano): la
+  inferencia va a ~10-30 FPS, así que el bucle lee la cámara casi tan rápido como llega el
+  stream. Con `CAP_PROP_BUFFERSIZE=1` alcanza para que no haya retraso.
+- **App facial** (InsightFace `buffalo_s` en CPU): la inferencia va a ~2-5 FPS. El bucle se
+  queda cientos de ms dentro del reconocedor sin leer, **no drena el stream** y la cámara de
+  red (teléfono/enlace móvil) acumula retraso hasta segundos; la app de enlace incluso avisa
+  *"calidad de red deficiente"*. `CAP_PROP_BUFFERSIZE=1` no lo evita porque ese búfer es
+  local; el búfer de red queda del lado del emisor.
+
+Solución en la app facial (solo ella, por ahora):
+
+1. `adapters/latest_frame_source.py` (`LatestFrameSource`): hilo daemon que **drena la
+   cámara sin parar** y guarda el último fotograma. `read()` espera al siguiente fotograma
+   nuevo y devuelve una copia (para dibujar); `wait_for_new(version)` permite al worker ver
+   el último sin consumirlo.
+2. `cli/apps/face_auth.py` (`_RecognitionWorker`): hilo que reconoce el último fotograma y
+   actualiza el estado (enrolamiento/login) bajo lock. El bucle principal **solo dibuja**,
+   así que la vista va a ritmo de cámara aunque la inferencia tarde.
+3. Costo de CPU acotado: `allowed_modules=["detection", "recognition"]` (se descartan
+   `landmark_2d_106`, `landmark_3d_68` y `genderage`, que se ejecutaban por cara y causaban el
+   pico al aparecer un rostro), `face_auth.det_size` (320), `face_auth.max_inference_fps`
+   (tope de 5 FPS; `0` = sin tope) y `face_auth.process_every_n_frames`.
+
+**Cuándo aplicar el mismo patrón a otras apps:** cuando la inferencia de una app sea más
+lenta que la cámara (FPS de inferencia < FPS de captura) o la cámara sea de red y aparezca
+retraso creciente / avisos de calidad. Se hace sin tocar `core`: envolver su `FrameSource`
+con `LatestFrameSource` y mover la inferencia a un worker que entregue resultados al bucle
+de dibujo. No hace falta para apps que ya corren en tiempo real (hoy, todas menos la facial).
+
+**Para qué sirve:** desacoplar la captura del cómputo. Garantiza (a) que el stream se drene
+siempre (sin retraso acumulado ni degradación de red), (b) que el usuario vea video en vivo
+con el último resultado disponible, y (c) que subir la carga de inferencia no congele la
+interfaz.

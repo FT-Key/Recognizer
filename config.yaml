@@ -1,9 +1,27 @@
 # Configuracion de Recognizer.
 # Este archivo es la unica fuente de verdad para umbrales, dispositivos y mapeos.
+
+# Launcher multi-app: al ejecutar `recognizer` sin argumentos se abre un menu.
+# `enabled` solo aplica a apps ya implementadas; las que aun no existen se
+# muestran como "proximamente". Orden del menu: gestos, luego las que no
+# requieren entrenamiento y al final las que si (entrenamiento o enrolamiento).
+apps:
+  enabled:
+    gestures: true
+    people_counter: true
+    anti_intruder: true
+    posture: true
+    # ppe_detector: true
+    # inventory: true
+    face_auth: true
+
+# La ventana de cada app muestra el fotograma a su resolucion nativa: sube
+# width/height para una imagen mas grande (la inferencia sera mas lenta).
+# Valores habituales de webcam: 640x480, 1280x720 (HD) y 1920x1080 (Full HD).
 camera:
   device_index: 0
-  width: 640
-  height: 480
+  width: 1280
+  height: 720
   target_fps: 30
 
 # Deteccion de manos con MediaPipe Tasks (HandLandmarker en modo VIDEO).
@@ -87,21 +105,27 @@ actions:
       type: media_key
       key: volume_down
       repeat_seconds: 0.5
+    # Scroll hacia abajo al sostener el puno (ticks via repeat_seconds).
     Closed_Fist:
-      type: media_key
-      key: volume_mute
+      type: scroll
+      direction: down
+      lines: 3
+      repeat_seconds: 0.15
+      cooldown_seconds: 0.12
     Open_Palm:
       type: media_key
       key: play_pause
+    # Scroll hacia arriba al sostener la V (ticks via repeat_seconds).
     Victory:
-      type: hotkey
-      keys: [ctrl, shift, m]
+      type: scroll
+      direction: up
+      lines: 3
+      repeat_seconds: 0.15
+      cooldown_seconds: 0.12
     # Playlist secuencial (no aleatoria): cada ILoveYou abre el siguiente enlace.
     ILoveYou:
-      type: open_links
-      urls:
-        - "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
-      # browser: ""   # opcional: ruta a chrome.exe; vacio = autodetectar
+      type: open_tab
+      tab: video
     # Los comandos se ejecutan de verdad; descomenta bajo tu responsabilidad.
     # Ejemplos de acciones script (descomenta y asigna a un gesto):
     # ILoveYou:
@@ -120,25 +144,197 @@ actions:
   # la izquierda sostenga el modificador, puede ejecutar tambien su accion global.
   menus:
     # Gesto compuesto: con la IZQUIERDA sosteniendo Pointing_Up, el gesto de la
-    # DERECHA elige la posicion del video. Las teclas 0/4/7 de YouTube saltan al
-    # 0% / 40% / 70% de la duracion.
+    # DERECHA elige la posicion del video.
     Replay:
       hand: Left
       modifier: Pointing_Up
       consume_trigger: true
       options:
         Pointing_Up:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "0"]
+          type: tab_seek
+          tab: video
+          fraction: 0.0
         Victory:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "4"]
+          type: tab_seek
+          tab: video
+          fraction: 0.4
         OK_Sign:
-          type: script
-          path: scripts/actions/video_start.ps1
-          interpreter: powershell
-          args: ["-Key", "7"]
+          type: tab_seek
+          tab: video
+          fraction: 0.7
+    # Con la IZQUIERDA sosteniendo Pointing_Up, el puno de la DERECHA silencia
+    # en vez de hacer scroll (los ticks Held resuelven menus antes que lo global).
+    # Convive con Replay (mismo modificador) porque las opciones no colisionan.
+    System:
+      hand: Left
+      modifier: Pointing_Up
+      consume_trigger: true
+      options:
+        Closed_Fist:
+          type: media_key
+          key: volume_mute
+
+# Contador de personas (etapa 10c): tracking YOLO + conteo de cruces de linea.
+# model_path admite un .pt de Ultralytics; si no existe, se descarga solo.
+# target_label filtra la clase a contar (p. ej. "person", "car", "dog").
+# line: divide el fotograma y cuenta entradas/salidas al cruzarla.
+#   axis: vertical (izquierda/derecha, por defecto: paso lateral frente a la
+#     camara) | horizontal (arriba/abajo).
+#   position: coordenada 0..1 de la linea en su eje.
+#   margin: banda muerta alrededor de la linea (el centro del objeto debe
+#     superarla para confirmar un lado). Evita el jitter del centro y los
+#     cruces fantasma de tracks que nacen junto a la linea.
+#   invert: intercambia entradas/salidas (positivo = abajo/derecha por defecto).
+#   confirm_frames: fotogramas consecutivos al otro lado para confirmar el cruce.
+#   track_timeout_frames: fotogramas sin ver un track antes de purgar su estado
+#     (evita que IDs muertos queden en memoria).
+people_counter:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
+  line:
+    enabled: true
+    axis: vertical
+    position: 0.5
+    margin: 0.05
+    invert: false
+    confirm_frames: 2
+    track_timeout_frames: 30
+
+# Anti-intrusos (etapa 11): tracking YOLO + zona de intrusion + alerta sonora.
+# zone: rectangulo normalizado 0..1 sobre el fotograma. Un objeto se considera
+#   dentro si el centro de su caja cae en la zona.
+#   enabled: false desactiva la zona (solo muestra cajas, sin alerta).
+#   confirm_frames: fotogramas consecutivos dentro para confirmar al intruso.
+#   release_frames: fotogramas consecutivos fuera (o ausente) para liberarlo.
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dura la intrusion (0 = una vez).
+anti_intruder:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
+  zone:
+    enabled: true
+    x_min: 0.25
+    y_min: 0.4
+    x_max: 0.75
+    y_max: 0.9
+    confirm_frames: 3
+    release_frames: 5
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Postura ergonomica (etapa 12): estima la pose con YOLO pose y avisa de malos
+# habitos frente a la camara. model_path admite un .pt de Ultralytics; si no
+# existe, se descarga solo (yolo26n-pose.pt).
+#
+# CALIBRACION (recomendada): al arrancar la app, sientate derecho y quieto.
+# Durante `calibration_frames` fotogramas se aprende tu postura correcta y luego
+# se avisa cuando te desvias mas de `tolerances`. Esto funciona aunque las
+# caderas queden ocultas por el escritorio y aunque la camara cambie de posicion.
+#   calibration_frames: 0 desactiva la calibracion y usa los umbrales absolutos.
+#   tolerances: cuanto puede desviarse cada metrica antes de avisar. Sube una
+#     tolerancia si el aviso salta de mas; bajala si no detecta tu mala postura.
+#       head_offset: nariz respecto al centro de hombros -> "cabeza adelante".
+#       head_height: altura de la nariz sobre los hombros -> "cabeza baja".
+#       torso_angle_deg: inclinacion de la linea hombros-caderas -> "espalda
+#         inclinada".
+#       shoulder_tilt: desnivel vertical entre hombros -> "hombros desnivelados".
+#
+# Umbrales absolutos (solo se usan si calibration_frames: 0):
+#   max_head_offset_ratio / min_head_height_ratio / max_torso_angle_deg /
+#   max_shoulder_tilt_ratio.
+# min_keypoint_confidence: confianza minima de cada punto clave para evaluar
+#   (las caderas suelen quedar por debajo de este umbral al estar sentado).
+# confirm_frames/release_frames: debounce del aviso.
+# alert: alerta sonora del sistema (winsound en Windows); repeat_seconds = 0
+#   suena una sola vez por aviso.
+posture:
+  model_path: models/yolo26n-pose.pt
+  min_confidence: 0.5
+  min_keypoint_confidence: 0.5
+  calibration_frames: 60
+  tolerances:
+    head_offset: 0.15
+    head_height: 0.2
+    torso_angle_deg: 8.0
+    shoulder_tilt: 0.1
+  max_head_offset_ratio: 0.35
+  min_head_height_ratio: 0.7
+  max_torso_angle_deg: 15.0
+  max_shoulder_tilt_ratio: 0.15
+  confirm_frames: 5
+  release_frames: 10
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Reconocimiento facial (etapa 15a): enrolamiento + login con InsightFace.
+# model_path es la carpeta del pack buffalo (root/nombre: models + buffalo_s);
+# InsightFace lo descarga solo si falta. min_confidence filtra detecciones
+# debiles; min/max_face_width_ratio guian la distancia (acercate/alejate) y el
+# marco objetivo del overlay usa min_face_width_ratio: la cara debe llenarlo.
+# Calibracion: 0.18 son ~230px a 1280px (alcanzable a ~1m). Sube
+# min_face_width_ratio si hay falsos positivos (mas cara = mejor embedding);
+# si la camara queda lejos, elige otra con el selector del menu en vez de
+# bajar el umbral. min_sharpness exige quietud (varianza del Laplaciano);
+# enrollment_samples fija las muestras por rostro; match_threshold es la
+# distancia coseno maxima aceptada (bajalo si hay falsos positivos, subelo si
+# no reconoce); confirm/release_frames son el debounce del login; store_dir
+# guarda index.json + <id>.json por cara.
+# det_size: lado de entrada del detector (px). 320 es mas rapido en CPU y basta
+#   para una cara que llena el encuadre; sube a 640 si necesitas detectar caras
+#   mas lejanas/pequenas.
+# process_every_n_frames: cada cuantos fotogramas reconoce el worker facial.
+#   1 = todos. Subilo a 2 o 3 en CPU lenta para bajar el uso de CPU; la vista
+#   sigue fluida porque el dibujo va aparte (captura asincrona + worker).
+# max_inference_fps: tope de reconocimientos por segundo (0 = sin tope). Con
+#   rostro en camara la inferencia es mas cara; el tope evita saturar la CPU y
+#   trabar el stream/dibujo. 5 FPS alcanza para login y enrolamiento.
+face_auth:
+  model_path: models/buffalo_s
+  min_confidence: 0.5
+  det_size: 320
+  process_every_n_frames: 1
+  max_inference_fps: 5.0
+  min_face_width_ratio: 0.18
+  max_face_width_ratio: 0.55
+  min_sharpness: 80.0
+  enrollment_samples: 5
+  match_threshold: 0.45
+  confirm_frames: 3
+  release_frames: 5
+  store_dir: data/faces
+  # Roles y sesiones (etapa 15b): el primer rostro enrolado es admin.
+  # default_role: rol de los siguientes enrolados (admin/operator/viewer).
+  # session_timeout_seconds: vigencia de la sesion tras el login (0 = sin expiracion).
+  # require_login: false = modo abierto (sin sesion todo permitido, como antes);
+  #   true = el menu filtra por rol. Matriz por defecto: admin = todas (incluidas
+  #   ppe_detector e inventory cuando existan); operator = todas las implementadas
+  #   (gestures, people_counter, anti_intruder, posture, face_auth); viewer = solo
+  #   gestures y posture.
+  default_role: operator
+  session_timeout_seconds: 28800
+  require_login: false
+  # Override por app (se fusiona sobre la matriz): ej.
+  # permissions: {people_counter: [admin, operator], posture: [admin, operator, viewer]}
+
+# Navegador controlado: Recognizer lanza su propia instancia de Chromium
+# (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla
+# por Chrome DevTools Protocol (CDP). Las acciones de navegador actuan sobre
+# pestanas registradas, no sobre la ventana activa.
+# Login: OPCIONAL. YouTube funciona sin cuenta. El perfil vive en
+# browser-profile/<familia>/ junto a config.yaml; borralo para resetear.
+browser:
+  # executable: null autodetecta Chromium (Chrome > Edge > Brave > Vivaldi > Opera > Chromium).
+  # Puedes forzar una ruta explicita si prefieres otro navegador.
+  executable: null
+  debugging_port: 9222
+  # user_data_dir: null = browser-profile/<familia>/ junto a config/.exe
+  user_data_dir: null
+  tabs:
+    video:
+      url: "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
+      match: "youtube.com/watch"

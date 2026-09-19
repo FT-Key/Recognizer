@@ -17,8 +17,13 @@ export function DownloadBanner({ desktopAvailable }) {
           <span className="banner-badge">&#x25CF; Detectada en este equipo</span>
         )}
       </div>
-      <a className="btn btn--primary" href={CONFIG.desktop.downloadUrl}>
-        {desktopAvailable ? 'Abrir app' : 'Descargar app'}
+      <a
+        className="btn btn--primary"
+        href={CONFIG.desktop.downloadUrl}
+        target="_blank"
+        rel="noreferrer noopener"
+      >
+        {desktopAvailable ? 'Abrir app' : 'Descargar para Windows'}
       </a>
     </div>
   );
