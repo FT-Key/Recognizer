@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** release **v0.2.0** publicada (launcher + YOLO + facial/roles); siguiente: 13 (EPP) o 15c (DB distribuida)
-- **Rama:** `dev`
+- **Fase actual:** etapa **15c** (usuarios/accesos/fotos) completada; siguiente: 13 (EPP) o 15d (identidad distribuida)
+- **Rama:** `stage/15c-users-access`
 - **Actualizado:** 2026-09-19
 
 ## Hecho
@@ -49,6 +49,8 @@
 - Fix 15b-cost: `allowed_modules=["detection","recognition"]` (se descartan landmarks/género-edad que corrían por cara) + `face_auth.max_inference_fps` (5 FPS) en el worker.
 - Gate fix 15b-cost verde: lint OK, mypy strict 187, pytest **1133 passed** (94.88%), check-arch 3/3.
 - Release **v0.2.0** publicada en GitHub (launcher multi-app + contador/anti-intrusos/postura + facial con roles). El `.exe` ahora incluye YOLO/torch e InsightFace; descripción en `docs/RELEASE-v0.2.0.md`; `recognizer.spec` con `ultralytics`/`torch`/`torchvision` y `hiddenimports` de `face_menu_gui`/`camera_discovery`.
+- Etapa 15c: gestión de usuarios y accesos. Submenú facial coherente (Login/Logout según sesión, selector de rol visible), foto de enrolamiento (`<id>.png`), foto del primer login reconocido, `AccessEvent` + `AccessLogRepository` (`data/access/logins.jsonl`), paneles admin **Usuarios** (editar/re-enrolar/eliminar) y **Accesos** (admin con foto; no-admin solo sus logins sin foto).
+- Gate 15c verde: lint OK, mypy strict 199, pytest **1198 passed** (95.53%), check-arch 3/3. Reviewer: apta tras correcciones (foto por identidad, gating admin, anti path-traversal, validador umbral). Commits pendientes `git-ops`.
 
 ## Siguiente (etapa 13 — EPP, o 15c — identidad distribuida)
 - 15c: `DbIdentityProvider` (SQLite/Postgres) sobre el puerto 15b. 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
