@@ -9,6 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from recognizer.core.config import CameraConfig
+from recognizer.core.constants import DEFAULT_CAPTURE_BUFFER_SIZE
 from recognizer.core.domain.frame import Frame
 from recognizer.core.errors import CameraError
 from recognizer.core.ports.frame_source import FrameSource
@@ -79,6 +80,9 @@ class OpenCVCamera(FrameSource):
         capture.set(cv2.CAP_PROP_FRAME_WIDTH, float(self._config.width))
         capture.set(cv2.CAP_PROP_FRAME_HEIGHT, float(self._config.height))
         capture.set(cv2.CAP_PROP_FPS, float(self._config.target_fps))
+        # Búfer mínimo: con inferencia más lenta que la cámara (p. ej. facial en
+        # CPU) el búfer acumula segundos de retraso; así se usa el frame actual.
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, float(DEFAULT_CAPTURE_BUFFER_SIZE))
         self._capture = capture
 
     def read(self) -> Frame | None:
