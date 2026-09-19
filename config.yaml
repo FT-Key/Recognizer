@@ -304,9 +304,16 @@ face_auth:
   min_sharpness: 80.0
   enrollment_samples: 5
   match_threshold: 0.45
+  # login_photo_threshold: distancia coseno maxima para guardar la foto del
+  #   login (mas estricta que match_threshold: menor = mejor coincidencia).
+  #   0.35 evita guardar fotos borrosas o de perfil; subelo si casi nunca
+  #   captura foto.
+  login_photo_threshold: 0.35
   confirm_frames: 3
   release_frames: 5
   store_dir: data/faces
+  # access_dir: registro de accesos (logins.jsonl + images/<fecha>_<id>.png).
+  access_dir: data/access
   # Roles y sesiones (etapa 15b): el primer rostro enrolado es admin.
   # default_role: rol de los siguientes enrolados (admin/operator/viewer).
   # session_timeout_seconds: vigencia de la sesion tras el login (0 = sin expiracion).

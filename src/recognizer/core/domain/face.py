@@ -113,10 +113,12 @@ class FaceObservation:
 
 @dataclass(frozen=True, slots=True)
 class EnrolledFace:
-    """Rostro enrolado: identidad, embedding promedio, muestras usadas y rol.
+    """Rostro enrolado: identidad, embedding promedio, muestras, rol y foto.
 
-    El rol va al final con default para migrar: los enrolados antes de la
-    etapa 15b se leen como operator.
+    ``role`` y ``preview`` van al final con default para migrar: los enrolados
+    antes de la etapa 15b se leen como operator y los anteriores a la 15c sin
+    foto. ``preview`` es el nombre de archivo de la foto de enrolamiento
+    (``F-0001.png``) dentro del almacen; ``""`` si no hay foto.
     """
 
     face_id: str
@@ -125,6 +127,7 @@ class EnrolledFace:
     samples: int
     created_at: str
     role: Role = Role.OPERATOR
+    preview: str = ""
 
 
 @dataclass(frozen=True, slots=True)
