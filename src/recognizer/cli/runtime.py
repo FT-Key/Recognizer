@@ -31,6 +31,7 @@ class RuntimeCallbacks:
     on_key: Callable[[int], None] | None = None
     on_context: Callable[[FrameContext], None] | None = None
     on_progress: Callable[[int, float], None] | None = None
+    should_stop: Callable[[], bool] | None = None
 
 
 DEFAULT_CALLBACKS = RuntimeCallbacks()
@@ -106,6 +107,9 @@ def run_camera_loop(
             elapsed = time.perf_counter() - start
             if callbacks.on_progress is not None:
                 callbacks.on_progress(count, count / elapsed)
+
+        if callbacks.should_stop is not None and callbacks.should_stop():
+            break
 
         if max_frames > 0 and count >= max_frames:
             break

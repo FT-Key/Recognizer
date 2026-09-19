@@ -41,3 +41,4 @@ etapa que se necesite.
 | 15b-open | Fix facial: doble apertura de cámara | completada | [stage-15b-fix6-face-double-open.md](stage-15b-fix6-face-double-open.md) |
 | 15b-cost | Fix facial: modelos extra y tope de FPS | completada | [stage-15b-fix7-face-infer-cost.md](stage-15b-fix7-face-infer-cost.md) |
 | 15c | Gestión de usuarios, accesos y fotos | completada | [stage-15c-users-access.md](stage-15c-users-access.md) |
+| 15c-ux | Fix login: redirección automática + visor de foto modal | completada | [stage-15c-fix-login-redirect.md](stage-15c-fix-login-redirect.md) |

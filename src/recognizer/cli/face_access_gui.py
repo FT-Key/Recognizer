@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from recognizer.cli import menu_gui
@@ -32,16 +31,18 @@ ACCESS_HEADER_TITLE = "ACCESOS"
 ACCESS_HEADER_SUBTITLE = "logins faciales registrados"
 ACCESS_MY_HEADER_SUBTITLE = "tus logins faciales"
 ACCESS_TABLE_LABEL = "Historial"
-ACCESS_PHOTO_LABEL = "Foto del login"
-ACCESS_PHOTO_EMPTY = "sin foto"
+ACCESS_VIEW_TEXT = "Ver imagen"
 ACCESS_BACK_TEXT = "Volver"
 ACCESS_FOOTER_HINT = "Selecciona una fila · ESC: volver"
 ACCESS_NO_STORE = "Sin registro de accesos; panel cancelado."
+ACCESS_NO_SELECTION = "Selecciona una fila para ver la imagen."
 ACCESS_COLUMNS = ("timestamp", "name", "id", "role")
 ACCESS_COLUMN_HEADINGS = ("Fecha", "Nombre", "ID", "Rol")
 ACCESS_COLUMN_WIDTHS = (220, 200, 90, 100)
-ACCESS_PHOTO_WIDTH = 40
-ACCESS_PHOTO_HEIGHT = 8
+ACCESS_MODAL_TITLE = "Foto del login"
+ACCESS_MODAL_NO_PHOTO = "sin foto disponible"
+ACCESS_MODAL_BACK_TEXT = "Volver"
+ACCESS_MODAL_INFO_TEMPLATE = "Fecha: {timestamp}\nNombre: {name}\nID: {face_id}\nRol: {role}"
 
 
 def run_access_panel(
@@ -89,7 +90,7 @@ def run_access_panel(
     rows: list[AccessEvent] = list(events)
 
     def _make_button(
-        parent: tkinter.Frame,
+        parent: tkinter.Misc,
         text: str,
         action: Callable[[], None],
         *,
@@ -175,54 +176,6 @@ def run_access_panel(
     scrollbar.pack(side=menu_gui.SIDE_RIGHT, fill=menu_gui.FILL_Y)
     tree.pack(side=menu_gui.SIDE_LEFT, fill=menu_gui.FILL_BOTH, expand=True)
 
-    photo_label: tkinter.Label | None = None
-    if show_photos:
-        tkinter.Label(
-            window,
-            text=ACCESS_PHOTO_LABEL,
-            font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
-            fg=theme.text,
-            bg=theme.surface,
-            anchor=menu_gui.ANCHOR_WEST,
-        ).pack(
-            fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_2, menu_gui.BORDER_NONE)
-        )
-        photo_label = tkinter.Label(
-            window,
-            text=ACCESS_PHOTO_EMPTY,
-            font=(body_family, theme.size_body_small),
-            fg=theme.text_muted,
-            bg=theme.surface_sunken,
-            width=ACCESS_PHOTO_WIDTH,
-            height=ACCESS_PHOTO_HEIGHT,
-            anchor=menu_gui.ANCHOR_WEST,
-        )
-        photo_label.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
-
-    def _clear_photo() -> None:
-        state["photo"] = None
-        if photo_label is None:
-            return
-        try:
-            photo_label.configure(image="", text=ACCESS_PHOTO_EMPTY)
-        except Exception as exc:
-            logger.debug("No se pudo limpiar la foto del acceso (%s).", exc)
-
-    def _load_photo(path: Path) -> None:
-        if photo_label is None:
-            return
-        try:
-            photo = tkinter.PhotoImage(file=str(path))
-        except Exception as exc:  # sin foto o sin Tk: texto de respaldo
-            logger.debug("Sin foto del acceso %s (%s).", path, exc)
-            _clear_photo()
-            return
-        state["photo"] = photo
-        try:
-            photo_label.configure(image=photo, text="")
-        except Exception as exc:
-            logger.debug("No se pudo mostrar la foto del acceso (%s).", exc)
-
     def _event_by_iid(iid: str) -> AccessEvent | None:
         try:
             index = int(iid)
@@ -232,22 +185,68 @@ def run_access_panel(
             return rows[index]
         return None
 
-    def on_select(_event: tkinter.Event) -> None:
+    def _open_photo_window(access: AccessEvent) -> None:
+        """Ventana modal con la foto del login y sus datos (bloquea la lista)."""
+        modal = tkinter.Toplevel(window)
+        modal.title(ACCESS_MODAL_TITLE)
+        modal.configure(bg=theme.surface)
+        tkinter.Label(
+            modal,
+            text=ACCESS_MODAL_INFO_TEMPLATE.format(
+                timestamp=access.timestamp,
+                name=access.name,
+                face_id=access.face_id,
+                role=access.role.value,
+            ),
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.text,
+            bg=theme.surface,
+            justify=menu_gui.JUSTIFY_LEFT,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_3)
+        photo: tkinter.PhotoImage | None = None
+        path = repo.image_path(access)
+        if path is not None:
+            try:
+                photo = tkinter.PhotoImage(file=str(path))
+            except Exception as exc:  # sin foto o sin Tk: texto de respaldo
+                logger.debug("Sin foto del acceso %s (%s).", path, exc)
+                photo = None
+        if photo is not None:
+            state["photo"] = photo  # referencia anti-GC mientras vive el modal
+            tkinter.Label(modal, image=photo, bg=theme.surface).pack(
+                padx=theme.pad_body, pady=theme.space_2
+            )
+        else:
+            tkinter.Label(
+                modal,
+                text=ACCESS_MODAL_NO_PHOTO,
+                font=(body_family, theme.size_body_small),
+                fg=theme.text_muted,
+                bg=theme.surface,
+                anchor=menu_gui.ANCHOR_WEST,
+            ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_2)
+        back = _make_button(modal, ACCESS_MODAL_BACK_TEXT, modal.destroy, primary=False)
+        back.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
+        try:
+            modal.grab_set()  # modal: bloquea la ventana de la lista
+        except Exception as exc:  # fakes o Tk sin display
+            logger.debug("Sin grab_set en el visor (%s).", exc)
+        try:
+            modal.wait_window()
+        except Exception as exc:
+            logger.debug("Sin wait_window en el visor (%s).", exc)
+
+    def view_image() -> None:
         if not show_photos:
             return
         selection = tree.selection()
         if not selection:
-            _clear_photo()
+            logger.info(ACCESS_NO_SELECTION)
             return
         access = _event_by_iid(str(selection[0]))
-        if access is None:
-            _clear_photo()
-            return
-        path = repo.image_path(access)
-        if path is None:
-            _clear_photo()
-            return
-        _load_photo(path)
+        if access is not None:
+            _open_photo_window(access)
 
     for index, access in enumerate(rows):
         tree.insert(
@@ -272,8 +271,16 @@ def run_access_panel(
     ).pack(side=menu_gui.SIDE_LEFT, padx=theme.pad_footer, pady=theme.pad_footer)
     back_button = _make_button(footer, ACCESS_BACK_TEXT, close, primary=False)
     back_button.pack(side=menu_gui.SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
+    if show_photos:
+        view_button = _make_button(footer, ACCESS_VIEW_TEXT, view_image, primary=True)
+        view_button.pack(
+            side=menu_gui.SIDE_RIGHT,
+            padx=(menu_gui.BORDER_NONE, theme.space_1),
+            pady=theme.pad_footer,
+        )
+        view_button.bind(menu_gui.EVENT_RETURN, _consume(view_image))
+        view_button.bind(menu_gui.EVENT_SPACE, _consume(view_image))
 
-    tree.bind(menu_gui.EVENT_TREE_SELECT, on_select)
     back_button.bind(menu_gui.EVENT_RETURN, _consume(close))
     back_button.bind(menu_gui.EVENT_SPACE, _consume(close))
 

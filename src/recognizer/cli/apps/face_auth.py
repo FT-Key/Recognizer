@@ -8,6 +8,7 @@ del telefono). Al salir (ESC/q) devuelve el control al launcher.
 """
 
 import logging
+import math
 import threading
 import time
 from collections.abc import Callable
@@ -92,6 +93,8 @@ class _LoginState:
     login_text: str = ""
     highlight_ok: bool = False
     greeted_id: str | None = None
+    greeted_at: float | None = None
+    done: bool = False
     login_photo_frame: NDArray[np.uint8] | None = None
     login_photo_face_id: str | None = None
 
@@ -537,6 +540,7 @@ def run_face_login(request: AppRunRequest) -> int:
                     state.login_text = f"Bienvenido {identity.name} {identity.face_id}"
                     if state.greeted_id != identity.face_id:
                         state.greeted_id = identity.face_id
+                        state.greeted_at = time.monotonic()
                         greet = identity
                         if state.login_photo_face_id == identity.face_id:
                             photo_frame = state.login_photo_frame
@@ -561,6 +565,15 @@ def run_face_login(request: AppRunRequest) -> int:
                 guidance = state.guidance
                 login_text = state.login_text
                 highlight_ok = state.highlight_ok
+                greeted_at = state.greeted_at
+                if greeted_at is not None and face_config.login_redirect_seconds > 0:
+                    remaining = face_config.login_redirect_seconds - (time.monotonic() - greeted_at)
+                    if remaining <= 0:
+                        state.done = True
+                    else:
+                        login_text = (
+                            f"{state.login_text} - Redirigiendo en {math.ceil(remaining)}..."
+                        )
             draw_face_overlay(
                 context.frame.data,
                 boxes=boxes,
@@ -607,7 +620,11 @@ def run_face_login(request: AppRunRequest) -> int:
                 window_name=LOGIN_WINDOW_NAME,
                 show_window=show_window,
                 max_frames=request.max_frames,
-                callbacks=RuntimeCallbacks(on_context=_on_context, on_progress=_on_progress),
+                callbacks=RuntimeCallbacks(
+                    on_context=_on_context,
+                    on_progress=_on_progress,
+                    should_stop=lambda: state.done,
+                ),
             )
     except RecognizerError as exc:
         LOGGER.error("La app fallo: %s", exc)
