@@ -1,4 +1,4 @@
-"""Tests del formulario de enrolamiento facial (tkinter falso), sin hardware."""
+"""Tests del dialogo de login con clave (tkinter falso), sin display ni hardware."""
 
 from __future__ import annotations
 
@@ -10,20 +10,13 @@ from typing import ClassVar, cast
 
 import pytest
 
-from recognizer.cli import face_enroll_gui, menu_gui
-from recognizer.cli.face_enroll_gui import run_enroll_form
-from recognizer.core.constants import (
-    FACE_ENROLL_NAME_PROMPT,
-    FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
-    FACE_ENROLL_PASSWORD_PROMPT,
-    FACE_ENROLL_ROLE_PROMPT,
-)
+from recognizer.cli import face_password_gui, menu_gui
+from recognizer.cli.face_password_gui import run_password_login
+from recognizer.core.constants import FACE_LOGIN_PASSWORD_PROMPT, FACE_LOGIN_USER_PROMPT
 from recognizer.core.domain.app import AppRunRequest
-from recognizer.core.domain.identity import Identity, Role
-from recognizer.core.ports.identity_provider import IdentityProvider
 
 REQUEST = AppRunRequest(config_path=Path("config.yaml"))
-TEST_LOGGER = logging.getLogger("recognizer.menu.face.enroll.test")
+TEST_LOGGER = logging.getLogger("recognizer.menu.face.password.test")
 
 
 class FakeToplevel:
@@ -147,47 +140,16 @@ class FakeEntry(_WidgetBase):
         self._value = value
 
 
-class FakeStringVar:
-    """Doble de tkinter.StringVar con get/set."""
+class FakeRunner:
+    """Doble del runner de login por clave: lee usuario y clave del reader."""
 
-    instances: ClassVar[list[FakeStringVar]] = []
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
 
-    def __init__(self, value: str = "") -> None:
-        self._value = value
-        FakeStringVar.instances.append(self)
-
-    def get(self) -> str:
-        return self._value
-
-    def set(self, value: str) -> None:
-        self._value = value
-
-
-class FakeOptionMenu(_WidgetBase):
-    """Doble de tkinter.OptionMenu: registra las opciones ofrecidas."""
-
-    instances: ClassVar[list[FakeOptionMenu]] = []
-
-    def __init__(self, *args: object, **kwargs: object) -> None:
-        super().__init__(*args, **kwargs)
-        self.options: tuple[str, ...] = tuple(str(item) for item in args[2:])
-        FakeOptionMenu.instances.append(self)
-
-
-class FakeProvider:
-    """Doble de IdentityProvider con rol configurable."""
-
-    def __init__(self, role: Role = Role.ADMIN) -> None:
-        self._identity = Identity(face_id="F-0001", name="Ada", role=role, authenticated_at="hoy")
-
-    def current_identity(self) -> Identity:
-        return self._identity
-
-    def require_role(self, *_roles: Role) -> Identity:
-        return self._identity
-
-    def refresh(self) -> Identity:
-        return self._identity
+    def __call__(self, request: AppRunRequest, *, reader: Callable[[str], str]) -> int:
+        del request
+        self.calls.append((reader(FACE_LOGIN_USER_PROMPT), reader(FACE_LOGIN_PASSWORD_PROMPT)))
+        return 0
 
 
 def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -196,14 +158,10 @@ def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeLabel.instances.clear()
     FakeButton.instances.clear()
     FakeEntry.instances.clear()
-    FakeStringVar.instances.clear()
-    FakeOptionMenu.instances.clear()
     monkeypatch.setattr(tkinter, "Frame", FakeFrame)
     monkeypatch.setattr(tkinter, "Label", FakeLabel)
     monkeypatch.setattr(tkinter, "Button", FakeButton)
     monkeypatch.setattr(tkinter, "Entry", FakeEntry)
-    monkeypatch.setattr(tkinter, "StringVar", FakeStringVar)
-    monkeypatch.setattr(tkinter, "OptionMenu", FakeOptionMenu)
 
 
 def _button_with_text(text: str) -> FakeButton:
@@ -223,117 +181,63 @@ def _tk_factory() -> Callable[[], tkinter.Toplevel]:
     return cast("Callable[[], tkinter.Toplevel]", FakeToplevel)
 
 
-def _run(
-    provider: IdentityProvider, *, enroll_runner: face_enroll_gui.EnrollRunner | None = None
-) -> int:
-    return run_enroll_form(
+def _run(runner: face_password_gui.PasswordLoginRunner | None = None) -> int:
+    return run_password_login(
         REQUEST,
         tk_factory=_tk_factory(),
-        identity_provider=provider,
-        enroll_runner=enroll_runner,
+        password_runner=runner,
         logger=TEST_LOGGER,
     )
 
 
-def _labels() -> list[str]:
-    return [label.text for label in FakeLabel.instances]
-
-
-def test_admin_offers_all_roles(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_login_calls_runner_with_user_and_password(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
+    runner = FakeRunner()
 
-    assert _run(cast("IdentityProvider", FakeProvider(Role.ADMIN))) == 0
-
-    assert FakeOptionMenu.instances[0].options == ("admin", "operator", "viewer")
-
-
-def test_operator_offers_two_roles(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fakes(monkeypatch)
-
-    _run(cast("IdentityProvider", FakeProvider(Role.OPERATOR)))
-
-    assert FakeOptionMenu.instances[0].options == ("operator", "viewer")
-
-
-def test_first_face_limits_roles_to_admin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from recognizer.adapters.file_face_repository import FileFaceRepository
-    from recognizer.adapters.file_identity_provider import FileIdentityProvider
-
-    _install_fakes(monkeypatch)
-    store = tmp_path / "faces"
-    provider = FileIdentityProvider(store, FileFaceRepository(store))
-
-    _run(cast("IdentityProvider", provider))
-
-    assert FakeOptionMenu.instances[0].options == ("admin",)
-    assert face_enroll_gui.ENROLL_FIRST_NOTE_TEXT in _labels()
-
-
-def test_viewer_without_permission_shows_notice(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fakes(monkeypatch)
-
-    _run(cast("IdentityProvider", FakeProvider(Role.VIEWER)))
-
-    assert FakeOptionMenu.instances == []
-    assert face_enroll_gui.ENROLL_NO_PERMISSION_TEXT in _labels()
-
-
-def test_enroll_calls_runner_with_name_and_role(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fakes(monkeypatch)
-    seen: list[list[str]] = []
-
-    def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
-        del request
-        assert reader is not None
-        seen.append(
-            [
-                reader(FACE_ENROLL_NAME_PROMPT),
-                reader(FACE_ENROLL_ROLE_PROMPT),
-                reader(FACE_ENROLL_PASSWORD_PROMPT),
-                reader(FACE_ENROLL_PASSWORD_CONFIRM_PROMPT),
-            ]
-        )
-        return 0
-
-    _run(cast("IdentityProvider", FakeProvider(Role.ADMIN)), enroll_runner=fake_enroll)
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
     FakeEntry.instances[0].set_text("Ada")
-    FakeStringVar.instances[0].set("operator")
     FakeEntry.instances[1].set_text("clave1")
-    FakeEntry.instances[2].set_text("clave1")
-    _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
 
-    assert seen == [["Ada", "operator", "clave1", "clave1"]]
+    assert runner.calls == [("Ada", "clave1")]
     window = FakeToplevel.instances[0]
     assert window.withdraw_calls == 1
     assert window.deiconify_calls == 1
     assert window.destroy_calls == 1
 
 
-def test_empty_name_does_not_call_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_empty_credentials_do_not_call_runner(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
-    calls: list[AppRunRequest] = []
+    runner = FakeRunner()
 
-    def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
-        del reader
-        calls.append(request)
-        return 0
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
 
-    _run(cast("IdentityProvider", FakeProvider(Role.ADMIN)), enroll_runner=fake_enroll)
-    _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
+    assert runner.calls == []
+    assert FakeToplevel.instances[0].destroy_calls == 0
 
-    assert calls == []
+
+def test_missing_password_does_not_call_runner(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    runner = FakeRunner()
+
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
+    FakeEntry.instances[0].set_text("Ada")
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
+
+    assert runner.calls == []
     assert FakeToplevel.instances[0].destroy_calls == 0
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
 
-    assert _run(cast("IdentityProvider", FakeProvider(Role.ADMIN))) == 0
+    assert _run() == 0
     window = FakeToplevel.instances[0]
-    assert window.titles == [face_enroll_gui.ENROLL_WINDOW_TITLE]
+    assert window.titles == [face_password_gui.PASSWORD_LOGIN_WINDOW_TITLE]
     assert menu_gui.EVENT_CLOSE_WINDOW in window.protocols
     window.protocols[menu_gui.EVENT_CLOSE_WINDOW]()
     window.bindings[menu_gui.EVENT_ESCAPE](None)
-    _press(_button_with_text(face_enroll_gui.ENROLL_BACK_TEXT).command)
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_BACK_TEXT).command)
 
     assert window.destroy_calls == 3

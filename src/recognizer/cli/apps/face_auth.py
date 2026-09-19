@@ -35,12 +35,19 @@ from recognizer.cli.paths import prepare_workspace
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.config import FaceAuthConfig
 from recognizer.core.constants import (
+    FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
+    FACE_ENROLL_PASSWORD_PROMPT,
+    FACE_ENROLL_ROLE_PROMPT,
+    FACE_LOGIN_PASSWORD_PROMPT,
+    FACE_LOGIN_USER_PROMPT,
     FACE_MAX_COSINE_DISTANCE,
     FACE_WORKER_JOIN_TIMEOUT_SECONDS,
     FACE_WORKER_WAIT_TIMEOUT_SECONDS,
 )
 from recognizer.core.domain.access import AccessEvent
 from recognizer.core.domain.app import AppRunRequest
+from recognizer.core.domain.credentials import authenticate, hash_password, validate_password
 from recognizer.core.domain.face import (
     CaptureGuidance,
     EnrolledFace,
@@ -63,10 +70,16 @@ LOGGER = logging.getLogger("recognizer.face_auth")
 
 ENROLL_WINDOW_NAME = "Enrolamiento facial"
 LOGIN_WINDOW_NAME = "Login facial"
-AUTH_MENU_TEXT = "1) Enrolar rostro  2) Login facial  3) Cerrar sesion  0) Volver"
-AUTH_PROMPT = "Elige (1/2/3/0): "
-NAME_PROMPT = "Nombre para enrolar: "
-ROLE_PROMPT = "Rol (admin/operator/viewer) [operator]: "
+AUTH_MENU_TEXT = (
+    "1) Enrolar rostro  2) Login facial  3) Login con clave  4) Cerrar sesion  0) Volver"
+)
+AUTH_PROMPT = "Elige (1/2/3/4/0): "
+NAME_PROMPT = FACE_ENROLL_NAME_PROMPT
+ROLE_PROMPT = FACE_ENROLL_ROLE_PROMPT
+PASSWORD_PROMPT = FACE_ENROLL_PASSWORD_PROMPT
+PASSWORD_CONFIRM_PROMPT = FACE_ENROLL_PASSWORD_CONFIRM_PROMPT
+LOGIN_USER_PROMPT = FACE_LOGIN_USER_PROMPT
+LOGIN_PASSWORD_PROMPT = FACE_LOGIN_PASSWORD_PROMPT
 NO_FACE_DISTANCE = FACE_MAX_COSINE_DISTANCE
 UNKNOWN_TEXT = "Desconocido"
 RECOGNIZING_TEXT = "Reconociendo..."
@@ -210,6 +223,55 @@ def _request_role(*, reader: Callable[[str], str] | None = None) -> str:
         return ""
 
 
+def _request_password(*, prompt: str, reader: Callable[[str], str] | None = None) -> str:
+    """Pide una clave; vacio si se cancelo. No recorta espacios (son significativos)."""
+    ask = reader if reader is not None else input
+    try:
+        return ask(prompt)
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
+def _request_login_user(*, reader: Callable[[str], str] | None = None) -> str:
+    """Pide el usuario (nombre o ID) del login con clave; vacio si se cancelo."""
+    ask = reader if reader is not None else input
+    try:
+        return ask(LOGIN_USER_PROMPT).strip()
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
+def _resolve_enroll_password(
+    *,
+    existing: EnrolledFace | None,
+    face_config: FaceAuthConfig,
+    reader: Callable[[str], str] | None = None,
+) -> str | None:
+    """Hash de la clave de respaldo del enrolamiento; ``None`` si es invalida.
+
+    En alta (``existing`` es ``None``) la clave es obligatoria y se confirma. Al
+    re-enrolar, dejar la clave vacia conserva la actual; si se escribe una nueva,
+    se valida la longitud y la confirmacion.
+    """
+    password = _request_password(prompt=PASSWORD_PROMPT, reader=reader)
+    if not password:
+        if existing is not None:
+            LOGGER.info("Re-enrolamiento sin clave nueva: se conserva la actual.")
+            return existing.password_hash
+        LOGGER.error("Enrolamiento cancelado: se requiere una clave.")
+        return None
+    try:
+        validate_password(password, min_length=face_config.min_password_length)
+    except ValueError as exc:
+        LOGGER.error("Clave invalida: %s", exc)
+        return None
+    confirm = _request_password(prompt=PASSWORD_CONFIRM_PROMPT, reader=reader)
+    if confirm != password:
+        LOGGER.error("Las claves no coinciden.")
+        return None
+    return hash_password(password)
+
+
 def _resolve_enroll_role(
     *,
     operator: Identity,
@@ -333,6 +395,11 @@ def run_face_enroll(
                 return 1
             role = resolved_role
             target_id = repository.next_id()
+        password_hash = _resolve_enroll_password(
+            existing=existing, face_config=face_config, reader=reader
+        )
+        if password_hash is None:
+            return 1
         recognizer = InsightFaceRecognizer(face_config)
         pipeline = PipelineBuilder().build()
         state = _EnrollState(required=face_config.enrollment_samples)
@@ -361,7 +428,9 @@ def run_face_enroll(
                         # Primera muestra aceptada: sera la foto de enrolamiento.
                         state.sample_frame = frame.data.copy()
                 if builder.is_complete and not state.saved:
-                    enrolled = builder.build(target_id, name, role=role)
+                    enrolled = builder.build(
+                        target_id, name, role=role, password_hash=password_hash
+                    )
                     if existing is not None:
                         # Re-enrolamiento: se conserva la fecha de alta original.
                         enrolled = replace(enrolled, created_at=existing.created_at)
@@ -668,6 +737,45 @@ def _append_access_event(
         LOGGER.warning("No se pudo registrar el acceso (%s).", exc)
 
 
+def run_face_login_password(
+    request: AppRunRequest, *, reader: Callable[[str], str] | None = None
+) -> int:
+    """Inicia sesion con usuario (nombre o ID) y clave, sin camara.
+
+    Es el respaldo cuando la camara no funciona o el reconocimiento facial
+    falla. Verifica la clave contra el hash PBKDF2 del rostro, persiste la
+    sesion y registra el acceso (sin foto). Devuelve 0 si entro, 1 si no.
+    """
+    try:
+        with log_step(LOGGER, "Cargando configuracion"):
+            config_path = prepare_workspace(request.config_path)
+            app_config = load_config(config_path)
+            face_config = app_config.face_auth
+        repository = FileFaceRepository(face_config.store_dir)
+        faces = repository.list_all()
+        if not faces:
+            LOGGER.error("Sin rostros enrolados: usa primero la opcion Enrolar.")
+            return 1
+        user = _request_login_user(reader=reader)
+        password = _request_password(prompt=LOGIN_PASSWORD_PROMPT, reader=reader)
+        face = authenticate(faces, name_or_id=user, password=password)
+        if face is None:
+            LOGGER.error("Usuario o clave incorrectos.")
+            return 1
+        session_provider = _identity_provider(face_config, repository)
+        _write_login_session(session_provider, face)
+        access_log = FileAccessLogRepository(face_config.access_dir)
+        _append_access_event(access_log, face, None)
+    except RecognizerError as exc:
+        LOGGER.error("La app fallo: %s", exc)
+        return 1
+    except Exception:
+        LOGGER.exception("Error inesperado en el login por clave")
+        return 1
+    LOGGER.info("Sesion iniciada con clave: %s (%s).", face.name, face.role.value)
+    return 0
+
+
 def run_face_logout(request: AppRunRequest) -> int:
     """Borra la sesion facial; devuelve 0 siempre que el almacen responda."""
     try:
@@ -702,6 +810,8 @@ def run_face_auth(request: AppRunRequest) -> int:
             case "2":
                 return run_face_login(request)
             case "3":
+                return run_face_login_password(request)
+            case "4":
                 return run_face_logout(request)
             case "0" | "q" | "salir" | "exit":
                 return 0

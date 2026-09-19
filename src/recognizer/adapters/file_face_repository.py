@@ -37,6 +37,7 @@ FACE_SAMPLES_KEY = "samples"
 FACE_CREATED_AT_KEY = "created_at"
 FACE_ROLE_KEY = "role"
 FACE_PREVIEW_KEY = "preview"
+FACE_PASSWORD_KEY = "password_hash"
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
@@ -167,6 +168,8 @@ class FileFaceRepository(FaceRepository):
                     LOGGER.warning("Rol invalido en %s; se usa viewer.", face_id)
             preview_raw = raw.get(FACE_PREVIEW_KEY, "")
             preview = preview_raw if isinstance(preview_raw, str) else ""
+            password_raw = raw.get(FACE_PASSWORD_KEY, "")
+            password_hash = password_raw if isinstance(password_raw, str) else ""
             return EnrolledFace(
                 # El id del nombre de archivo manda: evita ids embebidos que no
                 # coincidan (y que `list_all` devuelva ids no validados).
@@ -177,6 +180,7 @@ class FileFaceRepository(FaceRepository):
                 created_at=created_raw,
                 role=role,
                 preview=preview,
+                password_hash=password_hash,
             )
         except (KeyError, TypeError, ValueError):
             LOGGER.warning("Cara corrupta %s; se ignora.", face_id)
@@ -215,6 +219,7 @@ class FileFaceRepository(FaceRepository):
                 FACE_CREATED_AT_KEY: face.created_at,
                 FACE_ROLE_KEY: face.role.value,
                 FACE_PREVIEW_KEY: face.preview,
+                FACE_PASSWORD_KEY: face.password_hash,
             },
         )
         counter, _ = self._read_index()

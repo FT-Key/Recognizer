@@ -13,6 +13,7 @@ import pytest
 from recognizer.cli import face_users_gui, menu_gui
 from recognizer.cli.face_users_gui import run_users_panel
 from recognizer.core.domain.app import AppRunRequest
+from recognizer.core.domain.credentials import hash_password, verify_password
 from recognizer.core.domain.face import EnrolledFace, FaceEmbedding
 from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.ports.face_repository import FaceRepository
@@ -320,7 +321,13 @@ class FakeFaceRepository:
         return self.previews.get(face_id)
 
 
-def _face(face_id: str = "F-0001", name: str = "Ada", role: Role = Role.OPERATOR) -> EnrolledFace:
+def _face(
+    face_id: str = "F-0001",
+    name: str = "Ada",
+    role: Role = Role.OPERATOR,
+    *,
+    password_hash: str = "",
+) -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
         name=name,
@@ -328,6 +335,7 @@ def _face(face_id: str = "F-0001", name: str = "Ada", role: Role = Role.OPERATOR
         samples=5,
         created_at=CREATED_AT,
         role=role,
+        password_hash=password_hash,
     )
 
 
@@ -544,3 +552,78 @@ def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     _press(_button_with_text(face_users_gui.USERS_BACK_TEXT).command)
 
     assert window.destroy_calls == 3
+
+
+def test_table_includes_password_column(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository(
+        (
+            _face("F-0001", password_hash=hash_password("clave1", iterations=1000)),
+            _face("F-0002", "Bo"),
+        )
+    )
+
+    _run(Role.ADMIN, repo)
+
+    assert "password" in face_users_gui.USERS_COLUMNS
+    index = face_users_gui.USERS_COLUMNS.index("password")
+    assert face_users_gui.USERS_COLUMN_HEADINGS[index] == "Clave"
+    tree = FakeTreeview.instances[0]
+    assert tree.rows["F-0001"][index] == face_users_gui.USERS_PASSWORD_YES
+    assert tree.rows["F-0002"][index] == face_users_gui.USERS_PASSWORD_NO
+
+
+def test_edit_sets_new_password(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository((_face(),))
+
+    _run(Role.ADMIN, repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+    _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
+
+    FakeEntry.instances[1].insert(0, "nueva1")
+    FakeEntry.instances[2].insert(0, "nueva1")
+    _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
+
+    assert len(repo.updated) == 1
+    assert verify_password("nueva1", repo.updated[0].password_hash)
+    assert not verify_password("vieja1", repo.updated[0].password_hash)
+
+
+def test_edit_mismatched_passwords_aborts_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    previous = hash_password("vieja1", iterations=1000)
+    repo = FakeFaceRepository((_face(password_hash=previous),))
+
+    _run(Role.ADMIN, repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+    _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
+
+    FakeEntry.instances[1].insert(0, "nueva1")
+    FakeEntry.instances[2].insert(0, "otra12")
+    _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
+
+    # Claves distintas: no se guarda nada (se conserva la anterior).
+    assert repo.updated == []
+
+
+def test_edit_short_password_aborts_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    previous = hash_password("vieja1", iterations=1000)
+    repo = FakeFaceRepository((_face(password_hash=previous),))
+
+    _run(Role.ADMIN, repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+    _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
+
+    FakeEntry.instances[1].insert(0, "ab")
+    FakeEntry.instances[2].insert(0, "ab")
+    _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
+
+    assert repo.updated == []

@@ -22,7 +22,9 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from recognizer.cli import menu_gui
+from recognizer.core.constants import DEFAULT_MIN_PASSWORD_LENGTH
 from recognizer.core.domain.app import AppRunRequest
+from recognizer.core.domain.credentials import hash_password
 from recognizer.core.domain.face import EnrolledFace
 from recognizer.core.domain.identity import Role
 from recognizer.core.ports.face_repository import FaceRepository
@@ -51,17 +53,24 @@ USERS_SAVE_TEXT = "Guardar"
 USERS_CANCEL_TEXT = "Cancelar"
 USERS_NAME_LABEL = "Nombre"
 USERS_ROLE_LABEL = "Rol"
+USERS_NEW_PASSWORD_LABEL = "Nueva clave"
+USERS_CONFIRM_PASSWORD_LABEL = "Confirmar clave"
 USERS_EDIT_TITLE = "Editar rostro"
 USERS_DELETE_TITLE = "Eliminar rostro"
 USERS_FOOTER_HINT = "Selecciona una fila · ESC: volver"
 USERS_NO_SELECTION = "Selecciona un rostro primero."
 USERS_EMPTY_NAME = "El nombre no puede quedar vacio."
+USERS_PASSWORD_MISMATCH = "Las claves no coinciden; se conserva la actual."
+USERS_PASSWORD_SHORT_TEMPLATE = "La clave requiere al menos {min_length} caracteres."
+USERS_PASSWORD_READ_ERROR = "No se pudo leer la clave (%s)."
 USERS_CONFIRM_DELETE = "¿Eliminar el rostro {name} ({face_id})?"
 USERS_ADMIN_ONLY_TEMPLATE = "Panel de usuarios: se requiere rol admin (actual: {role})."
 USERS_NO_STORE = "Sin almacen de rostros; panel de usuarios cancelado."
-USERS_COLUMNS = ("id", "name", "role", "samples", "created")
-USERS_COLUMN_HEADINGS = ("ID", "Nombre", "Rol", "Muestras", "Fecha")
-USERS_COLUMN_WIDTHS = (90, 220, 100, 90, 220)
+USERS_COLUMNS = ("id", "name", "role", "samples", "created", "password")
+USERS_COLUMN_HEADINGS = ("ID", "Nombre", "Rol", "Muestras", "Fecha", "Clave")
+USERS_COLUMN_WIDTHS = (90, 200, 100, 90, 210, 70)
+USERS_PASSWORD_YES = "si"
+USERS_PASSWORD_NO = "-"
 USERS_ROLE_CHOICES = (Role.ADMIN, Role.OPERATOR, Role.VIEWER)
 USERS_PHOTO_ERROR = "Sin foto de %s (%s)."
 USERS_NAME_READ_ERROR = "No se pudo leer el nombre (%s)."
@@ -87,7 +96,11 @@ def run_users_panel(
     import tkinter
     from tkinter import messagebox, ttk
 
-    from recognizer.cli.face_adapters import default_face_repository, default_identity_provider
+    from recognizer.cli.face_adapters import (
+        default_face_repository,
+        default_identity_provider,
+        load_face_config,
+    )
 
     theme = menu_gui.DEFAULT_THEME
     provider = (
@@ -103,6 +116,10 @@ def run_users_panel(
     if repo is None:
         logger.warning(USERS_NO_STORE)
         return 1
+    face_config = load_face_config(request, logger=logger)
+    min_password_length = (
+        face_config.min_password_length if face_config is not None else DEFAULT_MIN_PASSWORD_LENGTH
+    )
 
     tk_cls = tk_factory if tk_factory is not None else tkinter.Toplevel
     window = tk_cls()
@@ -213,6 +230,7 @@ def run_users_panel(
                     face.role.value,
                     str(face.samples),
                     face.created_at,
+                    USERS_PASSWORD_YES if face.password_hash else USERS_PASSWORD_NO,
                 ),
             )
 
@@ -277,6 +295,53 @@ def run_users_panel(
             anchor=menu_gui.ANCHOR_WEST,
         )
         role_menu.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
+        tkinter.Label(
+            dialog,
+            text=USERS_NEW_PASSWORD_LABEL,
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.text,
+            bg=theme.surface,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(
+            fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_1, menu_gui.BORDER_NONE)
+        )
+        password_entry = tkinter.Entry(dialog, show=menu_gui.PASSWORD_SHOW)
+        password_entry.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
+        tkinter.Label(
+            dialog,
+            text=USERS_CONFIRM_PASSWORD_LABEL,
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.text,
+            bg=theme.surface,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(
+            fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_1, menu_gui.BORDER_NONE)
+        )
+        confirm_entry = tkinter.Entry(dialog, show=menu_gui.PASSWORD_SHOW)
+        confirm_entry.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
+
+        def _resolve_password() -> str | None:
+            """Hash de la clave nueva, el actual (vacio = conservar) o ``None`` si es invalida.
+
+            Devuelve ``None`` si se escribio una clave nueva que no cumple la
+            longitud minima o no coincide con la confirmacion: el guardado se
+            aborta en vez de conservar la clave anterior en silencio.
+            """
+            try:
+                password = password_entry.get()
+                confirm = confirm_entry.get()
+            except Exception as exc:
+                logger.warning(USERS_PASSWORD_READ_ERROR, exc)
+                return None
+            if not password and not confirm:
+                return face.password_hash
+            if len(password) < min_password_length:
+                logger.warning(USERS_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
+                return None
+            if password != confirm:
+                logger.warning(USERS_PASSWORD_MISMATCH)
+                return None
+            return hash_password(password)
 
         def save() -> None:
             try:
@@ -292,7 +357,17 @@ def run_users_panel(
             except ValueError:
                 logger.warning("Rol no valido; se conserva %s.", face.role.value)
                 new_role = face.role
-            repo.update(replace(face, name=new_name, role=new_role))
+            new_password_hash = _resolve_password()
+            if new_password_hash is None:
+                return
+            repo.update(
+                replace(
+                    face,
+                    name=new_name,
+                    role=new_role,
+                    password_hash=new_password_hash,
+                )
+            )
             logger.info(USERS_UPDATED_LOG, new_name, face.face_id, new_role.value)
             dialog.destroy()
             refresh_table()

@@ -210,6 +210,20 @@ def test_enrollment_builder_build_blank_name_raises() -> None:
         builder.build("F-0001", "   ")
 
 
+def test_enrolled_face_default_password_hash_is_empty() -> None:
+    assert _enrolled().password_hash == ""
+
+
+def test_enrollment_builder_build_keeps_password_hash() -> None:
+    builder = EnrollmentBuilder(samples_required=1)
+    builder.add(_observation())
+    encoded = "pbkdf2_sha256$1000$c2FsdA==$aGFzaA=="
+
+    face = builder.build("F-0001", "Ada", password_hash=encoded)
+
+    assert face.password_hash == encoded
+
+
 def test_enrollment_builder_current_step_cycles_prompts() -> None:
     builder = EnrollmentBuilder(samples_required=2)
     first = builder.current_step()

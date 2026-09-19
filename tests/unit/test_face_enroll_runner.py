@@ -8,6 +8,7 @@ el callback de inferencia una vez, de modo que se ejercita la logica real de
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import ClassVar
 
@@ -17,13 +18,20 @@ import pytest
 from recognizer.adapters.file_face_repository import FileFaceRepository
 from recognizer.cli.apps import face_auth
 from recognizer.core.config import AppConfig, FaceAuthConfig
+from recognizer.core.constants import (
+    FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
+    FACE_ENROLL_PASSWORD_PROMPT,
+)
 from recognizer.core.domain.app import AppRunRequest
+from recognizer.core.domain.credentials import hash_password, verify_password
 from recognizer.core.domain.face import EnrolledFace, FaceBox, FaceObservation
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.identity import Identity, Role
 
 ORIGINAL_CREATED_AT = "2020-01-01T00:00:00+00:00"
 FRAME_SHAPE = (8, 8, 3)
+EXISTING_CLAVE = "vieja1"
 REQUEST = AppRunRequest(config_path=Path("config.yaml"), max_frames=1, show_window=False)
 TEST_LOGGER = logging.getLogger("recognizer.face.enroll.runner.test")
 
@@ -110,7 +118,7 @@ def _install_runner_fakes(
     monkeypatch.setattr(face_auth, "run_camera_loop", fake_loop)
 
 
-def _existing_face(face_id: str) -> EnrolledFace:
+def _existing_face(face_id: str, *, password_hash: str = "") -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
         name="Ada",
@@ -119,7 +127,13 @@ def _existing_face(face_id: str) -> EnrolledFace:
         created_at=ORIGINAL_CREATED_AT,
         role=Role.ADMIN,
         preview="",
+        password_hash=password_hash,
     )
+
+
+def _reader(answers: dict[str, str]) -> Callable[[str], str]:
+    """Lector en cola que responde por prompt (claves de ``core.constants``)."""
+    return lambda prompt: answers.get(prompt, "")
 
 
 def test_reenroll_keeps_name_role_and_created_at(
@@ -127,11 +141,12 @@ def test_reenroll_keeps_name_role_and_created_at(
 ) -> None:
     store = tmp_path / "faces"
     repo = FileFaceRepository(store)
-    repo.save(_existing_face("F-0007"))
+    existing_hash = hash_password(EXISTING_CLAVE, iterations=1000)
+    repo.save(_existing_face("F-0007", password_hash=existing_hash))
     config = AppConfig(face_auth=FaceAuthConfig(store_dir=str(store), enrollment_samples=1))
     _install_runner_fakes(monkeypatch, config=config)
 
-    result = face_auth.run_face_enroll(REQUEST, face_id="F-0007")
+    result = face_auth.run_face_enroll(REQUEST, face_id="F-0007", reader=lambda _prompt: "")
 
     assert result == 0
     found = repo.find_by_id("F-0007")
@@ -141,6 +156,8 @@ def test_reenroll_keeps_name_role_and_created_at(
     assert found.created_at == ORIGINAL_CREATED_AT
     assert found.samples == 1
     assert found.preview == "F-0007.png"
+    assert found.password_hash == existing_hash
+    assert verify_password(EXISTING_CLAVE, found.password_hash)
     assert repo.preview_path("F-0007") is not None
 
 
@@ -150,6 +167,83 @@ def test_reenroll_missing_face_returns_one(tmp_path: Path, monkeypatch: pytest.M
     _install_runner_fakes(monkeypatch, config=config)
 
     result = face_auth.run_face_enroll(REQUEST, face_id="F-9999")
+
+    assert result == 1
+    assert FileFaceRepository(store).list_all() == ()
+
+
+def test_enroll_with_password_persists_verifiable_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = tmp_path / "faces"
+    config = AppConfig(face_auth=FaceAuthConfig(store_dir=str(store), enrollment_samples=1))
+    _install_runner_fakes(monkeypatch, config=config)
+    reader = _reader(
+        {
+            FACE_ENROLL_NAME_PROMPT: "Nuevo",
+            FACE_ENROLL_PASSWORD_PROMPT: "clave1",
+            FACE_ENROLL_PASSWORD_CONFIRM_PROMPT: "clave1",
+        }
+    )
+
+    result = face_auth.run_face_enroll(REQUEST, reader=reader)
+
+    assert result == 0
+    found = FileFaceRepository(store).find_by_id("F-0001")
+    assert found is not None
+    assert found.name == "Nuevo"
+    assert found.password_hash
+    assert verify_password("clave1", found.password_hash)
+    assert not verify_password("otra", found.password_hash)
+
+
+def test_enroll_short_password_returns_one(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    store = tmp_path / "faces"
+    config = AppConfig(face_auth=FaceAuthConfig(store_dir=str(store), enrollment_samples=1))
+    _install_runner_fakes(monkeypatch, config=config)
+    reader = _reader(
+        {
+            FACE_ENROLL_NAME_PROMPT: "Nuevo",
+            FACE_ENROLL_PASSWORD_PROMPT: "ab",
+            FACE_ENROLL_PASSWORD_CONFIRM_PROMPT: "ab",
+        }
+    )
+
+    result = face_auth.run_face_enroll(REQUEST, reader=reader)
+
+    assert result == 1
+    assert FileFaceRepository(store).list_all() == ()
+
+
+def test_enroll_password_mismatch_returns_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = tmp_path / "faces"
+    config = AppConfig(face_auth=FaceAuthConfig(store_dir=str(store), enrollment_samples=1))
+    _install_runner_fakes(monkeypatch, config=config)
+    reader = _reader(
+        {
+            FACE_ENROLL_NAME_PROMPT: "Nuevo",
+            FACE_ENROLL_PASSWORD_PROMPT: "clave1",
+            FACE_ENROLL_PASSWORD_CONFIRM_PROMPT: "clave2",
+        }
+    )
+
+    result = face_auth.run_face_enroll(REQUEST, reader=reader)
+
+    assert result == 1
+    assert FileFaceRepository(store).list_all() == ()
+
+
+def test_enroll_without_password_returns_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = tmp_path / "faces"
+    config = AppConfig(face_auth=FaceAuthConfig(store_dir=str(store), enrollment_samples=1))
+    _install_runner_fakes(monkeypatch, config=config)
+    reader = _reader({FACE_ENROLL_NAME_PROMPT: "Nuevo"})
+
+    result = face_auth.run_face_enroll(REQUEST, reader=reader)
 
     assert result == 1
     assert FileFaceRepository(store).list_all() == ()
