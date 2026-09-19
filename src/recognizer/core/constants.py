@@ -5,6 +5,7 @@ Los valores configurables por el usuario pertenecen a config.yaml.
 """
 
 DEFAULT_CAMERA_DEVICE_INDEX = 0
+DEFAULT_CAMERA_ENUMERATOR_MAX_INDEX = 8
 DEFAULT_FRAME_WIDTH = 640
 DEFAULT_FRAME_HEIGHT = 480
 DEFAULT_TARGET_FPS = 30
