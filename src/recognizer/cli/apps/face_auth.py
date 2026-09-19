@@ -224,6 +224,7 @@ def run_face_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | No
                 progress_text=progress,
                 login_text="",
                 highlight_ok=builder.is_complete,
+                target_width_ratio=face_config.min_face_width_ratio,
             )
             if builder.is_complete and not state.saved:
                 enrolled = builder.build(face_id, name, role=role)
@@ -351,6 +352,7 @@ def run_face_login(request: AppRunRequest) -> int:
                 progress_text=f"Rostros conocidos: {len(enrolled_tuple)}",
                 login_text=state.login_text,
                 highlight_ok=state.highlight_ok,
+                target_width_ratio=face_config.min_face_width_ratio,
             )
 
         def _on_progress(count: int, fps: float) -> None:
