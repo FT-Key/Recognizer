@@ -148,6 +148,9 @@ DEFAULT_FACE_PROCESS_EVERY_N_FRAMES = 1
 # camara la inferencia es mas cara y, sin tope, satura el equipo y traba el
 # stream/dibujo. 5 FPS alcanza para login y enrolamiento.
 DEFAULT_FACE_MAX_INFERENCE_FPS = 5.0
+# Segundos de cuenta regresiva tras un login correcto antes de volver al menu
+# (0 = no redirige solo; hay que salir con ESC/q).
+DEFAULT_LOGIN_REDIRECT_SECONDS = 3
 DEFAULT_FACE_CENTER_TOLERANCE = 0.15
 FACE_ID_PREFIX = "F-"
 FACE_ID_WIDTH = 4

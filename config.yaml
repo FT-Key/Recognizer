@@ -299,6 +299,9 @@ face_auth:
   det_size: 320
   process_every_n_frames: 1
   max_inference_fps: 5.0
+  # Segundos de cuenta regresiva tras un login correcto antes de volver al menu
+  # (0 = no redirige solo; hay que salir con ESC/q).
+  login_redirect_seconds: 3
   min_face_width_ratio: 0.18
   max_face_width_ratio: 0.55
   min_sharpness: 80.0
