@@ -32,3 +32,4 @@ etapa que se necesite.
 | 14 | Inventario por cámara (requiere entrenamiento) | pendiente | - |
 | 15 | Reconocimiento facial (enrolamiento, login y roles) | pendiente | - |
 | 15a | Enrolamiento + login facial (archivos locales) | completada | [stage-15a-face-enroll-login.md](stage-15a-face-enroll-login.md) |
+| 15b | Roles y permisos sobre login facial | completada | [stage-15b-face-roles.md](stage-15b-face-roles.md) |

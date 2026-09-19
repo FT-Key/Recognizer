@@ -291,6 +291,19 @@ face_auth:
   confirm_frames: 3
   release_frames: 5
   store_dir: data/faces
+  # Roles y sesiones (etapa 15b): el primer rostro enrolado es admin.
+  # default_role: rol de los siguientes enrolados (admin/operator/viewer).
+  # session_timeout_seconds: vigencia de la sesion tras el login (0 = sin expiracion).
+  # require_login: false = modo abierto (sin sesion todo permitido, como antes);
+  #   true = el menu filtra por rol. Matriz por defecto: admin = todas (incluidas
+  #   ppe_detector e inventory cuando existan); operator = todas las implementadas
+  #   (gestures, people_counter, anti_intruder, posture, face_auth); viewer = solo
+  #   gestures y posture.
+  default_role: operator
+  session_timeout_seconds: 28800
+  require_login: false
+  # Override por app (se fusiona sobre la matriz): ej.
+  # permissions: {people_counter: [admin, operator], posture: [admin, operator, viewer]}
 
 # Navegador controlado: Recognizer lanza su propia instancia de Chromium
 # (Chrome, Edge, Brave, Opera, Vivaldi) con un perfil aislado y la controla

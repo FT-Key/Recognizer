@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import cast
 
 from recognizer.core.domain.face import EnrolledFace, next_face_id
+from recognizer.core.domain.identity import Role
 from recognizer.core.errors import FaceRepositoryError
 from recognizer.core.ports.face_repository import FaceRepository
 
@@ -32,14 +33,19 @@ FACE_NAME_KEY = "name"
 FACE_EMBEDDING_KEY = "embedding"
 FACE_SAMPLES_KEY = "samples"
 FACE_CREATED_AT_KEY = "created_at"
+FACE_ROLE_KEY = "role"
 
 
 def _atomic_write_json(path: Path, payload: dict[str, object]) -> None:
     """Escribe JSON de forma atomica (temporal + rename) en el mismo directorio."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, tmp_name = tempfile.mkstemp(
-        dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
-    )
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, tmp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=f".{path.name}.", suffix=".tmp"
+        )
+    except OSError as exc:
+        msg = f"No se pudo escribir {path}."
+        raise FaceRepositoryError(msg) from exc
     tmp_path = Path(tmp_name)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
@@ -135,12 +141,30 @@ class FileFaceRepository(FaceRepository):
                 return None
             if not isinstance(created_raw, str):
                 return None
+            if FACE_ROLE_KEY not in raw:
+                # Migración 15a: las caras enroladas antes de los roles tenían
+                # acceso total, se conservan como operator (documentado).
+                LOGGER.info("Cara %s sin rol (legado 15a); se migra a operator.", face_id)
+                role = Role.OPERATOR
+            else:
+                role_raw = raw.get(FACE_ROLE_KEY)
+                role = Role.VIEWER
+                if isinstance(role_raw, str):
+                    try:
+                        role = Role(role_raw)
+                    except ValueError:
+                        LOGGER.warning(
+                            "Rol desconocido %r en %s; se usa viewer.", role_raw, face_id
+                        )
+                else:
+                    LOGGER.warning("Rol invalido en %s; se usa viewer.", face_id)
             return EnrolledFace(
                 face_id=str(raw.get(FACE_ID_KEY, face_id)),
                 name=name_raw,
                 embedding=embedding,
                 samples=samples_raw,
                 created_at=created_raw,
+                role=role,
             )
         except (KeyError, TypeError, ValueError):
             LOGGER.warning("Cara corrupta %s; se ignora.", face_id)
@@ -168,6 +192,7 @@ class FileFaceRepository(FaceRepository):
                 FACE_EMBEDDING_KEY: list(face.embedding),
                 FACE_SAMPLES_KEY: face.samples,
                 FACE_CREATED_AT_KEY: face.created_at,
+                FACE_ROLE_KEY: face.role.value,
             },
         )
         counter, _ = self._read_index()

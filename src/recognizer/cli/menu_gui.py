@@ -32,10 +32,17 @@ from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Final
 
-from recognizer.cli.menu import availability_label
+from recognizer.cli.menu import LABEL_NO_PERMISSION, availability_label
 from recognizer.cli.paths import desktop_icon_path, desktop_logo_path, display_font_paths
 from recognizer.core.config import AppsConfig
 from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.identity import (
+    AllowAllPolicy,
+    AppPolicy,
+    Identity,
+    anonymous_identity,
+)
+from recognizer.core.ports.identity_provider import IdentityProvider
 
 if TYPE_CHECKING:
     import tkinter
@@ -247,6 +254,7 @@ class MenuRow:
     selectable: bool
     description: str = ""
     availability: AppAvailability = AppAvailability.AVAILABLE
+    denied: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -258,20 +266,41 @@ class _Branding:
     icon: tkinter.PhotoImage | None
 
 
-def build_menu_rows(catalog: AppCatalog, apps_config: AppsConfig) -> tuple[MenuRow, ...]:
-    """Deriva las filas del menu grafico sin tocar tkinter (logica pura)."""
+def build_menu_rows(
+    catalog: AppCatalog,
+    apps_config: AppsConfig,
+    *,
+    identity: Identity | None = None,
+    policy: AppPolicy | None = None,
+) -> tuple[MenuRow, ...]:
+    """Deriva las filas del menu grafico sin tocar tkinter (logica pura).
+
+    Con ``identity`` y ``policy`` las apps disponibles pero no permitidas se
+    marcan con ``[sin permiso]`` y no son seleccionables; sin ambas, las filas
+    son las historicas (sin filtro).
+    """
     rows: list[MenuRow] = []
+    current = identity if identity is not None else anonymous_identity()
     for number, info in enumerate(catalog.apps, start=1):
         availability = catalog.availability(info.app_id, enabled=apps_config.enabled)
+        label = availability_label(info, availability)
+        denied = (
+            policy is not None
+            and availability is AppAvailability.AVAILABLE
+            and not policy.can_launch(current, app_id=info.app_id)
+        )
+        if denied:
+            label = f"{label} {LABEL_NO_PERMISSION}"
         rows.append(
             MenuRow(
                 number=number,
                 title=info.title,
-                label=availability_label(info, availability),
+                label=label,
                 app_id=info.app_id,
-                selectable=availability is AppAvailability.AVAILABLE,
+                selectable=availability is AppAvailability.AVAILABLE and not denied,
                 description=info.description,
                 availability=availability,
+                denied=denied,
             )
         )
     return tuple(rows)
@@ -494,19 +523,34 @@ def run_gui_menu(
     catalog: AppCatalog | None = None,
     logger: logging.Logger = LOGGER,
     tk_factory: Callable[[], tkinter.Tk] | None = None,
+    identity_provider: IdentityProvider | None = None,
+    policy: AppPolicy | None = None,
 ) -> int:
     """Muestra el menu grafico y abre apps hasta que el usuario sale (0).
 
     La app elegida corre con la ventana oculta (`withdraw`) y al terminar se
     re-muestra (`deiconify`). Cerrar con la X, ESC o el boton Salir devuelve 0.
-    `tk_factory` inyecta la clase Tk en tests (sin display real).
+    `tk_factory` inyecta la clase Tk en tests (sin display real). Con
+    `identity_provider` y `policy` (los inyecta el launcher real) las apps sin
+    permiso se muestran con `[sin permiso]` y no se pueden abrir; sin ambas,
+    el menu es el historico (sin filtro).
     """
     import tkinter
 
     from recognizer.cli.menu import resolve_runner
 
     resolved_catalog = catalog if catalog is not None else AppCatalog()
-    rows = build_menu_rows(resolved_catalog, apps_config)
+    engine = policy
+    current: Identity | None = None
+    if identity_provider is not None or engine is not None:
+        if engine is None:
+            engine = AllowAllPolicy()
+        current = (
+            identity_provider.current_identity()
+            if identity_provider is not None
+            else anonymous_identity()
+        )
+    rows = build_menu_rows(resolved_catalog, apps_config, identity=current, policy=engine)
     theme = DEFAULT_THEME
 
     tk_cls = tk_factory if tk_factory is not None else tkinter.Tk
@@ -528,6 +572,19 @@ def run_gui_menu(
         if row.app_id is None or not row.selectable:
             logger.info("'%s' no esta disponible %s.", row.title, row.label)
             return
+        if engine is not None:
+            fresh = (
+                identity_provider.current_identity()
+                if identity_provider is not None
+                else anonymous_identity()
+            )
+            if not engine.can_launch(fresh, app_id=row.app_id):
+                logger.warning(
+                    "'%s' requiere un rol con permiso (tu rol: %s).",
+                    row.title,
+                    fresh.role.value,
+                )
+                return
         runner = resolve_runner(row.app_id)
         if runner is None:
             logger.error("No hay runner para '%s'.", row.app_id.value)
@@ -711,7 +768,7 @@ def run_gui_menu(
             text=row.label,
             font=(display_family, theme.size_badge, FONT_WEIGHT_BOLD),
             bg=_badge_background(row.availability, theme),
-            fg=badge_foreground(row.availability, theme),
+            fg=theme.text if row.denied else badge_foreground(row.availability, theme),
             padx=theme.pad_badge_x,
             pady=theme.pad_badge_y,
             relief=RELIEF_RAISED,

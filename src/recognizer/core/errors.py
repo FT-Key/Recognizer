@@ -39,3 +39,7 @@ class FaceRepositoryError(RecognizerError):
 
 class ActionError(RecognizerError):
     """La accion local no pudo ejecutarse."""
+
+
+class AuthError(RecognizerError):
+    """Sin permiso para la accion o sesion requerida (rol insuficiente)."""

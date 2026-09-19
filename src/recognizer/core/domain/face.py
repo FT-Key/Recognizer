@@ -26,6 +26,7 @@ from recognizer.core.constants import (
     FACE_MAX_COSINE_DISTANCE,
     MIN_VECTOR_NORM,
 )
+from recognizer.core.domain.identity import Role
 from recognizer.core.errors import ConfigError
 
 FaceEmbedding = tuple[float, ...]
@@ -112,13 +113,18 @@ class FaceObservation:
 
 @dataclass(frozen=True, slots=True)
 class EnrolledFace:
-    """Rostro enrolado: identidad, embedding promedio y muestras usadas."""
+    """Rostro enrolado: identidad, embedding promedio, muestras usadas y rol.
+
+    El rol va al final con default para migrar: los enrolados antes de la
+    etapa 15b se leen como operator.
+    """
 
     face_id: str
     name: str
     embedding: FaceEmbedding
     samples: int
     created_at: str
+    role: Role = Role.OPERATOR
 
 
 @dataclass(frozen=True, slots=True)
@@ -292,7 +298,7 @@ class EnrollmentBuilder:
             case _:
                 return guidance
 
-    def build(self, face_id: str, name: str) -> EnrolledFace:
+    def build(self, face_id: str, name: str, *, role: Role = Role.OPERATOR) -> EnrolledFace:
         """Construye el rostro enrolado con el promedio de las muestras.
 
         Raises:
@@ -312,6 +318,7 @@ class EnrollmentBuilder:
             embedding=embedding,
             samples=len(self._samples),
             created_at=created_at,
+            role=role,
         )
 
 
