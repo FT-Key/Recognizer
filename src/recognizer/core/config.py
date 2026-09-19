@@ -21,6 +21,7 @@ from recognizer.core.constants import (
     DEFAULT_INTRUSION_ZONE_Y_MAX,
     DEFAULT_INTRUSION_ZONE_Y_MIN,
     DEFAULT_LINE_CONFIRM_FRAMES,
+    DEFAULT_LINE_MARGIN,
     DEFAULT_LINE_POSITION,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
@@ -56,6 +57,7 @@ from recognizer.core.constants import (
     DEFAULT_STABILIZATION_FRAMES,
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
+    DEFAULT_TRACK_TIMEOUT_FRAMES,
     MAX_ANGLE_DEG,
     MIN_ANGLE_DEG,
     PERSON_LABEL,
@@ -480,8 +482,17 @@ class CountingLineConfig(BaseModel):
     enabled: bool = True
     axis: LineAxis = LineAxis.HORIZONTAL
     position: float = Field(default=DEFAULT_LINE_POSITION, gt=0, lt=1)
+    margin: float = Field(default=DEFAULT_LINE_MARGIN, ge=0, lt=0.5)
     invert: bool = False
     confirm_frames: int = Field(default=DEFAULT_LINE_CONFIRM_FRAMES, ge=1)
+    track_timeout_frames: int = Field(default=DEFAULT_TRACK_TIMEOUT_FRAMES, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_margin(self) -> Self:
+        if self.margin >= min(self.position, 1 - self.position):
+            msg = "La linea requiere margin < min(position, 1-position)."
+            raise ValueError(msg)
+        return self
 
 
 class PeopleCounterConfig(BaseModel):

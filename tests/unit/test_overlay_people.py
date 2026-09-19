@@ -11,6 +11,7 @@ from recognizer.adapters.overlay_people import (
     BOX_COLOR_BGR,
     HUD_COLOR_BGR,
     LINE_COLOR_BGR,
+    LINE_MARGIN_COLOR_BGR,
     draw_people_overlay,
 )
 from recognizer.core.constants import PERSON_LABEL
@@ -23,6 +24,11 @@ FRAME_WIDTH = 640
 LINE_POSITION = 0.5
 LINE_PIXEL_Y = int(LINE_POSITION * FRAME_HEIGHT)
 LINE_PIXEL_X = int(LINE_POSITION * FRAME_WIDTH)
+LINE_MARGIN = 0.1
+MARGIN_PIXEL_Y_LOWER = int((LINE_POSITION - LINE_MARGIN) * FRAME_HEIGHT)
+MARGIN_PIXEL_Y_UPPER = int((LINE_POSITION + LINE_MARGIN) * FRAME_HEIGHT)
+MARGIN_PIXEL_X_LOWER = int((LINE_POSITION - LINE_MARGIN) * FRAME_WIDTH)
+MARGIN_PIXEL_X_UPPER = int((LINE_POSITION + LINE_MARGIN) * FRAME_WIDTH)
 SAMPLE_PIXEL = 10
 TRACK_ID = 1
 CONFIDENCE = 0.9
@@ -96,6 +102,46 @@ def test_draw_people_overlay_draws_vertical_line() -> None:
     )
 
     assert frame.data[SAMPLE_PIXEL, LINE_PIXEL_X].tolist() == list(LINE_COLOR_BGR)
+
+
+def test_draw_people_overlay_draws_horizontal_margin_band() -> None:
+    frame = _frame()
+
+    draw_people_overlay(
+        frame.data,
+        tracked=(),
+        current=0,
+        entries=0,
+        exits=0,
+        line=CountingLine(
+            axis=LineAxis.HORIZONTAL,
+            position=LINE_POSITION,
+            margin=LINE_MARGIN,
+        ),
+    )
+
+    assert frame.data[MARGIN_PIXEL_Y_LOWER, SAMPLE_PIXEL].tolist() == list(LINE_MARGIN_COLOR_BGR)
+    assert frame.data[MARGIN_PIXEL_Y_UPPER, SAMPLE_PIXEL].tolist() == list(LINE_MARGIN_COLOR_BGR)
+
+
+def test_draw_people_overlay_draws_vertical_margin_band() -> None:
+    frame = _frame()
+
+    draw_people_overlay(
+        frame.data,
+        tracked=(),
+        current=0,
+        entries=0,
+        exits=0,
+        line=CountingLine(
+            axis=LineAxis.VERTICAL,
+            position=LINE_POSITION,
+            margin=LINE_MARGIN,
+        ),
+    )
+
+    assert frame.data[SAMPLE_PIXEL, MARGIN_PIXEL_X_LOWER].tolist() == list(LINE_MARGIN_COLOR_BGR)
+    assert frame.data[SAMPLE_PIXEL, MARGIN_PIXEL_X_UPPER].tolist() == list(LINE_MARGIN_COLOR_BGR)
 
 
 def test_draw_people_overlay_without_line_and_tracks_draws_only_hud() -> None:
