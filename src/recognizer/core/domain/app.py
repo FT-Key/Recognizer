@@ -23,6 +23,7 @@ class AppId(StrEnum):
     FACE_AUTH = "face_auth"
     ASSISTANCE = "assistance"
     LOITERING = "loitering"
+    VACANCY = "vacancy"
     VEHICLE_COUNTER = "vehicle_counter"
     PRIVACY_BLUR = "privacy_blur"
     FALL_DETECTOR = "fall_detector"
@@ -114,11 +115,19 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.LOITERING,
         title="Zona permanencia",
         description="Avisa si alguien permanece en zona mas de N segundos; sin entrenamiento.",
+        implemented=True,
+    ),
+    AppInfo(
+        app_id=AppId.VACANCY,
+        title="Zona vacia",
+        description="Avisa si no hay nadie en la camara; util para museos/salas.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.VEHICLE_COUNTER,
         title="Conteo de autos",
         description="Cuenta autos que cruzan una linea con YOLO; sin entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.PRIVACY_BLUR,

@@ -1,6 +1,6 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 15d-intento-id completada y mergeada; siguiente: 13 (EPP) o 15e (identidad distribuida)
+- **Fase actual:** etapa 18 (conteo de autos) implementada; gate pendiente de ejecución manual
 - **Rama:** `dev`
 - **Actualizado:** 2026-09-20
 
@@ -22,12 +22,13 @@
 - Etapa 15d-accesos-clave: `AccessEvent` con `method` (`facial`/`clave`) y `success` (legado → facial exitoso); el login con clave exitosa y los intentos fallidos quedan registrados; tabla con Método/Resultado en verde/rojo y detalle con banner ("Inicio con clave exitoso/fallido", "Inicio facial exitoso") y nota de falta de foto con clave.
 - Etapa 15d-login-dni-ux: login solo por ID (`F-0001`) o DNI (el nombre ya no autentica; homónimos); `EnrolledFace.national_id` (7-8 dígitos, único, legado `""`); Enter envía el diálogo de clave y el fallo muestra error rojo con reintento; enrolamiento y CRUD validan con mensajes visibles. Gate verde (1281 passed, 95.63%). Reviewer: apta.
 - Etapa 15d-intento-id: el acceso guarda lo ingresado (`attempted`, nunca la clave) y el motivo (`ID/DNI desconocido` vs `clave incorrecta`); tabla y detalle lo muestran en rojo; IDs nuevos aleatorios `F-A3F9` no secuenciales (legado válido). Gate verde (1284 passed, 95.58%). Reviewer: apta.
-- Plan 16-23 + 13/14: catalogo de 15 apps (`docs/ROADMAP.md`, menu en orden implementadas→faciles→intermedias→OCR→entrenamiento); EPP/inventario al final. Permisos: viewer gestos+postura, operator todo lo sin entrenamiento, admin todo.
+- Etapa 16: asistencia (`assistance`). `AssistanceMonitor` (dominio puro, debounce confirm/release), `raised_arms` (muñeca sobre hombro, `raise_margin: 0.05`, `required_arms: 2` configurable a 1). Runner `run_assistance` con una sola vía de inferencia (reutiliza `yolo26n-pose.pt` + `PoseEstimator`), alerta edge-triggered. Overlay con brazos hombro-codo-muñeca, resaltado del lado levantado, HUD y banner. `config.yaml` con `AssistanceConfig`. Gate verde (lint, mypy strict, 80/80 targeted pass, check-arch). Pendiente smoke con cámara real.
+- Etapa 18: conteo de autos (`vehicle_counter`). `VehicleCounterConfig`, `AppId.VEHICLE_COUNTER` (`implemented=True`), runner `cli/apps/vehicle_counter.py`, overlay `adapters/overlay_vehicle.py`, import perezoso en `menu.py`, sección `vehicle_counter` en `config.yaml`. Reutiliza `LineCrossingCounter` + `UltralyticsDetector`. Tests en `tests/unit/test_vehicle_counter.py` (17 casos). Gate lint+typecheck verde; pytest pendiente de ejecución manual.
 
-## Siguiente (roadmap `docs/ROADMAP.md`: faciles sin entrenamiento primero)
-- 16 (asistencia, `assistance`): brazos levantados con `yolo26n-pose.pt` + `AssistanceMonitor` + alerta; fase facil.
-- Luego: 17 permanencia (`loitering`), 18 conteo autos (`vehicle_counter`), 19 privacidad (`privacy_blur`); intermedias 20 caidas / 21 edad-genero / 22 somnolencia; final 23 OCR; menor prioridad 13 EPP y 14 inventario (requieren entrenamiento).
-- 15e: API FastAPI + Postgres (online-only, enrolamiento en edge). Plan completo en `docs/SERVER-PLAN.md` (`/ready` protegido + monitor 5 min, Render + Neon $0). Roadmap en `docs/ROADMAP.md` y `docs/WORKFLOW.md` (skill `new-app`).
+## Siguiente (roadmap `docs/ROADMAP.md`)
+- Gate etapa 18: `uv run pytest tests/unit/ -x -q --tb=short` + `uv run check-arch` (ver `docs/history/stage-18-vehicle-counter.md`).
+- 19 privacidad (`privacy_blur`): desenfoque de caras/patentes en vivo.
+- Luego: 20 caídas / 21 edad-género / 22 somnolencia; final 23 OCR; menor prioridad 13 EPP y 14 inventario.
 
 ## Bloqueos / notas
 - Verificación manual del usuario: diálogo de clave, `.exe` v0.2.0, ESC/q+X y aspecto visual del menú 10d.

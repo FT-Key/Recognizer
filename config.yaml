@@ -13,8 +13,9 @@ apps:
     posture: true
     face_auth: true
     assistance: true
-    # loitering: true
-    # vehicle_counter: true
+    loitering: true
+    vacancy: true
+    vehicle_counter: true
     # privacy_blur: true
     # fall_detector: true
     # gender_age: true
@@ -382,3 +383,73 @@ browser:
     video:
       url: "https://www.youtube.com/watch?v=mlabBbn_fHI&t=0s"
       match: "youtube.com/watch"
+
+# Loitering / zona permanencia (etapa 17a): tracking YOLO + dwell time en zona.
+# Detecta personas que permanecen en una zona mas de N segundos y dispara alerta.
+# Util para prisiones, zonas restringidas, estaciones de espera, etc.
+# zone: rectangulo normalizado 0..1 sobre el fotograma. Un objeto se considera
+#   dentro si el centro de su caja cae en la zona.
+#   enabled: false desactiva la zona (solo muestra cajas, sin alerta).
+#   confirm_frames: fotogramas consecutivos dentro para confirmar al track.
+#   release_frames: fotogramas consecutivos fuera (o ausente) para liberarlo.
+# dwell_threshold_seconds: tiempo minimo en segundos dentro de la zona para
+#   activar la alerta (se convierte desde frames usando el FPS de la camara).
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dura la permanencia (0 = una vez).
+loitering:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
+  zone:
+    enabled: true
+    x_min: 0.25
+    y_min: 0.4
+    x_max: 0.75
+    y_max: 0.9
+    confirm_frames: 3
+    release_frames: 5
+  dwell_threshold_seconds: 10.0
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Vacancy / zona vacia (etapa 17b): tracking YOLO + alerta de ausencia.
+# Detecta cuando no hay ninguna persona visible en la camara durante mas de N
+# segundos y dispara alerta. Util para museos, galerias, salas de exposicion o
+# cualquier espacio que requiere al menos una persona presente.
+# absence_threshold_seconds: tiempo minimo sin personas para activar la alerta.
+# confirm_frames: fotogramas consecutivos vacios para confirmar la ausencia.
+# release_frames: fotogramas consecutivos con personas para liberar la alerta.
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dura la ausencia (0 = una vez).
+vacancy:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: person
+  absence_threshold_seconds: 5.0
+  confirm_frames: 3
+  release_frames: 5
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Contador de vehiculos (etapa 18): tracking YOLO + conteo de cruces de linea.
+# Igual que el contador de personas pero filtrando la clase "car" (COCO).
+# target_label: clase COCO a contar. Opciones habituales: car, truck, bus,
+#   motorcycle. Para contar todos los vehiculos motorizados puedes lanzar
+#   varias instancias o cambiar el label segun la escena.
+# line: misma semantica que en people_counter (ver arriba).
+vehicle_counter:
+  model_path: models/yolo26n.pt
+  min_confidence: 0.5
+  target_label: car
+  line:
+    enabled: true
+    axis: vertical
+    position: 0.5
+    margin: 0.05
+    invert: false
+    confirm_frames: 2
+    track_timeout_frames: 30

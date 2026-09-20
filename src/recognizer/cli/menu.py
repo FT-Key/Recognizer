@@ -151,6 +151,18 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.assistance import run_assistance
 
             return run_assistance
+        case AppId.LOITERING:
+            from recognizer.cli.apps.loitering import run_loitering
+
+            return run_loitering
+        case AppId.VACANCY:
+            from recognizer.cli.apps.vacancy import run_vacancy
+
+            return run_vacancy
+        case AppId.VEHICLE_COUNTER:
+            from recognizer.cli.apps.vehicle_counter import run_vehicle_counter
+
+            return run_vehicle_counter
         case _:
             return None
 

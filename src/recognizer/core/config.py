@@ -42,6 +42,10 @@ from recognizer.core.constants import (
     DEFAULT_LINE_POSITION,
     DEFAULT_LOGIN_PHOTO_THRESHOLD,
     DEFAULT_LOGIN_REDIRECT_SECONDS,
+    DEFAULT_LOITERING_ALERT_REPEAT_SECONDS,
+    DEFAULT_LOITERING_CONFIRM_FRAMES,
+    DEFAULT_LOITERING_DWELL_THRESHOLD_SECONDS,
+    DEFAULT_LOITERING_RELEASE_FRAMES,
     DEFAULT_MAX_FACE_WIDTH_RATIO,
     DEFAULT_MAX_HANDS,
     DEFAULT_MIN_DETECTION_CONFIDENCE,
@@ -83,6 +87,12 @@ from recognizer.core.constants import (
     DEFAULT_TARGET_FPS,
     DEFAULT_THUMB_OPEN_THRESHOLD,
     DEFAULT_TRACK_TIMEOUT_FRAMES,
+    DEFAULT_VACANCY_ABSENCE_THRESHOLD_SECONDS,
+    DEFAULT_VACANCY_ALERT_REPEAT_SECONDS,
+    DEFAULT_VACANCY_CONFIRM_FRAMES,
+    DEFAULT_VACANCY_RELEASE_FRAMES,
+    DEFAULT_VEHICLE_CONFIDENCE,
+    DEFAULT_VEHICLE_MODEL_PATH,
     FACE_AUTH_MODEL_PATH,
     MAX_ANGLE_DEG,
     MAX_RAISED_ARMS,
@@ -90,6 +100,7 @@ from recognizer.core.constants import (
     MIN_RAISED_ARMS,
     PERSON_LABEL,
     URL_PREFIXES,
+    VEHICLE_LABEL,
 )
 from recognizer.core.domain.action import MediaKey, ScriptInterpreter
 from recognizer.core.domain.app import AppId
@@ -664,6 +675,104 @@ class AssistanceConfig(BaseModel):
     alert: AssistanceAlertConfig = Field(default_factory=AssistanceAlertConfig)
 
 
+class LoiteringAlertConfig(BaseModel):
+    """Alerta sonora de permanencia: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_LOITERING_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class LoiteringZoneConfig(BaseModel):
+    """Zona de permanencia: rectangulo normalizado 0..1 del fotograma."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    x_min: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MIN, ge=0, le=1)
+    y_min: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MIN, ge=0, le=1)
+    x_max: float = Field(default=DEFAULT_INTRUSION_ZONE_X_MAX, ge=0, le=1)
+    y_max: float = Field(default=DEFAULT_INTRUSION_ZONE_Y_MAX, ge=0, le=1)
+    confirm_frames: int = Field(default=DEFAULT_LOITERING_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_LOITERING_RELEASE_FRAMES, ge=1)
+
+    @model_validator(mode="after")
+    def _validate_rectangle(self) -> Self:
+        if self.x_min >= self.x_max:
+            msg = "La zona de permanencia requiere x_min < x_max."
+            raise ValueError(msg)
+        if self.y_min >= self.y_max:
+            msg = "La zona de permanencia requiere y_min < y_max."
+            raise ValueError(msg)
+        return self
+
+
+class LoiteringConfig(BaseModel):
+    """Zona permanencia: modelo YOLO, zona, dwell time y alerta.
+
+    Detecta personas que permanecen en una zona mas de ``dwell_threshold_seconds``
+    segundos. El monitor acumula frames dentro de la zona por ``track_id`` y los
+    convierte a segundos usando el FPS de la camara. La alerta se dispara al
+    exceder el umbral y se repite segun ``alert.repeat_seconds``.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    zone: LoiteringZoneConfig = Field(default_factory=LoiteringZoneConfig)
+    dwell_threshold_seconds: float = Field(default=DEFAULT_LOITERING_DWELL_THRESHOLD_SECONDS, gt=0)
+    alert: LoiteringAlertConfig = Field(default_factory=LoiteringAlertConfig)
+
+
+class VacancyAlertConfig(BaseModel):
+    """Alerta sonora de ausencia: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_VACANCY_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class VacancyConfig(BaseModel):
+    """Zona vacia: modelo YOLO, umbral de ausencia y alerta.
+
+    Detecta cuando no hay ninguna persona visible en la camara durante mas de
+    ``absence_threshold_seconds`` segundos. Util para museos, galerias o salas
+    que deben tener al menos una persona presente.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PEOPLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=PERSON_LABEL, min_length=1)
+    absence_threshold_seconds: float = Field(
+        default=DEFAULT_VACANCY_ABSENCE_THRESHOLD_SECONDS, gt=0
+    )
+    confirm_frames: int = Field(default=DEFAULT_VACANCY_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_VACANCY_RELEASE_FRAMES, ge=1)
+    alert: VacancyAlertConfig = Field(default_factory=VacancyAlertConfig)
+
+
+class VehicleCounterConfig(BaseModel):
+    """Contador de vehiculos: modelo YOLO, umbrales y linea de conteo.
+
+    Reutiliza ``CountingLineConfig`` y ``LineCrossingCounter`` del contador de
+    personas. ``target_label`` filtra la clase COCO a contar (``car`` por
+    defecto; tambien ``truck``, ``bus``, ``motorcycle``).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_VEHICLE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_VEHICLE_CONFIDENCE, ge=0, le=1)
+    target_label: str = Field(default=VEHICLE_LABEL, min_length=1)
+    line: CountingLineConfig = Field(default_factory=CountingLineConfig)
+
+
 class FaceAuthConfig(BaseModel):
     """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
 
@@ -766,6 +875,9 @@ class AppConfig(BaseModel):
     anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
     posture: PostureConfig = Field(default_factory=PostureConfig)
     assistance: AssistanceConfig = Field(default_factory=AssistanceConfig)
+    loitering: LoiteringConfig = Field(default_factory=LoiteringConfig)
+    vacancy: VacancyConfig = Field(default_factory=VacancyConfig)
+    vehicle_counter: VehicleCounterConfig = Field(default_factory=VehicleCounterConfig)
     face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 
