@@ -7,7 +7,7 @@ import pytest
 
 from recognizer.adapters.file_access_log_repository import FileAccessLogRepository
 from recognizer.core.constants import ACCESS_IMAGES_DIRNAME, ACCESS_LOG_FILENAME
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import AccessLogError
 
@@ -91,6 +91,61 @@ def test_list_all_tolerates_corrupt_lines(tmp_path: Path) -> None:
 
     assert len(events) == 1
     assert events[0].face_id == "F-0001"
+
+
+def test_password_failure_round_trip(tmp_path: Path) -> None:
+    repo = FileAccessLogRepository(tmp_path / "access")
+    event = AccessEvent(
+        face_id="F-0001",
+        name="Ada",
+        role=Role.OPERATOR,
+        timestamp=TS_OLD,
+        method=AccessMethod.PASSWORD,
+        success=False,
+    )
+
+    stored = repo.append(event=event, image=None)
+
+    assert stored.method is AccessMethod.PASSWORD
+    assert stored.success is False
+    assert stored.image == ""
+    assert repo.list_all() == (stored,)
+
+
+def test_legacy_line_without_method_defaults_to_face_success(tmp_path: Path) -> None:
+    repo = FileAccessLogRepository(tmp_path / "access")
+    payload = {
+        "face_id": "F-0001",
+        "name": "Ada",
+        "role": "operator",
+        "timestamp": TS_OLD,
+        "image": "",
+    }
+    (repo.access_dir / ACCESS_LOG_FILENAME).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    events = repo.list_all()
+
+    assert events[0].method is AccessMethod.FACE
+    assert events[0].success is True
+
+
+def test_unknown_method_falls_back_to_face(tmp_path: Path) -> None:
+    repo = FileAccessLogRepository(tmp_path / "access")
+    payload = {
+        "face_id": "F-0001",
+        "name": "Ada",
+        "role": "operator",
+        "timestamp": TS_OLD,
+        "image": "",
+        "method": "retina",
+        "success": False,
+    }
+    (repo.access_dir / ACCESS_LOG_FILENAME).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    events = repo.list_all()
+
+    assert events[0].method is AccessMethod.FACE
+    assert events[0].success is False
 
 
 def test_unknown_role_falls_back_to_viewer(tmp_path: Path) -> None:

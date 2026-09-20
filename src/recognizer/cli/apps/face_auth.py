@@ -45,7 +45,7 @@ from recognizer.core.constants import (
     FACE_WORKER_JOIN_TIMEOUT_SECONDS,
     FACE_WORKER_WAIT_TIMEOUT_SECONDS,
 )
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.credentials import authenticate, hash_password, validate_password
 from recognizer.core.domain.face import (
@@ -721,7 +721,12 @@ def _write_login_session(session_provider: FileIdentityProvider, identity: Enrol
 
 
 def _append_access_event(
-    access_log: FileAccessLogRepository, identity: EnrolledFace, image: bytes | None
+    access_log: FileAccessLogRepository,
+    identity: EnrolledFace,
+    image: bytes | None,
+    *,
+    method: AccessMethod = AccessMethod.FACE,
+    success: bool = True,
 ) -> None:
     """Registra el login en el historial de accesos; un fallo no corta la app."""
     event = AccessEvent(
@@ -730,9 +735,43 @@ def _append_access_event(
         role=identity.role,
         timestamp=datetime.now(UTC).isoformat(),
         image="",
+        method=method,
+        success=success,
     )
     try:
         access_log.append(event=event, image=image)
+    except RecognizerError as exc:
+        LOGGER.warning("No se pudo registrar el acceso (%s).", exc)
+
+
+def _append_failure_event(
+    access_log: FileAccessLogRepository,
+    faces: tuple[EnrolledFace, ...],
+    user: str,
+) -> None:
+    """Registra un intento fallido con clave (auditoria); no cambia el resultado.
+
+    Si el usuario coincide con un rostro se guarda su identidad real; si no
+    existe, se guarda el texto ingresado con rol viewer como marcador de
+    "desconocido" (nunca la clave). Un fallo de escritura solo se avisa.
+    """
+    query = user.strip()
+    face_id, name, role = query, query, Role.VIEWER
+    lowered = query.casefold()
+    for face in faces:
+        if face.face_id.casefold() == lowered or face.name.casefold() == lowered:
+            face_id, name, role = face.face_id, face.name, face.role
+            break
+    event = AccessEvent(
+        face_id=face_id,
+        name=name,
+        role=role,
+        timestamp=datetime.now(UTC).isoformat(),
+        method=AccessMethod.PASSWORD,
+        success=False,
+    )
+    try:
+        access_log.append(event=event, image=None)
     except RecognizerError as exc:
         LOGGER.warning("No se pudo registrar el acceso (%s).", exc)
 
@@ -761,11 +800,18 @@ def run_face_login_password(
         face = authenticate(faces, name_or_id=user, password=password)
         if face is None:
             LOGGER.error("Usuario o clave incorrectos.")
+            if user.strip():
+                try:
+                    failure_log = FileAccessLogRepository(face_config.access_dir)
+                except RecognizerError as exc:
+                    LOGGER.warning("No se pudo registrar el acceso (%s).", exc)
+                else:
+                    _append_failure_event(failure_log, faces, user)
             return 1
         session_provider = _identity_provider(face_config, repository)
         _write_login_session(session_provider, face)
         access_log = FileAccessLogRepository(face_config.access_dir)
-        _append_access_event(access_log, face, None)
+        _append_access_event(access_log, face, None, method=AccessMethod.PASSWORD)
     except RecognizerError as exc:
         LOGGER.error("La app fallo: %s", exc)
         return 1

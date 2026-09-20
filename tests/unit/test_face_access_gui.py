@@ -13,7 +13,7 @@ import pytest
 from recognizer.adapters.file_access_log_repository import FileAccessLogRepository
 from recognizer.cli import face_access_gui, menu_gui
 from recognizer.cli.face_access_gui import run_access_panel
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.ports.access_log import AccessLogRepository
@@ -156,6 +156,8 @@ class FakeTreeview(_WidgetBase):
         super().__init__(*args, **kwargs)
         self.columns = tuple(columns)
         self.rows: dict[str, tuple[object, ...]] = {}
+        self.row_tags: dict[str, tuple[str, ...]] = {}
+        self.tag_styles: dict[str, dict[str, object]] = {}
         self._selection: list[str] = []
         FakeTreeview.instances.append(self)
 
@@ -165,8 +167,20 @@ class FakeTreeview(_WidgetBase):
     def column(self, *_args: object, **_kwargs: object) -> None:
         pass
 
-    def insert(self, _parent: str, _index: str, *, iid: str, values: object) -> None:
+    def tag_configure(self, tag: str, **kwargs: object) -> None:
+        self.tag_styles[tag] = dict(kwargs)
+
+    def insert(
+        self,
+        _parent: str,
+        _index: str,
+        *,
+        iid: str,
+        values: object,
+        tags: tuple[str, ...] = (),
+    ) -> None:
         self.rows[iid] = tuple(values)  # type: ignore[arg-type]
+        self.row_tags[iid] = tuple(tags)
 
     def get_children(self) -> tuple[str, ...]:
         return tuple(self.rows)
@@ -227,13 +241,22 @@ class FakeAccessRepository:
         return None
 
 
-def _event(face_id: str, name: str, timestamp: str) -> AccessEvent:
+def _event(
+    face_id: str,
+    name: str,
+    timestamp: str,
+    *,
+    method: AccessMethod = AccessMethod.FACE,
+    success: bool = True,
+) -> AccessEvent:
     return AccessEvent(
         face_id=face_id,
         name=name,
         role=Role.OPERATOR,
         timestamp=timestamp,
         image="",
+        method=method,
+        success=success,
     )
 
 
@@ -397,6 +420,87 @@ def test_missing_repository_returns_one(monkeypatch: pytest.MonkeyPatch) -> None
 
     assert result == 1
     assert FakeToplevel.instances == []
+
+
+def test_rows_show_method_result_and_color_tags(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeAccessRepository(
+        (
+            _event("F-0001", "Ada", TS_OLD),
+            _event("F-0002", "Bo", TS_NEW, method=AccessMethod.PASSWORD, success=False),
+        )
+    )
+
+    _run(_identity("F-0001", Role.ADMIN), repo)
+
+    tree = FakeTreeview.instances[0]
+    method_index = face_access_gui.ACCESS_COLUMNS.index("method")
+    result_index = face_access_gui.ACCESS_COLUMNS.index("result")
+    assert tree.rows["0"][method_index] == AccessMethod.FACE.value
+    assert tree.rows["0"][result_index] == face_access_gui.ACCESS_RESULT_OK_TEXT
+    assert tree.rows["1"][method_index] == AccessMethod.PASSWORD.value
+    assert tree.rows["1"][result_index] == face_access_gui.ACCESS_RESULT_FAIL_TEXT
+    assert tree.row_tags["0"] == (face_access_gui.ACCESS_TAG_OK,)
+    assert tree.row_tags["1"] == (face_access_gui.ACCESS_TAG_FAIL,)
+    assert tree.tag_styles[face_access_gui.ACCESS_TAG_OK]["foreground"] == (
+        menu_gui.DEFAULT_THEME.success
+    )
+    assert tree.tag_styles[face_access_gui.ACCESS_TAG_FAIL]["foreground"] == (
+        menu_gui.DEFAULT_THEME.danger
+    )
+
+
+def _modal_texts() -> list[str]:
+    return [label.text for label in FakeLabel.instances]
+
+
+def test_password_failure_modal_shows_red_status_and_no_photo_note(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeAccessRepository(
+        (_event("F-0002", "Bo", TS_NEW, method=AccessMethod.PASSWORD, success=False),)
+    )
+
+    _run(_identity("F-0001", Role.ADMIN), repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["0"])
+    _press(_button_with_text(face_access_gui.ACCESS_VIEW_TEXT).command)
+
+    texts = _modal_texts()
+    assert face_access_gui.ACCESS_STATUS_PASSWORD_FAIL in texts
+    assert face_access_gui.ACCESS_MODAL_NO_PHOTO_PASSWORD in texts
+    assert face_access_gui.ACCESS_STATUS_PASSWORD_OK not in texts
+
+
+def test_password_success_modal_explains_missing_photo(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeAccessRepository(
+        (_event("F-0001", "Ada", TS_NEW, method=AccessMethod.PASSWORD, success=True),)
+    )
+
+    _run(_identity("F-0001", Role.ADMIN), repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["0"])
+    _press(_button_with_text(face_access_gui.ACCESS_VIEW_TEXT).command)
+
+    texts = _modal_texts()
+    assert face_access_gui.ACCESS_STATUS_PASSWORD_OK in texts
+    assert face_access_gui.ACCESS_MODAL_NO_PHOTO_PASSWORD in texts
+
+
+def test_face_success_modal_shows_face_status(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeAccessRepository((_event("F-0001", "Ada", TS_NEW),))
+
+    _run(_identity("F-0001", Role.ADMIN), repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["0"])
+    _press(_button_with_text(face_access_gui.ACCESS_VIEW_TEXT).command)
+
+    assert face_access_gui.ACCESS_STATUS_FACE_OK in _modal_texts()
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:

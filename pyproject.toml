@@ -81,6 +81,7 @@ select = [
 # S105 (hardcoded password): falsos positivos en etiquetas, prompts y claves de
 # diccionario de la UI/almacen facial; no hay secretos embebidos.
 "src/recognizer/adapters/file_face_repository.py" = ["S105"]
+"src/recognizer/cli/face_access_gui.py" = ["S105"]
 "src/recognizer/cli/face_enroll_gui.py" = ["S105"]
 "src/recognizer/cli/face_menu_gui.py" = ["S105"]
 "src/recognizer/cli/face_password_gui.py" = ["S105"]

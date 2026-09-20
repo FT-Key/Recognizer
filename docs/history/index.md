@@ -46,3 +46,4 @@ etapa que se necesite.
 | 15c-ui | Rediseño submenú facial + detalle de usuarios | completada | [stage-15c-face-ui-redesign.md](stage-15c-face-ui-redesign.md) |
 | 15c-logout | Fix facial: "Cerrar sesión" rojo al final con confirmación | completada | [stage-15c-fix-logout-button.md](stage-15c-fix-logout-button.md) |
 | 15d | Clave de respaldo por usuario (login sin cámara) | completada | [stage-15d-clave-respaldo.md](stage-15d-clave-respaldo.md) |
+| 15d-acc | Método y resultado en accesos (clave exitosa/fallida en verde/rojo) | completada | [stage-15d-accesos-clave.md](stage-15d-accesos-clave.md) |

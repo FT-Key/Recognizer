@@ -16,7 +16,7 @@ import pytest
 from recognizer.cli.apps import face_auth
 from recognizer.core.config import AppConfig, FaceAuthConfig
 from recognizer.core.constants import FACE_LOGIN_PASSWORD_PROMPT, FACE_LOGIN_USER_PROMPT
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.credentials import hash_password
 from recognizer.core.domain.face import EnrolledFace, FaceEmbedding
@@ -113,6 +113,8 @@ def test_password_login_success_writes_session_and_access(
     event, image = access.events[0]
     assert event.face_id == "F-0001"
     assert event.name == "Ada"
+    assert event.method is AccessMethod.PASSWORD
+    assert event.success is True
     assert image is None
 
 
@@ -148,7 +150,38 @@ def test_password_login_wrong_password_returns_one(
 
     assert result == 1
     assert session.written == []
-    assert access.events == []
+    assert len(access.events) == 1
+    event, image = access.events[0]
+    assert event.face_id == "F-0001"
+    assert event.name == "Ada"
+    assert event.method is AccessMethod.PASSWORD
+    assert event.success is False
+    assert image is None
+
+
+def test_password_login_unknown_user_logs_failure_with_entered_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = FakeSessionProvider()
+    access = FakeAccessLog()
+    _install(
+        monkeypatch,
+        repository=FakeRepository((_face(),)),
+        session=session,
+        access=access,
+    )
+
+    result = face_auth.run_face_login_password(REQUEST, reader=_reader("Nadie", "mala"))
+
+    assert result == 1
+    assert session.written == []
+    assert len(access.events) == 1
+    event, _image = access.events[0]
+    assert event.face_id == "Nadie"
+    assert event.name == "Nadie"
+    assert event.role is Role.VIEWER
+    assert event.method is AccessMethod.PASSWORD
+    assert event.success is False
 
 
 def test_password_login_without_faces_returns_one(
@@ -179,14 +212,16 @@ def test_password_login_empty_reader_returns_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session = FakeSessionProvider()
+    access = FakeAccessLog()
     _install(
         monkeypatch,
         repository=FakeRepository((_face(),)),
         session=session,
-        access=FakeAccessLog(),
+        access=access,
     )
 
     result = face_auth.run_face_login_password(REQUEST, reader=_reader("", ""))
 
     assert result == 1
     assert session.written == []
+    assert access.events == []

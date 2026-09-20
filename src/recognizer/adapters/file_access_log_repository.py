@@ -19,7 +19,7 @@ from recognizer.core.constants import (
     ACCESS_LOG_FILENAME,
     FACE_PREVIEW_SUFFIX,
 )
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import AccessLogError
 from recognizer.core.ports.access_log import AccessLogRepository
@@ -31,6 +31,8 @@ ACCESS_NAME_KEY = "name"
 ACCESS_ROLE_KEY = "role"
 ACCESS_TIMESTAMP_KEY = "timestamp"
 ACCESS_IMAGE_KEY = "image"
+ACCESS_METHOD_KEY = "method"
+ACCESS_SUCCESS_KEY = "success"
 
 _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -48,6 +50,8 @@ def _event_to_payload(event: AccessEvent) -> dict[str, object]:
         ACCESS_ROLE_KEY: event.role.value,
         ACCESS_TIMESTAMP_KEY: event.timestamp,
         ACCESS_IMAGE_KEY: event.image,
+        ACCESS_METHOD_KEY: event.method.value,
+        ACCESS_SUCCESS_KEY: event.success,
     }
 
 
@@ -76,7 +80,26 @@ def _parse_event(line: str) -> AccessEvent | None:
             role = Role(role_raw)
         except ValueError:
             LOGGER.warning("Rol desconocido %r en el registro; se usa viewer.", role_raw)
-    return AccessEvent(face_id=face_id, name=name, role=role, timestamp=timestamp, image=image)
+    # Migracion 15d-accesos-clave: las lineas anteriores no traen medio ni
+    # resultado y se leen como facial exitoso (documentado).
+    method = AccessMethod.FACE
+    method_raw = raw.get(ACCESS_METHOD_KEY)
+    if isinstance(method_raw, str):
+        try:
+            method = AccessMethod(method_raw)
+        except ValueError:
+            LOGGER.warning("Medio desconocido %r en el registro; se usa facial.", method_raw)
+    success_raw = raw.get(ACCESS_SUCCESS_KEY, True)
+    success = success_raw if isinstance(success_raw, bool) else True
+    return AccessEvent(
+        face_id=face_id,
+        name=name,
+        role=role,
+        timestamp=timestamp,
+        image=image,
+        method=method,
+        success=success,
+    )
 
 
 class FileAccessLogRepository(AccessLogRepository):
