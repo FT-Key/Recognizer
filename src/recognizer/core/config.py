@@ -8,6 +8,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from recognizer.core.constants import (
     DEFAULT_ACCESS_DIR,
     DEFAULT_ACTION_COOLDOWN_SECONDS,
+    DEFAULT_ASSISTANCE_CONFIRM_FRAMES,
+    DEFAULT_ASSISTANCE_KEYPOINT_CONFIDENCE,
+    DEFAULT_ASSISTANCE_MODEL_PATH,
+    DEFAULT_ASSISTANCE_RAISE_MARGIN,
+    DEFAULT_ASSISTANCE_RELEASE_FRAMES,
+    DEFAULT_ASSISTANCE_REQUIRED_ARMS,
     DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
     DEFAULT_ENROLLMENT_SAMPLES,
@@ -79,7 +85,9 @@ from recognizer.core.constants import (
     DEFAULT_TRACK_TIMEOUT_FRAMES,
     FACE_AUTH_MODEL_PATH,
     MAX_ANGLE_DEG,
+    MAX_RAISED_ARMS,
     MIN_ANGLE_DEG,
+    MIN_RAISED_ARMS,
     PERSON_LABEL,
     URL_PREFIXES,
 )
@@ -622,6 +630,40 @@ class PostureConfig(BaseModel):
     alert: PostureAlertConfig = Field(default_factory=PostureAlertConfig)
 
 
+class AssistanceAlertConfig(BaseModel):
+    """Alerta sonora de asistencia: activacion y repeticion mientras dura."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class AssistanceConfig(BaseModel):
+    """Manos arriba / asistencia: modelo YOLO pose, margen y debounce.
+
+    Un brazo cuenta como levantado cuando su muneca queda por encima del
+    hombro del mismo lado al menos ``raise_margin`` (coordenadas normalizadas
+    0..1). ``required_arms`` fija cuantos brazos debe levantar una persona
+    (1 o 2); ``confirm_frames``/``release_frames`` son el debounce del aviso.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_ASSISTANCE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PEOPLE_CONFIDENCE, ge=0, le=1)
+    min_keypoint_confidence: float = Field(
+        default=DEFAULT_ASSISTANCE_KEYPOINT_CONFIDENCE, ge=0, le=1
+    )
+    raise_margin: float = Field(default=DEFAULT_ASSISTANCE_RAISE_MARGIN, ge=0, le=0.5)
+    required_arms: int = Field(
+        default=DEFAULT_ASSISTANCE_REQUIRED_ARMS, ge=MIN_RAISED_ARMS, le=MAX_RAISED_ARMS
+    )
+    confirm_frames: int = Field(default=DEFAULT_ASSISTANCE_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_ASSISTANCE_RELEASE_FRAMES, ge=1)
+    alert: AssistanceAlertConfig = Field(default_factory=AssistanceAlertConfig)
+
+
 class FaceAuthConfig(BaseModel):
     """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
 
@@ -723,6 +765,7 @@ class AppConfig(BaseModel):
     people_counter: PeopleCounterConfig = Field(default_factory=PeopleCounterConfig)
     anti_intruder: AntiIntruderConfig = Field(default_factory=AntiIntruderConfig)
     posture: PostureConfig = Field(default_factory=PostureConfig)
+    assistance: AssistanceConfig = Field(default_factory=AssistanceConfig)
     face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 

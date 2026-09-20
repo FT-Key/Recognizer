@@ -25,9 +25,17 @@ def test_catalog_order_is_gestures_then_no_training_then_training() -> None:
         AppId.PEOPLE_COUNTER,
         AppId.ANTI_INTRUDER,
         AppId.POSTURE,
+        AppId.FACE_AUTH,
+        AppId.ASSISTANCE,
+        AppId.LOITERING,
+        AppId.VEHICLE_COUNTER,
+        AppId.PRIVACY_BLUR,
+        AppId.FALL_DETECTOR,
+        AppId.GENDER_AGE,
+        AppId.DROWSINESS,
+        AppId.OCR_READER,
         AppId.PPE_DETECTOR,
         AppId.INVENTORY,
-        AppId.FACE_AUTH,
     ]
 
 
@@ -40,11 +48,24 @@ def test_implemented_apps_are_in_order() -> None:
         AppId.ANTI_INTRUDER,
         AppId.POSTURE,
         AppId.FACE_AUTH,
+        AppId.ASSISTANCE,
     ]
 
 
 def test_no_training_apps_have_no_preparation() -> None:
-    no_training = {AppId.PEOPLE_COUNTER, AppId.ANTI_INTRUDER, AppId.POSTURE}
+    no_training = {
+        AppId.PEOPLE_COUNTER,
+        AppId.ANTI_INTRUDER,
+        AppId.POSTURE,
+        AppId.ASSISTANCE,
+        AppId.LOITERING,
+        AppId.VEHICLE_COUNTER,
+        AppId.PRIVACY_BLUR,
+        AppId.FALL_DETECTOR,
+        AppId.GENDER_AGE,
+        AppId.DROWSINESS,
+        AppId.OCR_READER,
+    }
 
     for info in DEFAULT_APPS:
         if info.app_id in no_training:

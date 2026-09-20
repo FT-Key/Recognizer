@@ -22,9 +22,12 @@
 - Etapa 15d-accesos-clave: `AccessEvent` con `method` (`facial`/`clave`) y `success` (legado → facial exitoso); el login con clave exitosa y los intentos fallidos quedan registrados; tabla con Método/Resultado en verde/rojo y detalle con banner ("Inicio con clave exitoso/fallido", "Inicio facial exitoso") y nota de falta de foto con clave.
 - Etapa 15d-login-dni-ux: login solo por ID (`F-0001`) o DNI (el nombre ya no autentica; homónimos); `EnrolledFace.national_id` (7-8 dígitos, único, legado `""`); Enter envía el diálogo de clave y el fallo muestra error rojo con reintento; enrolamiento y CRUD validan con mensajes visibles. Gate verde (1281 passed, 95.63%). Reviewer: apta.
 - Etapa 15d-intento-id: el acceso guarda lo ingresado (`attempted`, nunca la clave) y el motivo (`ID/DNI desconocido` vs `clave incorrecta`); tabla y detalle lo muestran en rojo; IDs nuevos aleatorios `F-A3F9` no secuenciales (legado válido). Gate verde (1284 passed, 95.58%). Reviewer: apta.
+- Plan 16-23 + 13/14: catalogo de 15 apps (`docs/ROADMAP.md`, menu en orden implementadas→faciles→intermedias→OCR→entrenamiento); EPP/inventario al final. Permisos: viewer gestos+postura, operator todo lo sin entrenamiento, admin todo.
 
-## Siguiente (etapa 13 — EPP, o 15e — identidad distribuida)
-- 15e: API FastAPI + Postgres (online-only, enrolamiento en edge). Plan completo en `docs/SERVER-PLAN.md` (`/ready` protegido + monitor 5 min, Render + Neon $0). 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).
+## Siguiente (roadmap `docs/ROADMAP.md`: faciles sin entrenamiento primero)
+- 16 (asistencia, `assistance`): brazos levantados con `yolo26n-pose.pt` + `AssistanceMonitor` + alerta; fase facil.
+- Luego: 17 permanencia (`loitering`), 18 conteo autos (`vehicle_counter`), 19 privacidad (`privacy_blur`); intermedias 20 caidas / 21 edad-genero / 22 somnolencia; final 23 OCR; menor prioridad 13 EPP y 14 inventario (requieren entrenamiento).
+- 15e: API FastAPI + Postgres (online-only, enrolamiento en edge). Plan completo en `docs/SERVER-PLAN.md` (`/ready` protegido + monitor 5 min, Render + Neon $0). Roadmap en `docs/ROADMAP.md` y `docs/WORKFLOW.md` (skill `new-app`).
 
 ## Bloqueos / notas
 - Verificación manual del usuario: diálogo de clave, `.exe` v0.2.0, ESC/q+X y aspecto visual del menú 10d.
