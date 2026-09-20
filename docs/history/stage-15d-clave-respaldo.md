@@ -1,7 +1,7 @@
 # Etapa 15d — Clave de respaldo por usuario
 
 - **Rama:** stage/15d-clave-respaldo
-- **Estado:** completada (commits pendientes `git-ops`)
+- **Estado:** completada (mergeada a `dev`)
 - **Objetivo:** que cada rostro enrolado tenga una clave (asignada en el enrolamiento, con
   confirmación) y pueda iniciar sesión con ella cuando la cámara no funcione o el
   reconocimiento facial falle.
@@ -61,7 +61,11 @@
 - Queda como decisión consciente el mínimo de 4 caracteres (configurable).
 
 ## Commits
-- Pendientes: `git-ops` (commits en la rama, merge `--no-ff` a `dev`, push).
+- `0716f59` feat(face): clave de respaldo por usuario (dominio, repositorio, config).
+- `f149e79` feat(face): enrolamiento con clave y login sin camara (runner + GUI).
+- `76127c7` test(face): cubrir credenciales, login por clave y panel de usuarios.
+- `ba8162d` docs(15d): historial y STATE.
+- `0d5ee24` merge: etapa 15d — clave de respaldo por usuario (`stage/15d-clave-respaldo` → `dev`, push OK).
 
 ## Pendientes / riesgos
 - Verificación manual del usuario del diálogo de clave y del `.exe`.
