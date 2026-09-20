@@ -114,6 +114,18 @@ DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT = 0.1
 # perfil) se usa el largo del torso como escala en vez del ancho de hombros.
 POSTURE_PROFILE_SHOULDER_RATIO = 0.5
 
+# Asistencia / manos arriba (etapa 16): brazos levantados con YOLO pose.
+# Un brazo cuenta cuando su muneca queda por encima del hombro al menos
+# `raise_margin` (coordenadas normalizadas 0..1, eje Y hacia abajo).
+DEFAULT_ASSISTANCE_MODEL_PATH = "models/yolo26n-pose.pt"
+DEFAULT_ASSISTANCE_KEYPOINT_CONFIDENCE = 0.5
+DEFAULT_ASSISTANCE_RAISE_MARGIN = 0.05
+DEFAULT_ASSISTANCE_REQUIRED_ARMS = 2
+MIN_RAISED_ARMS = 1
+MAX_RAISED_ARMS = 2
+DEFAULT_ASSISTANCE_CONFIRM_FRAMES = 5
+DEFAULT_ASSISTANCE_RELEASE_FRAMES = 10
+
 DEFAULT_BROWSER_DEBUGGING_PORT: int = 9222
 DEFAULT_CDP_CONNECT_TIMEOUT: float = 2.0
 DEFAULT_CDP_COMMAND_TIMEOUT: float = 3.0

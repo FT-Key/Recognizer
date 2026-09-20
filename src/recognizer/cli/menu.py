@@ -147,6 +147,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.face_auth import run_face_auth
 
             return run_face_auth
+        case AppId.ASSISTANCE:
+            from recognizer.cli.apps.assistance import run_assistance
+
+            return run_assistance
         case _:
             return None
 

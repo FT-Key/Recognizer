@@ -57,6 +57,14 @@ def test_operator_launches_all_but_training_apps() -> None:
     assert policy.can_launch(operator, app_id=AppId.PEOPLE_COUNTER) is True
     assert policy.can_launch(operator, app_id=AppId.ANTI_INTRUDER) is True
     assert policy.can_launch(operator, app_id=AppId.FACE_AUTH) is True
+    assert policy.can_launch(operator, app_id=AppId.ASSISTANCE) is True
+    assert policy.can_launch(operator, app_id=AppId.LOITERING) is True
+    assert policy.can_launch(operator, app_id=AppId.VEHICLE_COUNTER) is True
+    assert policy.can_launch(operator, app_id=AppId.PRIVACY_BLUR) is True
+    assert policy.can_launch(operator, app_id=AppId.FALL_DETECTOR) is True
+    assert policy.can_launch(operator, app_id=AppId.GENDER_AGE) is True
+    assert policy.can_launch(operator, app_id=AppId.DROWSINESS) is True
+    assert policy.can_launch(operator, app_id=AppId.OCR_READER) is True
     assert policy.can_launch(operator, app_id=AppId.PPE_DETECTOR) is False
     assert policy.can_launch(operator, app_id=AppId.INVENTORY) is False
 

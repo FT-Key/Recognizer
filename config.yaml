@@ -3,17 +3,25 @@
 
 # Launcher multi-app: al ejecutar `recognizer` sin argumentos se abre un menu.
 # `enabled` solo aplica a apps ya implementadas; las que aun no existen se
-# muestran como "proximamente". Orden del menu: gestos, luego las que no
-# requieren entrenamiento y al final las que si (entrenamiento o enrolamiento).
+# muestran como "proximamente". Orden del menu: implementadas, luego faciles
+# (sin entrenamiento), intermedias, OCR al final y entrenamiento al ultimo.
 apps:
   enabled:
     gestures: true
     people_counter: true
     anti_intruder: true
     posture: true
+    face_auth: true
+    assistance: true
+    # loitering: true
+    # vehicle_counter: true
+    # privacy_blur: true
+    # fall_detector: true
+    # gender_age: true
+    # drowsiness: true
+    # ocr_reader: true
     # ppe_detector: true
     # inventory: true
-    face_auth: true
 
 # La ventana de cada app muestra el fotograma a su resolucion nativa: sube
 # width/height para una imagen mas grande (la inferencia sera mas lenta).
@@ -265,6 +273,29 @@ posture:
   min_head_height_ratio: 0.7
   max_torso_angle_deg: 15.0
   max_shoulder_tilt_ratio: 0.15
+  confirm_frames: 5
+  release_frames: 10
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Manos arriba / asistencia (etapa 16): detecta brazos levantados con YOLO
+# pose y dispara una alerta sonora + visual. model_path admite un .pt de
+# Ultralytics; si no existe, se descarga solo (yolo26n-pose.pt, el mismo de
+# postura).
+#   raise_margin: cuanto debe superar la muneca al hombro (0..1) para contar
+#     el brazo como levantado. Subelo si avisa con brazos a medio alzar.
+#   required_arms: 1 o 2 brazos para pedir asistencia (2 = manos arriba).
+#   confirm_frames/release_frames: debounce del aviso.
+#   min_keypoint_confidence: confianza minima de hombros/munecas para evaluar.
+#   alert: alerta sonora del sistema (winsound en Windows); repeat_seconds = 0
+#     suena una sola vez por pedido.
+assistance:
+  model_path: models/yolo26n-pose.pt
+  min_confidence: 0.5
+  min_keypoint_confidence: 0.5
+  raise_margin: 0.05
+  required_arms: 2
   confirm_frames: 5
   release_frames: 10
   alert:
