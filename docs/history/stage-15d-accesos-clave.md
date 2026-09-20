@@ -42,7 +42,8 @@
 - Sin reviewer formal (cambio acotado sobre 15d ya revisada); se mantuvo el gate completo verde.
 
 ## Commits
-- Pendiente `git-ops` (merge `--no-ff` a `dev`, push).
+- `05f4103` feat(accesos): metodo y resultado en el registro (clave exitosa/fallida en verde/rojo).
+- Merge a `dev` con `--no-ff` y push OK (`53ac2ea..8d56106`).
 
 ## Pendientes / riesgos
 - Verificación manual del usuario: colores y textos del panel de accesos con datos reales.
