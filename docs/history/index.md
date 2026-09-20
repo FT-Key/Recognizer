@@ -48,3 +48,4 @@ etapa que se necesite.
 | 15d | Clave de respaldo por usuario (login sin cámara) | completada | [stage-15d-clave-respaldo.md](stage-15d-clave-respaldo.md) |
 | 15d-acc | Método y resultado en accesos (clave exitosa/fallida en verde/rojo) | completada | [stage-15d-accesos-clave.md](stage-15d-accesos-clave.md) |
 | 15d-dni | Login por ID/DNI, Enter y formularios con errores visibles | completada | [stage-15d-login-dni-ux.md](stage-15d-login-dni-ux.md) |
+| 15d-id | Detalle del intento (ingresado/motivo) e IDs no secuenciales | completada | [stage-15d-intento-id.md](stage-15d-intento-id.md) |

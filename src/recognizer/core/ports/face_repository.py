@@ -15,8 +15,8 @@ from recognizer.core.domain.face import EnrolledFace
 class FaceRepository(Protocol):
     """Guarda y recupera rostros enrolados por id o por nombre."""
 
-    def next_id(self) -> str:
-        """Siguiente identificador secuencial libre (``F-0001``, ...)."""
+    def new_id(self) -> str:
+        """Identificador aleatorio libre (``F-A3F9``, ...), sin colisiones."""
         ...
 
     def save(self, face: EnrolledFace) -> None:

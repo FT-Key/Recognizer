@@ -17,14 +17,15 @@ from pathlib import Path
 from typing import cast
 
 from recognizer.core.constants import FACE_PREVIEW_SUFFIX
-from recognizer.core.domain.face import EnrolledFace, next_face_id
+from recognizer.core.domain.face import EnrolledFace, new_face_id
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import FaceRepositoryError
 from recognizer.core.ports.face_repository import FaceRepository
 
 LOGGER = logging.getLogger("recognizer.face_store")
 
-FACE_ID_PATTERN = r"^F-\d{4}$"
+# IDs viejos (`F-0001`) y nuevos (`F-A3F9`): 4 alfanumericos tras `F-`.
+FACE_ID_PATTERN = r"^F-[A-Z0-9]{4}$"
 INDEX_FILENAME = "index.json"
 FACE_SUFFIX = ".json"
 FACE_FILE_TEMPLATE = "{face_id}.json"
@@ -74,9 +75,9 @@ class FileFaceRepository(FaceRepository):
 
     @staticmethod
     def _require_face_id(face_id: str) -> None:
-        """Rechaza ids fuera del formato ``F-0001`` (evita path traversal)."""
-        if re.match(FACE_ID_PATTERN, face_id) is None:
-            msg = f"face_id invalido: {face_id!r} (se espera F-0001)."
+        """Rechaza ids fuera del formato ``F-XXXX`` (evita path traversal)."""
+        if re.fullmatch(FACE_ID_PATTERN, face_id) is None:
+            msg = f"face_id invalido: {face_id!r} (se espera F-XXXX)."
             raise FaceRepositoryError(msg)
 
     @property
@@ -193,26 +194,26 @@ class FileFaceRepository(FaceRepository):
     def _known_ids(self) -> list[str]:
         """Ids del indice mas los archivos sueltos en disco.
 
-        Solo se aceptan nombres con formato de id facial (``F-0001``), de modo
-        que ``index.json``, ``session.json`` u otros JSON del directorio no se
-        confundan con rostros.
+        Solo se aceptan nombres con formato de id facial (``F-XXXX``, viejos y
+        nuevos), de modo que ``index.json``, ``session.json`` u otros JSON del
+        directorio no se confundan con rostros.
         """
         _, indexed = self._read_index()
         on_disk = [
             path.stem
             for path in self._store_dir.glob(f"*{FACE_SUFFIX}")
-            if re.match(FACE_ID_PATTERN, path.stem) is not None
+            if re.fullmatch(FACE_ID_PATTERN, path.stem) is not None
         ]
         return sorted(
-            name for name in set(indexed) | set(on_disk) if re.match(FACE_ID_PATTERN, name)
+            name for name in set(indexed) | set(on_disk) if re.fullmatch(FACE_ID_PATTERN, name)
         )
 
-    def next_id(self) -> str:
-        """Siguiente id secuencial persistente (maximo en disco + 1)."""
-        return next_face_id(self._known_ids())
+    def new_id(self) -> str:
+        """ID aleatorio libre (no secuencial: no delata orden ni admin)."""
+        return new_face_id(self._known_ids())
 
     def save(self, face: EnrolledFace) -> None:
-        """Guarda la cara y actualiza el indice con el contador maximo."""
+        """Guarda la cara y actualiza el indice de ids conocidos."""
         _atomic_write_json(
             self._face_path(face.face_id),
             {

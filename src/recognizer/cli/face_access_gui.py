@@ -47,18 +47,35 @@ ACCESS_MODAL_TITLE = "Detalle del login"
 ACCESS_MODAL_NO_PHOTO = "sin foto disponible"
 ACCESS_MODAL_NO_PHOTO_PASSWORD = "sin foto: el acceso fue con clave, no con cámara"
 ACCESS_MODAL_BACK_TEXT = "Volver"
+ACCESS_EMPTY_DETAIL = "—"
 ACCESS_MODAL_INFO_TEMPLATE = (
     "Fecha: {timestamp}\nNombre: {name}\nID: {face_id}\nRol: {role}\n"
-    "Método: {method}\nResultado: {result}"
+    "Método: {method}\nResultado: {result}\nIngresó: {attempted}\nMotivo: {reason}"
 )
 ACCESS_STATUS_FACE_OK = "Inicio facial exitoso"
 ACCESS_STATUS_PASSWORD_OK = "Inicio con clave exitoso"
 ACCESS_STATUS_PASSWORD_FAIL = "Inicio con clave fallido"
 
 
-def _result_text(success: bool) -> str:
-    """Texto de la columna Resultado y del detalle."""
-    return ACCESS_RESULT_OK_TEXT if success else ACCESS_RESULT_FAIL_TEXT
+def _result_text(access: AccessEvent) -> str:
+    """Texto de la columna Resultado: éxito o el motivo del fallo."""
+    if access.success:
+        return ACCESS_RESULT_OK_TEXT
+    if access.reason is not None:
+        return access.reason.value
+    return ACCESS_RESULT_FAIL_TEXT
+
+
+def _attempted_text(access: AccessEvent) -> str:
+    """Identificador tipeado (solo login con clave) o guion."""
+    return access.attempted if access.attempted else ACCESS_EMPTY_DETAIL
+
+
+def _reason_text(access: AccessEvent) -> str:
+    """Motivo del fallo o guion si entró (o no se registró motivo)."""
+    if access.reason is not None:
+        return access.reason.value
+    return ACCESS_EMPTY_DETAIL if access.success else ACCESS_RESULT_FAIL_TEXT
 
 
 def _status_text(access: AccessEvent) -> str:
@@ -227,7 +244,9 @@ def run_access_panel(
                 face_id=access.face_id,
                 role=access.role.value,
                 method=access.method.value,
-                result=_result_text(access.success),
+                result=_result_text(access),
+                attempted=_attempted_text(access),
+                reason=_reason_text(access),
             ),
             font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
             fg=theme.text,
@@ -303,7 +322,7 @@ def run_access_panel(
                 access.face_id,
                 access.role.value,
                 access.method.value,
-                _result_text(access.success),
+                _result_text(access),
             ),
             tags=(ACCESS_TAG_OK if access.success else ACCESS_TAG_FAIL,),
         )

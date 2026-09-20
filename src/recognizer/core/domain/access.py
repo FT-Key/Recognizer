@@ -19,15 +19,24 @@ class AccessMethod(StrEnum):
     PASSWORD = "clave"  # noqa: S105 (etiqueta del medio, no un secreto)
 
 
+class AccessFailureReason(StrEnum):
+    """Por qué falló un intento con clave (solo auditoría, en rojo en la UI)."""
+
+    UNKNOWN_USER = "ID/DNI desconocido"
+    WRONG_PASSWORD = "clave incorrecta"  # noqa: S105 (etiqueta del motivo, no un secreto)
+
+
 @dataclass(frozen=True, slots=True)
 class AccessEvent:
     """Un intento de acceso: identidad, rol, instante (ISO UTC), medio y resultado.
 
     ``timestamp`` usa ISO 8601 en UTC (``datetime.now(UTC).isoformat()`` en el
     adaptador), de modo que el orden lexicografico coincide con el cronologico.
-    ``method`` indica si fue facial o con clave; ``success`` si entro. Los
-    eventos anteriores a la etapa 15d-accesos-clave se leen como facial
-    exitoso. ``image`` es el nombre de archivo de la foto del login dentro del
+    ``method`` indica si fue facial o con clave; ``success`` si entro.
+    ``attempted`` es el identificador tipeado (ID o DNI, nunca la clave) para
+    auditar intentos fallidos; ``reason`` dice por qué fallo (``None`` si
+    entro). Los eventos anteriores se leen como facial exitoso sin intento ni
+    motivo. ``image`` es el nombre de archivo de la foto del login dentro del
     almacen (``""`` si no se capturo; los logins con clave nunca tienen foto).
     """
 
@@ -38,3 +47,5 @@ class AccessEvent:
     image: str = ""
     method: AccessMethod = AccessMethod.FACE
     success: bool = True
+    attempted: str = ""
+    reason: AccessFailureReason | None = None

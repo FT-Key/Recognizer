@@ -154,6 +154,11 @@ DEFAULT_LOGIN_REDIRECT_SECONDS = 3
 DEFAULT_FACE_CENTER_TOLERANCE = 0.15
 FACE_ID_PREFIX = "F-"
 FACE_ID_WIDTH = 4
+# Alfabeto del sufijo del ID facial: sin 0/O/1/I/L para no confundir al
+# tipearlo en el login con clave. Los IDs son aleatorios (no secuenciales)
+# para que no delaten orden ni quien es admin.
+FACE_ID_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+MAX_FACE_ID_ATTEMPTS = 100
 FACE_MAX_COSINE_DISTANCE = 2.0
 DEFAULT_FACE_DEFAULT_ROLE = "operator"
 # Clave de respaldo por usuario (login sin camara): hash PBKDF2-HMAC-SHA256 con
