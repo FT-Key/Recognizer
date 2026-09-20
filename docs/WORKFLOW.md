@@ -58,8 +58,9 @@ Cada app nueva se implementa como una etapa propia (y se subdivide en fases `a/b
 grande, p. ej. `stage/10b-people-counter-deteccion`). Checklist obligatorio de una app:
 
 1. **Catalogo**: agregar/activar su `AppInfo` en `core/domain/app.py`
-   (`implemented=True` cuando exista). Mantener el orden acordado: gestos, luego las que no
-   requieren entrenamiento, luego las que sí.
+   (`implemented=True` cuando exista). Mantener el orden acordado en
+   `docs/ROADMAP.md`: implementadas, luego faciles (sin entrenamiento),
+   intermedias, OCR al final y entrenamiento al ultimo.
 2. **Runner**: crear `cli/apps/<app>.py` con una funcion `run_<app>(request, ...) -> int`
    que respete `AppRunRequest`. Registrar la rama en `cli/menu.resolve_runner` con **import
    perezoso** (la app no se carga hasta que se selecciona).
@@ -73,9 +74,9 @@ grande, p. ej. `stage/10b-people-counter-deteccion`). Checklist obligatorio de u
 7. **Tests y gate**: tests unitarios con dobles (sin hardware) + `@pytest.mark.integration`
    para cámara; gate completo verde y medición de FPS (`uv run smoke`) registrada en el
    history de la etapa.
-8. **Sin entrenamiento primero**: las apps que usan modelos preentrenados (contador,
-   anti-intrusos, postura) van antes que las que requieren entrenar/enrolar (EPP,
-   inventario, reconocimiento facial).
+8. **Sin entrenamiento primero**: las 8 apps sin entrenamiento van antes que
+   las que requieren entrenar (EPP, inventario). Detalle y prioridades en
+   `docs/ROADMAP.md`; facial ya esta implementado y no bloquea.
 
 ## Plantilla de history de etapa
 

@@ -376,7 +376,7 @@ def test_build_menu_rows_reflects_states_and_descriptions() -> None:
     rows = build_menu_rows(AppCatalog(), AppsConfig())
     by_id = {row.app_id: row for row in rows}
 
-    assert [row.number for row in rows] == [1, 2, 3, 4, 5, 6, 7]
+    assert [row.number for row in rows] == list(range(1, len(rows) + 1))
     assert rows[0].title == "Reconocimiento de gestos"
     assert rows[0].description == "Controla el equipo con gestos de mano (MediaPipe)."
     assert by_id[AppId.GESTURES].selectable is True

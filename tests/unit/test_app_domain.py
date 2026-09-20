@@ -28,6 +28,7 @@ def test_catalog_order_is_gestures_then_no_training_then_training() -> None:
         AppId.FACE_AUTH,
         AppId.ASSISTANCE,
         AppId.LOITERING,
+        AppId.VACANCY,
         AppId.VEHICLE_COUNTER,
         AppId.PRIVACY_BLUR,
         AppId.FALL_DETECTOR,
@@ -49,6 +50,9 @@ def test_implemented_apps_are_in_order() -> None:
         AppId.POSTURE,
         AppId.FACE_AUTH,
         AppId.ASSISTANCE,
+        AppId.LOITERING,
+        AppId.VACANCY,
+        AppId.VEHICLE_COUNTER,
     ]
 
 
@@ -59,6 +63,7 @@ def test_no_training_apps_have_no_preparation() -> None:
         AppId.POSTURE,
         AppId.ASSISTANCE,
         AppId.LOITERING,
+        AppId.VACANCY,
         AppId.VEHICLE_COUNTER,
         AppId.PRIVACY_BLUR,
         AppId.FALL_DETECTOR,
