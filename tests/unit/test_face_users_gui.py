@@ -327,6 +327,7 @@ def _face(
     role: Role = Role.OPERATOR,
     *,
     password_hash: str = "",
+    national_id: str = "12345678",
 ) -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
@@ -336,6 +337,7 @@ def _face(
         created_at=CREATED_AT,
         role=role,
         password_hash=password_hash,
+        national_id=national_id,
     )
 
 
@@ -469,6 +471,93 @@ def test_edit_from_modal_saves_name_and_role(monkeypatch: pytest.MonkeyPatch) ->
     assert len(repo.updated) == 1
     assert repo.updated[0].name == "Ada Lovelace"
     assert repo.updated[0].role is Role.VIEWER
+    assert repo.updated[0].national_id == "12345678"
+
+
+def _open_edit_dialog() -> None:
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+    _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
+
+
+def _save() -> None:
+    _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
+
+
+def test_table_includes_dni_column(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository(
+        (
+            _face("F-0001", national_id="12345678"),
+            _face("F-0002", "Bo", national_id=""),
+        )
+    )
+
+    _run(Role.ADMIN, repo)
+
+    assert "dni" in face_users_gui.USERS_COLUMNS
+    index = face_users_gui.USERS_COLUMNS.index("dni")
+    assert face_users_gui.USERS_COLUMN_HEADINGS[index] == "DNI"
+    tree = FakeTreeview.instances[0]
+    assert tree.rows["F-0001"][index] == "12345678"
+    assert tree.rows["F-0002"][index] == ""
+
+
+def test_edit_sets_new_dni(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository((_face(),))
+
+    _run(Role.ADMIN, repo)
+    _open_edit_dialog()
+
+    FakeEntry.instances[1].insert(0, "87.654.321")
+    _save()
+
+    assert len(repo.updated) == 1
+    assert repo.updated[0].national_id == "87654321"
+
+
+def test_edit_invalid_dni_aborts_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository((_face(),))
+
+    _run(Role.ADMIN, repo)
+    _open_edit_dialog()
+
+    FakeEntry.instances[1].insert(0, "ABC")
+    _save()
+
+    assert repo.updated == []
+    assert any("DNI" in label.text for label in FakeLabel.instances)
+
+
+def test_edit_duplicate_dni_aborts_save(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository((_face("F-0001"), _face("F-0002", "Bo", national_id="87654321")))
+
+    _run(Role.ADMIN, repo)
+    _open_edit_dialog()
+
+    FakeEntry.instances[1].insert(0, "87654321")
+    _save()
+
+    assert repo.updated == []
+    assert face_users_gui.USERS_DUPLICATE_NATIONAL_ID in [
+        label.text for label in FakeLabel.instances
+    ]
+
+
+def test_detail_modal_shows_dni(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    repo = FakeFaceRepository((_face(),))
+
+    _run(Role.ADMIN, repo)
+    tree = FakeTreeview.instances[0]
+    tree.set_selection(["F-0001"])
+    _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
+
+    assert any("12345678" in label.text for label in FakeLabel.instances)
 
 
 def test_edit_empty_name_does_not_save(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -583,8 +672,8 @@ def test_edit_sets_new_password(monkeypatch: pytest.MonkeyPatch) -> None:
     _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
 
-    FakeEntry.instances[1].insert(0, "nueva1")
     FakeEntry.instances[2].insert(0, "nueva1")
+    FakeEntry.instances[3].insert(0, "nueva1")
     _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
 
     assert len(repo.updated) == 1
@@ -603,8 +692,8 @@ def test_edit_mismatched_passwords_aborts_save(monkeypatch: pytest.MonkeyPatch) 
     _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
 
-    FakeEntry.instances[1].insert(0, "nueva1")
-    FakeEntry.instances[2].insert(0, "otra12")
+    FakeEntry.instances[2].insert(0, "nueva1")
+    FakeEntry.instances[3].insert(0, "otra12")
     _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
 
     # Claves distintas: no se guarda nada (se conserva la anterior).
@@ -622,8 +711,8 @@ def test_edit_short_password_aborts_save(monkeypatch: pytest.MonkeyPatch) -> Non
     _press(_button_with_text(face_users_gui.USERS_DETAIL_TEXT).command)
     _press(_button_with_text(face_users_gui.USERS_EDIT_TEXT).command)
 
-    FakeEntry.instances[1].insert(0, "ab")
     FakeEntry.instances[2].insert(0, "ab")
+    FakeEntry.instances[3].insert(0, "ab")
     _press(_button_with_text(face_users_gui.USERS_SAVE_TEXT).command)
 
     assert repo.updated == []

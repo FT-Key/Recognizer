@@ -36,6 +36,7 @@ from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.config import FaceAuthConfig
 from recognizer.core.constants import (
     FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_NATIONAL_ID_PROMPT,
     FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
     FACE_ENROLL_PASSWORD_PROMPT,
     FACE_ENROLL_ROLE_PROMPT,
@@ -58,6 +59,8 @@ from recognizer.core.domain.face import (
     FaceObservation,
     LoginDebouncer,
     assess_capture,
+    normalize_national_id,
+    validate_national_id,
 )
 from recognizer.core.domain.frame import Frame
 from recognizer.core.domain.identity import Identity, Role
@@ -76,6 +79,7 @@ AUTH_MENU_TEXT = (
 AUTH_PROMPT = "Elige (1/2/3/4/0): "
 NAME_PROMPT = FACE_ENROLL_NAME_PROMPT
 ROLE_PROMPT = FACE_ENROLL_ROLE_PROMPT
+NATIONAL_ID_PROMPT = FACE_ENROLL_NATIONAL_ID_PROMPT
 PASSWORD_PROMPT = FACE_ENROLL_PASSWORD_PROMPT
 PASSWORD_CONFIRM_PROMPT = FACE_ENROLL_PASSWORD_CONFIRM_PROMPT
 LOGIN_USER_PROMPT = FACE_LOGIN_USER_PROMPT
@@ -233,12 +237,62 @@ def _request_password(*, prompt: str, reader: Callable[[str], str] | None = None
 
 
 def _request_login_user(*, reader: Callable[[str], str] | None = None) -> str:
-    """Pide el usuario (nombre o ID) del login con clave; vacio si se cancelo."""
+    """Pide el usuario (ID o DNI) del login con clave; vacio si se cancelo."""
     ask = reader if reader is not None else input
     try:
         return ask(LOGIN_USER_PROMPT).strip()
     except (EOFError, KeyboardInterrupt):
         return ""
+
+
+def _request_national_id(*, reader: Callable[[str], str] | None = None) -> str:
+    """Pide el DNI del nuevo rostro; vacio si se cancelo."""
+    ask = reader if reader is not None else input
+    try:
+        return ask(NATIONAL_ID_PROMPT)
+    except (EOFError, KeyboardInterrupt):
+        return ""
+
+
+def _national_id_taken(
+    faces: tuple[EnrolledFace, ...], national_id: str, *, exclude_face_id: str = ""
+) -> bool:
+    """Indica si el DNI ya lo usa otro rostro (``exclude_face_id`` para reeditar)."""
+    return any(
+        face.national_id == national_id and face.face_id != exclude_face_id for face in faces
+    )
+
+
+def _resolve_enroll_national_id(
+    *,
+    existing: EnrolledFace | None,
+    known: tuple[EnrolledFace, ...],
+    reader: Callable[[str], str] | None = None,
+) -> str | None:
+    """DNI normalizado del enrolamiento; ``None`` si es invalido o duplicado.
+
+    En alta (``existing`` es ``None``) es obligatorio. Al re-enrolar, dejarlo
+    vacio conserva el actual; si se escribe uno nuevo, se valida y debe ser
+    unico (excluyendo el propio rostro).
+    """
+    raw = _request_national_id(reader=reader)
+    if not raw.strip():
+        if existing is not None:
+            LOGGER.info("Re-enrolamiento sin DNI nuevo: se conserva el actual.")
+            return existing.national_id
+        LOGGER.error("Enrolamiento cancelado: se requiere el DNI.")
+        return None
+    try:
+        national_id = validate_national_id(raw)
+    except ValueError as exc:
+        LOGGER.error("DNI invalido: %s", exc)
+        return None
+    exclude = existing.face_id if existing is not None else ""
+    if _national_id_taken(known, national_id, exclude_face_id=exclude):
+        # Sin el valor: el DNI es un dato personal y no aporta al log.
+        LOGGER.error("DNI ya enrolado: elige otro documento.")
+        return None
+    return national_id
 
 
 def _resolve_enroll_password(
@@ -341,9 +395,10 @@ def run_face_enroll(
 
     Con ``face_id`` se re-enrola ese rostro: se conservan ``name``, ``role`` y
     ``created_at`` y no se piden nombre ni rol (el panel de usuarios lo usa con
-    ``reader=lambda _p: ""``); se capturan muestras nuevas y se actualiza el
-    mismo id (embedding, muestras y foto). Sin ``face_id`` se crea un rostro
-    nuevo (el primer rostro del almacen es admin).
+    ``reader=lambda _p: ""``); DNI y clave vacios conservan los actuales. Se
+    capturan muestras nuevas y se actualiza el mismo id (embedding, muestras y
+    foto). Sin ``face_id`` se crea un rostro nuevo (el primer rostro del
+    almacen es admin) con DNI obligatorio y unico.
 
     Devuelve 0 si termino bien (ESC/q vuelve al menu), 1 si fallo.
     """
@@ -368,6 +423,9 @@ def run_face_enroll(
         )
         repository = FileFaceRepository(face_config.store_dir)
         existing: EnrolledFace | None = None
+        # Rostros conocidos: para `is_first` y para validar que el DNI sea
+        # unico. Se lee una sola vez por rama (nada escribe en el medio).
+        known: tuple[EnrolledFace, ...] = ()
         if face_id is not None:
             existing = repository.find_by_id(face_id)
             if existing is None:
@@ -381,13 +439,15 @@ def run_face_enroll(
             name = existing.name
             role = existing.role
             target_id = existing.face_id
+            known = repository.list_all()
         else:
             name = _request_name(reader=reader)
             if not name:
                 LOGGER.error("Enrolamiento cancelado: se requiere un nombre no vacio.")
                 return 1
             operator = _identity_provider(face_config, repository).current_identity()
-            is_first = len(repository.list_all()) == 0
+            known = repository.list_all()
+            is_first = len(known) == 0
             resolved_role = _resolve_enroll_role(
                 operator=operator, is_first=is_first, face_config=face_config, reader=reader
             )
@@ -395,6 +455,9 @@ def run_face_enroll(
                 return 1
             role = resolved_role
             target_id = repository.next_id()
+        national_id = _resolve_enroll_national_id(existing=existing, known=known, reader=reader)
+        if national_id is None:
+            return 1
         password_hash = _resolve_enroll_password(
             existing=existing, face_config=face_config, reader=reader
         )
@@ -429,7 +492,11 @@ def run_face_enroll(
                         state.sample_frame = frame.data.copy()
                 if builder.is_complete and not state.saved:
                     enrolled = builder.build(
-                        target_id, name, role=role, password_hash=password_hash
+                        target_id,
+                        name,
+                        role=role,
+                        password_hash=password_hash,
+                        national_id=national_id,
                     )
                     if existing is not None:
                         # Re-enrolamiento: se conserva la fecha de alta original.
@@ -751,15 +818,24 @@ def _append_failure_event(
 ) -> None:
     """Registra un intento fallido con clave (auditoria); no cambia el resultado.
 
-    Si el usuario coincide con un rostro se guarda su identidad real; si no
-    existe, se guarda el texto ingresado con rol viewer como marcador de
-    "desconocido" (nunca la clave). Un fallo de escritura solo se avisa.
+    Si el usuario (ID o DNI) coincide con un rostro se guarda su identidad
+    real; si no existe, se guarda el texto ingresado con rol viewer como
+    marcador de "desconocido" (nunca la clave). Un fallo de escritura solo se
+    avisa.
     """
     query = user.strip()
     face_id, name, role = query, query, Role.VIEWER
-    lowered = query.casefold()
+    query_id = query.casefold()
+    query_dni = normalize_national_id(query)
     for face in faces:
-        if face.face_id.casefold() == lowered or face.name.casefold() == lowered:
+        by_id = face.face_id.casefold() == query_id
+        by_dni = (
+            bool(face.national_id)
+            and bool(query_dni)
+            and query_dni.isdigit()
+            and face.national_id == query_dni
+        )
+        if by_id or by_dni:
             face_id, name, role = face.face_id, face.name, face.role
             break
     event = AccessEvent(
@@ -779,7 +855,7 @@ def _append_failure_event(
 def run_face_login_password(
     request: AppRunRequest, *, reader: Callable[[str], str] | None = None
 ) -> int:
-    """Inicia sesion con usuario (nombre o ID) y clave, sin camara.
+    """Inicia sesion con usuario (ID o DNI) y clave, sin camara.
 
     Es el respaldo cuando la camara no funciona o el reconocimiento facial
     falla. Verifica la clave contra el hash PBKDF2 del rostro, persiste la
@@ -797,7 +873,7 @@ def run_face_login_password(
             return 1
         user = _request_login_user(reader=reader)
         password = _request_password(prompt=LOGIN_PASSWORD_PROMPT, reader=reader)
-        face = authenticate(faces, name_or_id=user, password=password)
+        face = authenticate(faces, user=user, password=password)
         if face is None:
             LOGGER.error("Usuario o clave incorrectos.")
             if user.strip():
@@ -842,7 +918,7 @@ def run_face_logout(request: AppRunRequest) -> int:
 
 
 def run_face_auth(request: AppRunRequest) -> int:
-    """Submenu facial: 1 Enrolar, 2 Login, 3 Cerrar sesion, 0 Volver."""
+    """Submenu facial: 1 Enrolar, 2 Login facial, 3 Login con clave, 4 Cerrar sesion, 0 Volver."""
     while True:
         LOGGER.info(AUTH_MENU_TEXT)
         try:

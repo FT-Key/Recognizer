@@ -65,6 +65,30 @@ def default_enroll_role(
     return allowed[0]
 
 
+def national_id_taken(
+    provider: IdentityProvider, national_id: str, *, exclude_face_id: str = ""
+) -> bool:
+    """Indica si el DNI ya lo usa otro rostro (``exclude_face_id`` al reeditar).
+
+    Solo aplica al proveedor de archivos; cualquier otro proveedor o error se
+    trata como "libre" para no bloquear el enrolamiento por un fallo de lectura
+    (el runner valida de nuevo con el repositorio real).
+    """
+    from recognizer.adapters.file_face_repository import FileFaceRepository
+    from recognizer.adapters.file_identity_provider import FileIdentityProvider
+    from recognizer.core.errors import RecognizerError
+
+    if not isinstance(provider, FileIdentityProvider):
+        return False
+    try:
+        faces = FileFaceRepository(provider.store_dir).list_all()
+    except (OSError, RecognizerError):
+        return False
+    return any(
+        face.national_id == national_id and face.face_id != exclude_face_id for face in faces
+    )
+
+
 def store_is_empty(provider: IdentityProvider) -> bool:
     """Indica si el almacen facial esta vacio (primer rostro = admin).
 

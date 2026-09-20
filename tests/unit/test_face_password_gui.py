@@ -143,13 +143,14 @@ class FakeEntry(_WidgetBase):
 class FakeRunner:
     """Doble del runner de login por clave: lee usuario y clave del reader."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, result: int = 0) -> None:
         self.calls: list[tuple[str, str]] = []
+        self.result = result
 
     def __call__(self, request: AppRunRequest, *, reader: Callable[[str], str]) -> int:
         del request
         self.calls.append((reader(FACE_LOGIN_USER_PROMPT), reader(FACE_LOGIN_PASSWORD_PROMPT)))
-        return 0
+        return self.result
 
 
 def _install_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -195,15 +196,59 @@ def test_login_calls_runner_with_user_and_password(monkeypatch: pytest.MonkeyPat
     runner = FakeRunner()
 
     _run(cast("face_password_gui.PasswordLoginRunner", runner))
-    FakeEntry.instances[0].set_text("Ada")
+    FakeEntry.instances[0].set_text("12345678")
     FakeEntry.instances[1].set_text("clave1")
     _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
 
-    assert runner.calls == [("Ada", "clave1")]
+    assert runner.calls == [("12345678", "clave1")]
     window = FakeToplevel.instances[0]
-    assert window.withdraw_calls == 1
-    assert window.deiconify_calls == 1
+    assert window.withdraw_calls == 0
     assert window.destroy_calls == 1
+
+
+def test_enter_key_triggers_login(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    runner = FakeRunner()
+
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
+    FakeEntry.instances[0].set_text("F-0001")
+    FakeEntry.instances[1].set_text("clave1")
+    FakeToplevel.instances[0].bindings[menu_gui.EVENT_RETURN](None)
+
+    assert runner.calls == [("F-0001", "clave1")]
+    assert FakeToplevel.instances[0].destroy_calls == 1
+
+
+def test_failed_login_shows_error_and_stays_open(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    runner = FakeRunner(result=1)
+
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
+    FakeEntry.instances[0].set_text("12345678")
+    FakeEntry.instances[1].set_text("mala")
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
+
+    assert runner.calls == [("12345678", "mala")]
+    assert FakeToplevel.instances[0].destroy_calls == 0
+    assert face_password_gui.PASSWORD_LOGIN_FAILED_MESSAGE in [
+        label.text for label in FakeLabel.instances
+    ]
+
+
+def test_failed_login_can_retry_without_reopening(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fakes(monkeypatch)
+    runner = FakeRunner(result=1)
+
+    _run(cast("face_password_gui.PasswordLoginRunner", runner))
+    FakeEntry.instances[0].set_text("12345678")
+    FakeEntry.instances[1].set_text("mala")
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
+    FakeEntry.instances[1].set_text("clave1")
+    runner.result = 0
+    _press(_button_with_text(face_password_gui.PASSWORD_LOGIN_TEXT).command)
+
+    assert runner.calls == [("12345678", "mala"), ("12345678", "clave1")]
+    assert FakeToplevel.instances[0].destroy_calls == 1
 
 
 def test_empty_credentials_do_not_call_runner(monkeypatch: pytest.MonkeyPatch) -> None:

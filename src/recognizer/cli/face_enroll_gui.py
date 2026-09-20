@@ -31,11 +31,13 @@ from recognizer.cli import menu_gui
 from recognizer.core.constants import (
     DEFAULT_MIN_PASSWORD_LENGTH,
     FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_NATIONAL_ID_PROMPT,
     FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
     FACE_ENROLL_PASSWORD_PROMPT,
     FACE_ENROLL_ROLE_PROMPT,
 )
 from recognizer.core.domain.app import AppRunRequest
+from recognizer.core.domain.face import validate_national_id
 from recognizer.core.ports.identity_provider import IdentityProvider
 
 if TYPE_CHECKING:
@@ -45,9 +47,10 @@ LOGGER = logging.getLogger("recognizer.menu.face.enroll")
 
 ENROLL_WINDOW_TITLE = "Enrolamiento facial"
 ENROLL_HEADER_TITLE = "ENROLAR"
-ENROLL_HEADER_SUBTITLE = "asigna nombre, rol y clave al nuevo rostro"
+ENROLL_HEADER_SUBTITLE = "asigna datos, rol y clave al nuevo rostro"
 ENROLL_NAME_LABEL = "Nombre"
 ENROLL_ROLE_LABEL = "Rol"
+ENROLL_NATIONAL_ID_LABEL = "DNI"
 ENROLL_PASSWORD_LABEL = "Clave"
 ENROLL_PASSWORD_CONFIRM_LABEL = "Confirmar clave"
 ENROLL_TEXT = "Enrolar"
@@ -55,9 +58,12 @@ ENROLL_BACK_TEXT = "Volver"
 ENROLL_FIRST_NOTE_TEXT = "nota: el primer rostro = admin"
 ENROLL_NO_PERMISSION_TEXT = "sin permiso: se requiere operator o admin"
 ENROLL_FOOTER_HINT = "Enter: activar · ESC: volver"
-ENROLL_EMPTY_NAME_MESSAGE = "Enrolamiento cancelado: escribe un nombre primero."
-ENROLL_EMPTY_PASSWORD_MESSAGE = "Enrolamiento cancelado: escribe una clave."
-ENROLL_PASSWORD_MISMATCH_MESSAGE = "Enrolamiento cancelado: las claves no coinciden."
+ENROLL_EMPTY_NAME_MESSAGE = "Escribe un nombre primero."
+ENROLL_EMPTY_NATIONAL_ID_MESSAGE = "Escribe el DNI (7 u 8 dígitos)."
+ENROLL_INVALID_NATIONAL_ID_TEMPLATE = "DNI inválido: {reason}"
+ENROLL_DUPLICATE_NATIONAL_ID_MESSAGE = "Ese DNI ya está enrolado."
+ENROLL_EMPTY_PASSWORD_MESSAGE = "Escribe una clave."
+ENROLL_PASSWORD_MISMATCH_MESSAGE = "Las claves no coinciden."
 ENROLL_PASSWORD_SHORT_TEMPLATE = (
     "Enrolamiento cancelado: la clave requiere al menos {min_length} caracteres."
 )
@@ -97,10 +103,12 @@ def run_enroll_form(
 ) -> int:
     """Muestra el formulario de enrolamiento y devuelve 0 al cerrarlo.
 
-    ``Enrolar`` oculta la ventana, corre el runner con un lector en cola que
-    devuelve ``[nombre, rol]`` en orden y al terminar destruye la ventana.
-    ``Volver``/X/ESC cierran sin enrolar. Si el operador no tiene permiso se
-    muestra el aviso y el boton ``Enrolar`` queda deshabilitado.
+    ``Enrolar`` valida los campos (nombre, DNI único de 7-8 dígitos, clave y
+    confirmación) mostrando el error en rojo en el formulario; si todo está
+    bien, oculta la ventana, corre el runner con un lector en cola mapeado por
+    prompt y al terminar destruye la ventana. ``Volver``/X/ESC cierran sin
+    enrolar. Si el operador no tiene permiso se muestra el aviso y el boton
+    ``Enrolar`` queda deshabilitado.
     """
     import tkinter
 
@@ -109,6 +117,7 @@ def run_enroll_form(
         default_enroll_role,
         default_identity_provider,
         load_face_config,
+        national_id_taken,
         store_is_empty,
     )
 
@@ -256,6 +265,16 @@ def run_enroll_form(
 
     tkinter.Label(
         body,
+        text=ENROLL_NATIONAL_ID_LABEL,
+        font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+        fg=theme.text,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    ).pack(fill=menu_gui.FILL_X)
+    national_id_entry = tkinter.Entry(body)
+    national_id_entry.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
+    tkinter.Label(
+        body,
         text=ENROLL_PASSWORD_LABEL,
         font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
         fg=theme.text,
@@ -274,18 +293,47 @@ def run_enroll_form(
     ).pack(fill=menu_gui.FILL_X)
     confirm_entry = tkinter.Entry(body, show=menu_gui.PASSWORD_SHOW)
     confirm_entry.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
+    error_label = tkinter.Label(
+        body,
+        text="",
+        font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
+        fg=theme.danger,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    )
+    error_label.pack(fill=menu_gui.FILL_X, pady=(theme.space_1, menu_gui.BORDER_NONE))
+
+    def _fail(message: str) -> None:
+        """Muestra el error en el formulario (rojo) y lo registra."""
+        logger.error("%s", message)
+        try:
+            error_label.configure(text=message)
+        except Exception as exc:  # el fake puede no soportar `text`
+            logger.debug("Sin etiqueta de error en enrolamiento (%s).", exc)
+
+    def _read_entries() -> tuple[str, str, str, str] | None:
+        """Lee nombre, DNI, clave y confirmación; ``None`` si no se pudo leer."""
+        try:
+            return (
+                name_entry.get().strip(),
+                national_id_entry.get(),
+                password_entry.get(),
+                confirm_entry.get(),
+            )
+        except Exception as exc:  # el fake o Tk sin display pueden fallar
+            logger.warning(ENROLL_NAME_READ_ERROR, exc)
+            return None
 
     def do_enroll() -> None:
         if not roles:
             logger.warning(ENROLL_NO_PERMISSION_TEXT)
             return
-        try:
-            name = name_entry.get().strip()
-        except Exception as exc:  # el fake o Tk sin display pueden fallar
-            logger.warning(ENROLL_NAME_READ_ERROR, exc)
+        read = _read_entries()
+        if read is None:
             return
+        name, raw_dni, password, confirm = read
         if not name:
-            logger.error(ENROLL_EMPTY_NAME_MESSAGE)
+            _fail(ENROLL_EMPTY_NAME_MESSAGE)
             return
         try:
             role_text = role_var.get().strip().lower()
@@ -295,26 +343,32 @@ def run_enroll_form(
         if role_text not in {role.value for role in roles}:
             logger.warning(ENROLL_ROLE_FALLBACK_LOG, role_text, roles[0].value)
             role_text = roles[0].value
+        if not raw_dni.strip():
+            _fail(ENROLL_EMPTY_NATIONAL_ID_MESSAGE)
+            return
         try:
-            password = password_entry.get()
-            confirm = confirm_entry.get()
-        except Exception as exc:  # el fake o Tk sin display pueden fallar
-            logger.warning(ENROLL_PASSWORD_READ_ERROR, exc)
+            national_id = validate_national_id(raw_dni)
+        except ValueError as exc:
+            _fail(ENROLL_INVALID_NATIONAL_ID_TEMPLATE.format(reason=exc))
+            return
+        if national_id_taken(provider, national_id):
+            _fail(ENROLL_DUPLICATE_NATIONAL_ID_MESSAGE)
             return
         if not password:
-            logger.error(ENROLL_EMPTY_PASSWORD_MESSAGE)
+            _fail(ENROLL_EMPTY_PASSWORD_MESSAGE)
             return
         if len(password) < min_password_length:
-            logger.error(ENROLL_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
+            _fail(ENROLL_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
             return
         if password != confirm:
-            logger.error(ENROLL_PASSWORD_MISMATCH_MESSAGE)
+            _fail(ENROLL_PASSWORD_MISMATCH_MESSAGE)
             return
-        # El lector mapea por prompt: el runner pide nombre, rol, clave y
+        # El lector mapea por prompt: el runner pide nombre, rol, DNI, clave y
         # confirmacion; el rol puede no pedirse (primer rostro = admin).
         answers = {
             FACE_ENROLL_NAME_PROMPT: name,
             FACE_ENROLL_ROLE_PROMPT: role_text,
+            FACE_ENROLL_NATIONAL_ID_PROMPT: national_id,
             FACE_ENROLL_PASSWORD_PROMPT: password,
             FACE_ENROLL_PASSWORD_CONFIRM_PROMPT: confirm,
         }

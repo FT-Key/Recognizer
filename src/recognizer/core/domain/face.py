@@ -25,6 +25,8 @@ from recognizer.core.constants import (
     FACE_ID_WIDTH,
     FACE_MAX_COSINE_DISTANCE,
     MIN_VECTOR_NORM,
+    NATIONAL_ID_MAX_DIGITS,
+    NATIONAL_ID_MIN_DIGITS,
 )
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import ConfigError
@@ -115,13 +117,14 @@ class FaceObservation:
 class EnrolledFace:
     """Rostro enrolado: identidad, embedding promedio, muestras, rol y foto.
 
-    ``role``, ``preview`` y ``password_hash`` van al final con default para
-    migrar: los enrolados antes de la etapa 15b se leen como operator, los
-    anteriores a la 15c sin foto y los anteriores a la 15d sin clave de
-    respaldo. ``preview`` es el nombre de archivo de la foto de enrolamiento
-    (``F-0001.png``) dentro del almacen; ``""`` si no hay foto.
-    ``password_hash`` es el hash PBKDF2 de la clave de respaldo (login sin
-    camara) o ``""`` si el rostro no tiene clave.
+    ``role``, ``preview``, ``password_hash`` y ``national_id`` van al final con
+    default para migrar: los enrolados antes de la etapa 15b se leen como
+    operator, los anteriores a la 15c sin foto, los anteriores a la 15d sin
+    clave de respaldo y los anteriores al DNI sin documento. ``preview`` es el
+    nombre de archivo de la foto de enrolamiento (``F-0001.png``) dentro del
+    almacen; ``""`` si no hay foto. ``password_hash`` es el hash PBKDF2 de la
+    clave de respaldo (login sin camara) o ``""`` si el rostro no tiene clave.
+    ``national_id`` es el DNI argentino normalizado (solo digitos) o ``""``.
     """
 
     face_id: str
@@ -132,6 +135,32 @@ class EnrolledFace:
     role: Role = Role.OPERATOR
     preview: str = ""
     password_hash: str = ""
+    national_id: str = ""
+
+
+def normalize_national_id(value: str) -> str:
+    """DNI normalizado: sin puntos ni espacios (``12.345.678`` → ``12345678``)."""
+    return "".join(value.split()).replace(".", "")
+
+
+def validate_national_id(value: str) -> str:
+    """Normaliza y valida un DNI argentino; devuelve los digitos.
+
+    Raises:
+        ValueError: si esta vacio, tiene letras u otra longitud que 7-8 digitos.
+    """
+    cleaned = normalize_national_id(value)
+    if not cleaned:
+        msg = "El DNI no puede estar vacio."
+        raise ValueError(msg)
+    if (
+        not cleaned.isdigit()
+        or len(cleaned) < NATIONAL_ID_MIN_DIGITS
+        or len(cleaned) > NATIONAL_ID_MAX_DIGITS
+    ):
+        msg = f"El DNI requiere {NATIONAL_ID_MIN_DIGITS} u {NATIONAL_ID_MAX_DIGITS} digitos."
+        raise ValueError(msg)
+    return cleaned
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,11 +341,13 @@ class EnrollmentBuilder:
         *,
         role: Role = Role.OPERATOR,
         password_hash: str = "",
+        national_id: str = "",
     ) -> EnrolledFace:
         """Construye el rostro enrolado con el promedio de las muestras.
 
         ``password_hash`` es el hash de la clave de respaldo (``""`` si no se
         asigna, p. ej. al re-enrolar conservando la clave actual).
+        ``national_id`` es el DNI ya normalizado (``""`` al conservar).
 
         Raises:
             ValueError: si faltan muestras o el nombre esta vacio.
@@ -337,6 +368,7 @@ class EnrollmentBuilder:
             created_at=created_at,
             role=role,
             password_hash=password_hash,
+            national_id=national_id,
         )
 
 
