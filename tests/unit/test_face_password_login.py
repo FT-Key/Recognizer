@@ -59,7 +59,9 @@ class FakeAccessLog:
         return event
 
 
-def _face(*, name: str = "Ada", password: str | None = CLAVE) -> EnrolledFace:
+def _face(
+    *, name: str = "Ada", password: str | None = CLAVE, national_id: str = "12345678"
+) -> EnrolledFace:
     password_hash = hash_password(password, iterations=1000) if password is not None else ""
     return EnrolledFace(
         face_id="F-0001",
@@ -69,6 +71,7 @@ def _face(*, name: str = "Ada", password: str | None = CLAVE) -> EnrolledFace:
         created_at="2026-09-19T00:00:00+00:00",
         role=Role.OPERATOR,
         password_hash=password_hash,
+        national_id=national_id,
     )
 
 
@@ -105,7 +108,7 @@ def test_password_login_success_writes_session_and_access(
         access=access,
     )
 
-    result = face_auth.run_face_login_password(REQUEST, reader=_reader("Ada", CLAVE))
+    result = face_auth.run_face_login_password(REQUEST, reader=_reader("12.345.678", CLAVE))
 
     assert result == 0
     assert session.written == [face]
@@ -116,6 +119,29 @@ def test_password_login_success_writes_session_and_access(
     assert event.method is AccessMethod.PASSWORD
     assert event.success is True
     assert image is None
+
+
+def test_password_login_by_name_does_not_authenticate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    face = _face()
+    session = FakeSessionProvider()
+    access = FakeAccessLog()
+    _install(
+        monkeypatch,
+        repository=FakeRepository((face,)),
+        session=session,
+        access=access,
+    )
+
+    result = face_auth.run_face_login_password(REQUEST, reader=_reader("Ada", CLAVE))
+
+    assert result == 1
+    assert session.written == []
+    assert len(access.events) == 1
+    event, _image = access.events[0]
+    assert event.face_id == "Ada"
+    assert event.success is False
 
 
 def test_password_login_by_id_succeeds(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -146,7 +172,7 @@ def test_password_login_wrong_password_returns_one(
         access=access,
     )
 
-    result = face_auth.run_face_login_password(REQUEST, reader=_reader("Ada", "mala"))
+    result = face_auth.run_face_login_password(REQUEST, reader=_reader("F-0001", "mala"))
 
     assert result == 1
     assert session.written == []

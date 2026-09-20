@@ -162,13 +162,17 @@ PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 600_000
 PASSWORD_SALT_BYTES = 16
 DEFAULT_MIN_PASSWORD_LENGTH = 4
+# DNI argentino: 7 u 8 digitos (se aceptan puntos y espacios al ingresarlo).
+NATIONAL_ID_MIN_DIGITS = 7
+NATIONAL_ID_MAX_DIGITS = 8
 # Prompts estables del enrolamiento y del login con clave; la GUI los usa como
 # claves del lector en cola (no dependen de face_auth para no cargar modelos).
 FACE_ENROLL_NAME_PROMPT = "Nombre para enrolar: "
 FACE_ENROLL_ROLE_PROMPT = "Rol (admin/operator/viewer) [operator]: "
+FACE_ENROLL_NATIONAL_ID_PROMPT = "DNI (7 u 8 digitos): "
 FACE_ENROLL_PASSWORD_PROMPT = "Clave para el usuario: "
 FACE_ENROLL_PASSWORD_CONFIRM_PROMPT = "Confirma la clave: "
-FACE_LOGIN_USER_PROMPT = "Usuario (nombre o ID): "
+FACE_LOGIN_USER_PROMPT = "Usuario (ID o DNI): "
 FACE_LOGIN_PASSWORD_PROMPT = "Clave: "
 DEFAULT_SESSION_TIMEOUT_SECONDS = 8 * 3600
 SESSION_FILENAME = "session.json"

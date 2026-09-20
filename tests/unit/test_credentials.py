@@ -29,6 +29,7 @@ def _face(
     name: str = "Ada",
     *,
     password: str | None = CLAVE,
+    national_id: str = "12345678",
 ) -> EnrolledFace:
     password_hash = (
         hash_password(password, salt=SALT, iterations=ITERATIONS) if password is not None else ""
@@ -41,6 +42,7 @@ def _face(
         created_at="2026-09-19T00:00:00+00:00",
         role=Role.OPERATOR,
         password_hash=password_hash,
+        national_id=national_id,
     )
 
 
@@ -116,50 +118,60 @@ def test_validate_password_rejects_invalid_min_length() -> None:
         validate_password("abcd", min_length=0)
 
 
-def test_authenticate_by_name_is_case_insensitive() -> None:
+def test_authenticate_by_name_does_not_work() -> None:
     face = _face(name="Ada")
 
-    assert authenticate((face,), name_or_id="aDa", password=CLAVE) is face
-    assert authenticate((face,), name_or_id="  ADA  ", password=CLAVE) is face
+    assert authenticate((face,), user="aDa", password=CLAVE) is None
+    assert authenticate((face,), user="  ADA  ", password=CLAVE) is None
 
 
 def test_authenticate_by_id_is_case_insensitive() -> None:
     face = _face(face_id="F-0001")
 
-    assert authenticate((face,), name_or_id="f-0001", password=CLAVE) is face
+    assert authenticate((face,), user="f-0001", password=CLAVE) is face
+    assert authenticate((face,), user="  F-0001  ", password=CLAVE) is face
+
+
+def test_authenticate_by_national_id_accepts_dots_and_spaces() -> None:
+    face = _face(national_id="12345678")
+
+    assert authenticate((face,), user="12345678", password=CLAVE) is face
+    assert authenticate((face,), user="12.345.678", password=CLAVE) is face
 
 
 def test_authenticate_rejects_wrong_password() -> None:
     face = _face()
     mala = "mala"
 
-    assert authenticate((face,), name_or_id="Ada", password=mala) is None
+    assert authenticate((face,), user="F-0001", password=mala) is None
+    assert authenticate((face,), user="12345678", password=mala) is None
 
 
 def test_authenticate_ignores_faces_without_password() -> None:
     face = _face(password=None)
 
-    assert authenticate((face,), name_or_id="Ada", password=CLAVE) is None
+    assert authenticate((face,), user="F-0001", password=CLAVE) is None
 
 
 def test_authenticate_empty_gallery_returns_none() -> None:
-    assert authenticate((), name_or_id="Ada", password=CLAVE) is None
+    assert authenticate((), user="F-0001", password=CLAVE) is None
 
 
 def test_authenticate_blank_query_or_password_returns_none() -> None:
     face = _face()
 
-    assert authenticate((face,), name_or_id="   ", password=CLAVE) is None
-    assert authenticate((face,), name_or_id="Ada", password="") is None
+    assert authenticate((face,), user="   ", password=CLAVE) is None
+    assert authenticate((face,), user="F-0001", password="") is None
 
 
-def test_authenticate_homonyms_picks_the_matching_password() -> None:
+def test_authenticate_homonyms_share_nothing_each_uses_own_id() -> None:
     clave_a = "primera1"
     clave_b = "segunda1"
     clave_c = "tercera1"
-    first = _face("F-0001", "Ada", password=clave_a)
-    second = _face("F-0002", "Ada", password=clave_b)
+    first = _face("F-0001", "Ada", password=clave_a, national_id="11111111")
+    second = _face("F-0002", "Ada", password=clave_b, national_id="22222222")
 
-    assert authenticate((first, second), name_or_id="Ada", password=clave_a) is first
-    assert authenticate((first, second), name_or_id="Ada", password=clave_b) is second
-    assert authenticate((first, second), name_or_id="Ada", password=clave_c) is None
+    assert authenticate((first, second), user="F-0001", password=clave_a) is first
+    assert authenticate((first, second), user="22222222", password=clave_b) is second
+    assert authenticate((first, second), user="Ada", password=clave_a) is None
+    assert authenticate((first, second), user="F-0001", password=clave_c) is None

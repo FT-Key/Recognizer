@@ -1,13 +1,15 @@
 """Dialogo grafico de login con clave (imperative shell) vintage.
 
-Ventana independiente para iniciar sesion con usuario (nombre o ID) y clave,
-como respaldo cuando la camara no funciona o el reconocimiento facial falla. Se
-abre desde el submenu facial (``face_menu_gui``) con import perezoso; ``tkinter``
-y el runner se cargan solo al usarse.
+Ventana independiente para iniciar sesion con usuario (ID o DNI) y clave, como
+respaldo cuando la camara no funciona o el reconocimiento facial falla. Se abre
+desde el submenu facial (``face_menu_gui``) con import perezoso; ``tkinter`` y
+el runner se cargan solo al usarse. Enter equivale a ``Ingresar``; si las
+credenciales fallan se muestra el error en rojo en el dialogo y se puede
+reintentar sin volver al submenu.
 
 Testabilidad: ``tk_factory`` inyecta el ``Toplevel``; los tests parchean
 ``tkinter.Frame/Label/Button/Entry``. El runner recibe un lector en cola con las
-respuestas ``[usuario, clave]``.
+respuestas ``[usuario, clave]`` y devuelve 0 si entro.
 """
 
 from __future__ import annotations
@@ -29,12 +31,13 @@ LOGGER = logging.getLogger("recognizer.menu.face.password")
 PASSWORD_LOGIN_WINDOW_TITLE = "Iniciar sesion con clave"
 PASSWORD_LOGIN_HEADER_TITLE = "ENTRAR CON CLAVE"
 PASSWORD_LOGIN_HEADER_SUBTITLE = "respaldo si la camara o el rostro fallan"
-PASSWORD_LOGIN_USER_LABEL = "Usuario"
+PASSWORD_LOGIN_USER_LABEL = "ID o DNI"
 PASSWORD_LOGIN_PASSWORD_LABEL = "Clave"
 PASSWORD_LOGIN_TEXT = "Ingresar"
 PASSWORD_LOGIN_BACK_TEXT = "Volver"
 PASSWORD_LOGIN_FOOTER_HINT = "Enter: ingresar · ESC: volver"
-PASSWORD_LOGIN_EMPTY_MESSAGE = "Escribe tu usuario y tu clave."
+PASSWORD_LOGIN_EMPTY_MESSAGE = "Escribe tu ID o DNI y tu clave."
+PASSWORD_LOGIN_FAILED_MESSAGE = "Usuario o clave incorrectos. Intenta de nuevo."
 PASSWORD_LOGIN_START_LOG = "Iniciando sesion con clave... (ESC/q para volver)"
 PASSWORD_LOGIN_READ_ERROR = "No se pudo leer las credenciales (%s)."
 PASSWORD_LOGIN_FOCUS_ERROR = "Sin foco inicial del usuario (%s)."
@@ -159,6 +162,23 @@ def run_password_login(
     ).pack(fill=menu_gui.FILL_X)
     password_entry = tkinter.Entry(body, show=menu_gui.PASSWORD_SHOW)
     password_entry.pack(fill=menu_gui.FILL_X, pady=(menu_gui.BORDER_NONE, theme.space_2))
+    error_label = tkinter.Label(
+        body,
+        text="",
+        font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
+        fg=theme.danger,
+        bg=theme.surface,
+        anchor=menu_gui.ANCHOR_WEST,
+    )
+    error_label.pack(fill=menu_gui.FILL_X, pady=(theme.space_1, menu_gui.BORDER_NONE))
+
+    def _fail(message: str) -> None:
+        """Muestra el error en el dialogo (rojo) y lo registra."""
+        logger.error("%s", message)
+        try:
+            error_label.configure(text=message)
+        except Exception as exc:  # el fake puede no soportar `text`
+            logger.debug("Sin etiqueta de error en login por clave (%s).", exc)
 
     def do_login() -> None:
         try:
@@ -168,7 +188,7 @@ def run_password_login(
             logger.warning(PASSWORD_LOGIN_READ_ERROR, exc)
             return
         if not user or not password:
-            logger.error(PASSWORD_LOGIN_EMPTY_MESSAGE)
+            _fail(PASSWORD_LOGIN_EMPTY_MESSAGE)
             return
         answers = {
             FACE_LOGIN_USER_PROMPT: user,
@@ -180,11 +200,11 @@ def run_password_login(
 
         runner = password_runner if password_runner is not None else _default_password_runner()
         logger.info(PASSWORD_LOGIN_START_LOG)
-        window.withdraw()
-        try:
-            runner(replace(request), reader=queue_reader)
-        finally:
-            window.deiconify()
+        # Sin camara el runner es instantaneo: no se oculta la ventana. Si
+        # falla, el dialogo sigue abierto con el error para reintentar.
+        if runner(replace(request), reader=queue_reader) != 0:
+            _fail(PASSWORD_LOGIN_FAILED_MESSAGE)
+            return
         window.destroy()
 
     def close() -> None:
@@ -218,6 +238,9 @@ def run_password_login(
     back_button.bind(menu_gui.EVENT_SPACE, _consume(close))
 
     window.protocol(menu_gui.EVENT_CLOSE_WINDOW, close)
+    # Enter en cualquier campo equivale a Ingresar (los botones consumen su
+    # propio Return con `break`, asi que no hay doble disparo).
+    window.bind(menu_gui.EVENT_RETURN, _consume(do_login))
     window.bind(menu_gui.EVENT_ESCAPE, lambda _event: close())
     window.bind(menu_gui.EVENT_KEY_Q, lambda _event: close())
     window.bind(menu_gui.EVENT_KEY_Q_UPPER, lambda _event: close())

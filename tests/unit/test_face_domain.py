@@ -26,6 +26,8 @@ from recognizer.core.domain.face import (
     l2_normalize,
     mean_embedding,
     next_face_id,
+    normalize_national_id,
+    validate_national_id,
 )
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import ConfigError
@@ -222,6 +224,40 @@ def test_enrollment_builder_build_keeps_password_hash() -> None:
     face = builder.build("F-0001", "Ada", password_hash=encoded)
 
     assert face.password_hash == encoded
+
+
+def test_enrolled_face_default_national_id_is_empty() -> None:
+    assert _enrolled().national_id == ""
+
+
+def test_enrollment_builder_build_keeps_national_id() -> None:
+    builder = EnrollmentBuilder(samples_required=1)
+    builder.add(_observation())
+
+    face = builder.build("F-0001", "Ada", national_id="12345678")
+
+    assert face.national_id == "12345678"
+
+
+def test_normalize_national_id_strips_dots_and_spaces() -> None:
+    assert normalize_national_id("12.345.678") == "12345678"
+    assert normalize_national_id("  1234567  ") == "1234567"
+
+
+def test_validate_national_id_accepts_seven_or_eight_digits() -> None:
+    assert validate_national_id("12.345.678") == "12345678"
+    assert validate_national_id("1234567") == "1234567"
+
+
+def test_validate_national_id_rejects_invalid() -> None:
+    with pytest.raises(ValueError, match="vacio"):
+        validate_national_id("   ")
+    with pytest.raises(ValueError, match="digitos"):
+        validate_national_id("123456")
+    with pytest.raises(ValueError, match="digitos"):
+        validate_national_id("123456789")
+    with pytest.raises(ValueError, match="digitos"):
+        validate_national_id("12A45678")
 
 
 def test_enrollment_builder_current_step_cycles_prompts() -> None:

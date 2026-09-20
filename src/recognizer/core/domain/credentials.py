@@ -21,7 +21,7 @@ from recognizer.core.constants import (
     PASSWORD_HASH_ITERATIONS,
     PASSWORD_SALT_BYTES,
 )
-from recognizer.core.domain.face import EnrolledFace
+from recognizer.core.domain.face import EnrolledFace, normalize_national_id
 from recognizer.core.errors import ConfigError
 
 _HASH_SEPARATOR = "$"
@@ -104,28 +104,36 @@ def verify_password(password: str, encoded: str) -> bool:
     return hmac.compare_digest(digest, expected)
 
 
-def authenticate(
-    faces: Iterable[EnrolledFace], *, name_or_id: str, password: str
-) -> EnrolledFace | None:
-    """Busca por nombre o ID y verifica la clave; ``None`` si no coincide.
+def authenticate(faces: Iterable[EnrolledFace], *, user: str, password: str) -> EnrolledFace | None:
+    """Busca por ID de rostro o DNI y verifica la clave; ``None`` si no coincide.
 
-    La busqueda por nombre es case-insensitive; si hay homonimos se prueba cada
-    uno hasta que la clave valide. Un rostro sin clave no puede autenticarse.
+    El nombre ya no autentica (puede haber homonimos): solo ``face_id``
+    (``F-0001``, case-insensitive) o DNI normalizado (se aceptan puntos y
+    espacios al ingresarlo). Un rostro sin clave no puede autenticarse.
     """
-    query = name_or_id.strip().casefold()
-    if not query or not password:
+    raw = (user or "").strip()
+    if not raw or not password:
         return None
+    query_id = raw.casefold()
+    query_dni = normalize_national_id(raw)
     matched = False
     for face in faces:
         if not face.password_hash:
             continue
-        if face.face_id.casefold() != query and face.name.casefold() != query:
+        by_id = face.face_id.casefold() == query_id
+        by_dni = (
+            bool(face.national_id)
+            and bool(query_dni)
+            and query_dni.isdigit()
+            and face.national_id == query_dni
+        )
+        if not (by_id or by_dni):
             continue
         matched = True
         if verify_password(password, face.password_hash):
             return face
     if not matched:
         # Usuario inexistente: se verifica contra un hash dummy para que el
-        # tiempo no delate si el nombre/ID esta enrolado.
+        # tiempo no delate si el ID/DNI esta enrolado.
         verify_password(password, _DUMMY_HASH)
     return None

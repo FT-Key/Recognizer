@@ -14,6 +14,7 @@ from recognizer.cli import face_enroll_gui, menu_gui
 from recognizer.cli.face_enroll_gui import run_enroll_form
 from recognizer.core.constants import (
     FACE_ENROLL_NAME_PROMPT,
+    FACE_ENROLL_NATIONAL_ID_PROMPT,
     FACE_ENROLL_PASSWORD_CONFIRM_PROMPT,
     FACE_ENROLL_PASSWORD_PROMPT,
     FACE_ENROLL_ROLE_PROMPT,
@@ -278,7 +279,7 @@ def test_viewer_without_permission_shows_notice(monkeypatch: pytest.MonkeyPatch)
     assert face_enroll_gui.ENROLL_NO_PERMISSION_TEXT in _labels()
 
 
-def test_enroll_calls_runner_with_name_and_role(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_enroll_calls_runner_with_form_values(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_fakes(monkeypatch)
     seen: list[list[str]] = []
 
@@ -289,6 +290,7 @@ def test_enroll_calls_runner_with_name_and_role(monkeypatch: pytest.MonkeyPatch)
             [
                 reader(FACE_ENROLL_NAME_PROMPT),
                 reader(FACE_ENROLL_ROLE_PROMPT),
+                reader(FACE_ENROLL_NATIONAL_ID_PROMPT),
                 reader(FACE_ENROLL_PASSWORD_PROMPT),
                 reader(FACE_ENROLL_PASSWORD_CONFIRM_PROMPT),
             ]
@@ -298,15 +300,105 @@ def test_enroll_calls_runner_with_name_and_role(monkeypatch: pytest.MonkeyPatch)
     _run(cast("IdentityProvider", FakeProvider(Role.ADMIN)), enroll_runner=fake_enroll)
     FakeEntry.instances[0].set_text("Ada")
     FakeStringVar.instances[0].set("operator")
-    FakeEntry.instances[1].set_text("clave1")
+    FakeEntry.instances[1].set_text("12.345.678")
     FakeEntry.instances[2].set_text("clave1")
+    FakeEntry.instances[3].set_text("clave1")
     _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
 
-    assert seen == [["Ada", "operator", "clave1", "clave1"]]
+    assert seen == [["Ada", "operator", "12345678", "clave1", "clave1"]]
     window = FakeToplevel.instances[0]
     assert window.withdraw_calls == 1
     assert window.deiconify_calls == 1
     assert window.destroy_calls == 1
+
+
+def _error_texts() -> list[str]:
+    return [label.text for label in FakeLabel.instances]
+
+
+def test_empty_dni_shows_error_and_does_not_call_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fakes(monkeypatch)
+    calls: list[AppRunRequest] = []
+
+    def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
+        del reader
+        calls.append(request)
+        return 0
+
+    _run(cast("IdentityProvider", FakeProvider(Role.ADMIN)), enroll_runner=fake_enroll)
+    FakeEntry.instances[0].set_text("Ada")
+    FakeEntry.instances[2].set_text("clave1")
+    FakeEntry.instances[3].set_text("clave1")
+    _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
+
+    assert calls == []
+    assert FakeToplevel.instances[0].destroy_calls == 0
+    assert face_enroll_gui.ENROLL_EMPTY_NATIONAL_ID_MESSAGE in _error_texts()
+
+
+def test_invalid_dni_shows_error_and_does_not_call_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_fakes(monkeypatch)
+    calls: list[AppRunRequest] = []
+
+    def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
+        del reader
+        calls.append(request)
+        return 0
+
+    _run(cast("IdentityProvider", FakeProvider(Role.ADMIN)), enroll_runner=fake_enroll)
+    FakeEntry.instances[0].set_text("Ada")
+    FakeEntry.instances[1].set_text("ABC")
+    FakeEntry.instances[2].set_text("clave1")
+    FakeEntry.instances[3].set_text("clave1")
+    _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
+
+    assert calls == []
+    assert FakeToplevel.instances[0].destroy_calls == 0
+    assert any("DNI" in text for text in _error_texts())
+
+
+def test_duplicate_dni_shows_error_and_does_not_call_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from recognizer.adapters.file_face_repository import FileFaceRepository
+    from recognizer.adapters.file_identity_provider import FileIdentityProvider
+    from recognizer.core.domain.face import EnrolledFace
+
+    _install_fakes(monkeypatch)
+    store = tmp_path / "faces"
+    admin = EnrolledFace(
+        face_id="F-0001",
+        name="Ada",
+        embedding=(1.0, 0.0),
+        samples=5,
+        created_at="2026-09-19T00:00:00+00:00",
+        role=Role.ADMIN,
+        national_id="12345678",
+    )
+    FileFaceRepository(store).save(admin)
+    provider = FileIdentityProvider(store, FileFaceRepository(store))
+    provider.write_session(admin)
+    calls: list[AppRunRequest] = []
+
+    def fake_enroll(request: AppRunRequest, *, reader: Callable[[str], str] | None = None) -> int:
+        del reader
+        calls.append(request)
+        return 0
+
+    _run(cast("IdentityProvider", provider), enroll_runner=fake_enroll)
+    FakeEntry.instances[0].set_text("Bo")
+    FakeEntry.instances[1].set_text("12345678")
+    FakeEntry.instances[2].set_text("clave1")
+    FakeEntry.instances[3].set_text("clave1")
+    _press(_button_with_text(face_enroll_gui.ENROLL_TEXT).command)
+
+    assert calls == []
+    assert FakeToplevel.instances[0].destroy_calls == 0
+    assert face_enroll_gui.ENROLL_DUPLICATE_NATIONAL_ID_MESSAGE in _error_texts()
 
 
 def test_empty_name_does_not_call_runner(monkeypatch: pytest.MonkeyPatch) -> None:

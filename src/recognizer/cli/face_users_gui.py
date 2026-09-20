@@ -25,7 +25,7 @@ from recognizer.cli import menu_gui
 from recognizer.core.constants import DEFAULT_MIN_PASSWORD_LENGTH
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.credentials import hash_password
-from recognizer.core.domain.face import EnrolledFace
+from recognizer.core.domain.face import EnrolledFace, validate_national_id
 from recognizer.core.domain.identity import Role
 from recognizer.core.ports.face_repository import FaceRepository
 from recognizer.core.ports.identity_provider import IdentityProvider
@@ -43,7 +43,8 @@ USERS_DETAIL_TEXT = "Ver detalle"
 USERS_DETAIL_TITLE = "Detalle del rostro"
 USERS_MODAL_NO_PHOTO = "sin foto de enrolamiento"
 USERS_MODAL_INFO_TEMPLATE = (
-    "ID: {face_id}\nNombre: {name}\nRol: {role}\nMuestras: {samples}\nFecha: {created_at}"
+    "ID: {face_id}\nNombre: {name}\nDNI: {national_id}\nRol: {role}\n"
+    "Muestras: {samples}\nFecha: {created_at}"
 )
 USERS_EDIT_TEXT = "Editar"
 USERS_REENROLL_TEXT = "Re-enrolar"
@@ -52,6 +53,7 @@ USERS_BACK_TEXT = "Volver"
 USERS_SAVE_TEXT = "Guardar"
 USERS_CANCEL_TEXT = "Cancelar"
 USERS_NAME_LABEL = "Nombre"
+USERS_NATIONAL_ID_LABEL = "DNI"
 USERS_ROLE_LABEL = "Rol"
 USERS_NEW_PASSWORD_LABEL = "Nueva clave"
 USERS_CONFIRM_PASSWORD_LABEL = "Confirmar clave"
@@ -60,15 +62,19 @@ USERS_DELETE_TITLE = "Eliminar rostro"
 USERS_FOOTER_HINT = "Selecciona una fila · ESC: volver"
 USERS_NO_SELECTION = "Selecciona un rostro primero."
 USERS_EMPTY_NAME = "El nombre no puede quedar vacio."
-USERS_PASSWORD_MISMATCH = "Las claves no coinciden; se conserva la actual."
+USERS_EMPTY_NATIONAL_ID = "El DNI no puede quedar vacio."
+USERS_INVALID_NATIONAL_ID_TEMPLATE = "DNI inválido: {reason}"
+USERS_DUPLICATE_NATIONAL_ID = "Ese DNI ya lo usa otro rostro."
+USERS_PASSWORD_MISMATCH = "Las claves no coinciden; revisa la confirmación."
 USERS_PASSWORD_SHORT_TEMPLATE = "La clave requiere al menos {min_length} caracteres."
 USERS_PASSWORD_READ_ERROR = "No se pudo leer la clave (%s)."
+USERS_FORM_READ_ERROR = "No se pudo leer el formulario (%s)."
 USERS_CONFIRM_DELETE = "¿Eliminar el rostro {name} ({face_id})?"
 USERS_ADMIN_ONLY_TEMPLATE = "Panel de usuarios: se requiere rol admin (actual: {role})."
 USERS_NO_STORE = "Sin almacen de rostros; panel de usuarios cancelado."
-USERS_COLUMNS = ("id", "name", "role", "samples", "created", "password")
-USERS_COLUMN_HEADINGS = ("ID", "Nombre", "Rol", "Muestras", "Fecha", "Clave")
-USERS_COLUMN_WIDTHS = (90, 200, 100, 90, 210, 70)
+USERS_COLUMNS = ("id", "name", "dni", "role", "samples", "created", "password")
+USERS_COLUMN_HEADINGS = ("ID", "Nombre", "DNI", "Rol", "Muestras", "Fecha", "Clave")
+USERS_COLUMN_WIDTHS = (90, 170, 100, 90, 70, 180, 60)
 USERS_PASSWORD_YES = "si"
 USERS_PASSWORD_NO = "-"
 USERS_ROLE_CHOICES = (Role.ADMIN, Role.OPERATOR, Role.VIEWER)
@@ -227,6 +233,7 @@ def run_users_panel(
                 values=(
                     face.face_id,
                     face.name,
+                    face.national_id,
                     face.role.value,
                     str(face.samples),
                     face.created_at,
@@ -266,6 +273,22 @@ def run_users_panel(
             name_entry.insert(0, face.name)
         except Exception as exc:  # fakes sin `insert`
             logger.debug("No se pudo precargar el nombre (%s).", exc)
+        tkinter.Label(
+            dialog,
+            text=USERS_NATIONAL_ID_LABEL,
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.text,
+            bg=theme.surface,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(
+            fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_1, menu_gui.BORDER_NONE)
+        )
+        national_id_entry = tkinter.Entry(dialog)
+        national_id_entry.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
+        try:
+            national_id_entry.insert(0, face.national_id)
+        except Exception as exc:  # fakes sin `insert`
+            logger.debug("No se pudo precargar el DNI (%s).", exc)
         tkinter.Label(
             dialog,
             text=USERS_ROLE_LABEL,
@@ -319,29 +342,76 @@ def run_users_panel(
         )
         confirm_entry = tkinter.Entry(dialog, show=menu_gui.PASSWORD_SHOW)
         confirm_entry.pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_1)
+        edit_error_label = tkinter.Label(
+            dialog,
+            text="",
+            font=(body_family, theme.size_body_small, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.danger,
+            bg=theme.surface,
+            anchor=menu_gui.ANCHOR_WEST,
+        )
+        edit_error_label.pack(
+            fill=menu_gui.FILL_X, padx=theme.pad_body, pady=(theme.space_1, menu_gui.BORDER_NONE)
+        )
+
+        def _fail(message: str) -> None:
+            """Muestra el error en el dialogo (rojo) y lo registra."""
+            logger.warning("%s", message)
+            try:
+                edit_error_label.configure(text=message)
+            except Exception as exc:  # el fake puede no soportar `text`
+                logger.debug("Sin etiqueta de error en edicion (%s).", exc)
 
         def _resolve_password() -> str | None:
             """Hash de la clave nueva, el actual (vacio = conservar) o ``None`` si es invalida.
 
             Devuelve ``None`` si se escribio una clave nueva que no cumple la
             longitud minima o no coincide con la confirmacion: el guardado se
-            aborta en vez de conservar la clave anterior en silencio.
+            aborta mostrando el motivo en el dialogo.
             """
             try:
                 password = password_entry.get()
                 confirm = confirm_entry.get()
             except Exception as exc:
-                logger.warning(USERS_PASSWORD_READ_ERROR, exc)
+                _fail(USERS_PASSWORD_READ_ERROR % exc)
                 return None
             if not password and not confirm:
                 return face.password_hash
             if len(password) < min_password_length:
-                logger.warning(USERS_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
+                _fail(USERS_PASSWORD_SHORT_TEMPLATE.format(min_length=min_password_length))
                 return None
             if password != confirm:
-                logger.warning(USERS_PASSWORD_MISMATCH)
+                _fail(USERS_PASSWORD_MISMATCH)
                 return None
             return hash_password(password)
+
+        def _resolve_national_id() -> str | None:
+            """DNI validado y unico (excluyendo el propio rostro) o ``None``."""
+            try:
+                raw_dni = national_id_entry.get()
+            except Exception as exc:
+                _fail(USERS_FORM_READ_ERROR % exc)
+                return None
+            if not raw_dni.strip():
+                _fail(USERS_EMPTY_NATIONAL_ID)
+                return None
+            try:
+                national_id = validate_national_id(raw_dni)
+            except ValueError as exc:
+                _fail(USERS_INVALID_NATIONAL_ID_TEMPLATE.format(reason=exc))
+                return None
+            try:
+                known = repo.list_all()
+            except Exception as exc:
+                _fail(USERS_FORM_READ_ERROR % exc)
+                return None
+            if any(
+                other.national_id == national_id and other.face_id != face.face_id
+                for other in known
+            ):
+                _fail(USERS_DUPLICATE_NATIONAL_ID)
+                return None
+            return national_id
 
         def save() -> None:
             try:
@@ -350,7 +420,10 @@ def run_users_panel(
                 logger.warning(USERS_NAME_READ_ERROR, exc)
                 return
             if not new_name:
-                logger.warning(USERS_EMPTY_NAME)
+                _fail(USERS_EMPTY_NAME)
+                return
+            new_national_id = _resolve_national_id()
+            if new_national_id is None:
                 return
             try:
                 new_role = Role(role_var.get().strip().lower())
@@ -364,6 +437,7 @@ def run_users_panel(
                 replace(
                     face,
                     name=new_name,
+                    national_id=new_national_id,
                     role=new_role,
                     password_hash=new_password_hash,
                 )
@@ -422,6 +496,7 @@ def run_users_panel(
             text=USERS_MODAL_INFO_TEMPLATE.format(
                 face_id=face.face_id,
                 name=face.name,
+                national_id=face.national_id or "-",
                 role=face.role.value,
                 samples=face.samples,
                 created_at=face.created_at,

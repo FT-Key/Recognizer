@@ -24,6 +24,7 @@ def _face(
     role: Role = Role.OPERATOR,
     preview: str = "",
     password_hash: str = "",
+    national_id: str = "",
 ) -> EnrolledFace:
     return EnrolledFace(
         face_id=face_id,
@@ -34,6 +35,7 @@ def _face(
         role=role,
         preview=preview,
         password_hash=password_hash,
+        national_id=national_id,
     )
 
 
@@ -227,6 +229,17 @@ def test_legacy_face_without_password_reads_empty(tmp_path: Path) -> None:
 
     assert found is not None
     assert found.password_hash == ""
+    assert found.national_id == ""
+
+
+def test_national_id_roundtrip_persists_field(tmp_path: Path) -> None:
+    store = tmp_path / "faces"
+    FileFaceRepository(store).save(_face(national_id="12345678"))
+
+    found = FileFaceRepository(store).find_by_id("F-0001")
+
+    assert found is not None
+    assert found.national_id == "12345678"
 
 
 def test_update_changes_name_role_and_preview(tmp_path: Path) -> None:
