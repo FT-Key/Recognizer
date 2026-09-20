@@ -46,7 +46,11 @@ from recognizer.core.constants import (
     FACE_WORKER_JOIN_TIMEOUT_SECONDS,
     FACE_WORKER_WAIT_TIMEOUT_SECONDS,
 )
-from recognizer.core.domain.access import AccessEvent, AccessMethod
+from recognizer.core.domain.access import (
+    AccessEvent,
+    AccessFailureReason,
+    AccessMethod,
+)
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.credentials import authenticate, hash_password, validate_password
 from recognizer.core.domain.face import (
@@ -454,7 +458,7 @@ def run_face_enroll(
             if resolved_role is None:
                 return 1
             role = resolved_role
-            target_id = repository.next_id()
+            target_id = repository.new_id()
         national_id = _resolve_enroll_national_id(existing=existing, known=known, reader=reader)
         if national_id is None:
             return 1
@@ -794,8 +798,13 @@ def _append_access_event(
     *,
     method: AccessMethod = AccessMethod.FACE,
     success: bool = True,
+    attempted: str = "",
 ) -> None:
-    """Registra el login en el historial de accesos; un fallo no corta la app."""
+    """Registra el login en el historial de accesos; un fallo no corta la app.
+
+    ``attempted`` es el identificador tipeado (solo login con clave, nunca la
+    clave); en facial queda vacio porque no hay entrada de texto.
+    """
     event = AccessEvent(
         face_id=identity.face_id,
         name=identity.name,
@@ -804,6 +813,7 @@ def _append_access_event(
         image="",
         method=method,
         success=success,
+        attempted=attempted,
     )
     try:
         access_log.append(event=event, image=image)
@@ -818,13 +828,15 @@ def _append_failure_event(
 ) -> None:
     """Registra un intento fallido con clave (auditoria); no cambia el resultado.
 
-    Si el usuario (ID o DNI) coincide con un rostro se guarda su identidad
-    real; si no existe, se guarda el texto ingresado con rol viewer como
-    marcador de "desconocido" (nunca la clave). Un fallo de escritura solo se
-    avisa.
+    Guarda qué se ingresó (``attempted``) y por qué falló: si el ID/DNI
+    coincide con un rostro se guarda su identidad real con motivo "clave
+    incorrecta"; si no existe, se guarda el texto ingresado con rol viewer y
+    motivo "ID/DNI desconocido" (nunca la clave). Un fallo de escritura solo
+    se avisa.
     """
     query = user.strip()
     face_id, name, role = query, query, Role.VIEWER
+    reason = AccessFailureReason.UNKNOWN_USER
     query_id = query.casefold()
     query_dni = normalize_national_id(query)
     for face in faces:
@@ -837,6 +849,7 @@ def _append_failure_event(
         )
         if by_id or by_dni:
             face_id, name, role = face.face_id, face.name, face.role
+            reason = AccessFailureReason.WRONG_PASSWORD
             break
     event = AccessEvent(
         face_id=face_id,
@@ -845,6 +858,8 @@ def _append_failure_event(
         timestamp=datetime.now(UTC).isoformat(),
         method=AccessMethod.PASSWORD,
         success=False,
+        attempted=query,
+        reason=reason,
     )
     try:
         access_log.append(event=event, image=None)
@@ -887,7 +902,9 @@ def run_face_login_password(
         session_provider = _identity_provider(face_config, repository)
         _write_login_session(session_provider, face)
         access_log = FileAccessLogRepository(face_config.access_dir)
-        _append_access_event(access_log, face, None, method=AccessMethod.PASSWORD)
+        _append_access_event(
+            access_log, face, None, method=AccessMethod.PASSWORD, attempted=user.strip()
+        )
     except RecognizerError as exc:
         LOGGER.error("La app fallo: %s", exc)
         return 1

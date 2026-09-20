@@ -25,7 +25,7 @@ from recognizer.core.domain.face import (
     face_width_ratio,
     l2_normalize,
     mean_embedding,
-    next_face_id,
+    new_face_id,
     normalize_national_id,
     validate_national_id,
 )
@@ -145,16 +145,30 @@ def test_assess_capture_good_when_centered_and_sharp() -> None:
     assert assess_capture(_centered_box(), GOOD_SHARPNESS) is CaptureGuidance.GOOD
 
 
-def test_next_face_id_empty_starts_at_one() -> None:
-    assert next_face_id([]) == "F-0001"
+def test_new_face_id_has_expected_shape() -> None:
+    face_id = new_face_id([], choice=lambda alphabet: alphabet[0])
+
+    assert face_id == "F-AAAA"
+    assert face_id.startswith("F-")
+    assert len(face_id) == 6
 
 
-def test_next_face_id_sequential_after_existing() -> None:
-    assert next_face_id(["F-0001", "F-0002"]) == "F-0003"
+def test_new_face_id_avoids_collisions() -> None:
+    letters = iter(["A", "A", "A", "A", "B", "B", "B", "B"])
+    face_id = new_face_id(["F-AAAA"], choice=lambda _alphabet: next(letters))
+
+    assert face_id == "F-BBBB"
 
 
-def test_next_face_id_accepts_mapping_and_ignores_foreign() -> None:
-    assert next_face_id({"F-0009": object(), "X-0042": object()}) == "F-0010"
+def test_new_face_id_accepts_mapping() -> None:
+    face_id = new_face_id({"F-AAAA": object()}, choice=lambda alphabet: alphabet[1])
+
+    assert face_id == "F-BBBB"
+
+
+def test_new_face_id_exhausted_raises() -> None:
+    with pytest.raises(ValueError, match="libre"):
+        new_face_id(["F-AAAA"], choice=lambda _alphabet: "A")
 
 
 def test_enrollment_builder_rejects_bad_samples_required() -> None:

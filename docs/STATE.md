@@ -1,6 +1,6 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 15d-login-dni-ux completada y mergeada; siguiente: 13 (EPP) o 15e (identidad distribuida)
+- **Fase actual:** etapa 15d-intento-id completada y mergeada; siguiente: 13 (EPP) o 15e (identidad distribuida)
 - **Rama:** `dev`
 - **Actualizado:** 2026-09-20
 
@@ -21,6 +21,7 @@
 - Gate 15d verde: lint OK, mypy strict 206, pytest **1250 passed** (95.57%), check-arch 3/3, smoke 17.0 FPS. Reviewer: apta (hallazgos menores aplicados). Merge `0d5ee24` en `dev` (push OK).
 - Etapa 15d-accesos-clave: `AccessEvent` con `method` (`facial`/`clave`) y `success` (legado → facial exitoso); el login con clave exitosa y los intentos fallidos quedan registrados; tabla con Método/Resultado en verde/rojo y detalle con banner ("Inicio con clave exitoso/fallido", "Inicio facial exitoso") y nota de falta de foto con clave.
 - Etapa 15d-login-dni-ux: login solo por ID (`F-0001`) o DNI (el nombre ya no autentica; homónimos); `EnrolledFace.national_id` (7-8 dígitos, único, legado `""`); Enter envía el diálogo de clave y el fallo muestra error rojo con reintento; enrolamiento y CRUD validan con mensajes visibles. Gate verde (1281 passed, 95.63%). Reviewer: apta.
+- Etapa 15d-intento-id: el acceso guarda lo ingresado (`attempted`, nunca la clave) y el motivo (`ID/DNI desconocido` vs `clave incorrecta`); tabla y detalle lo muestran en rojo; IDs nuevos aleatorios `F-A3F9` no secuenciales (legado válido). Gate verde (1284 passed, 95.58%). Reviewer: apta.
 
 ## Siguiente (etapa 13 — EPP, o 15e — identidad distribuida)
 - 15e: API FastAPI + Postgres (online-only, enrolamiento en edge). Plan completo en `docs/SERVER-PLAN.md` (`/ready` protegido + monitor 5 min, Render + Neon $0). 13 EPP y 14 inventario requieren entrenamiento. Roadmap en `docs/WORKFLOW.md` (skill `new-app`).

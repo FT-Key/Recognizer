@@ -7,7 +7,7 @@ import pytest
 
 from recognizer.adapters.file_access_log_repository import FileAccessLogRepository
 from recognizer.core.constants import ACCESS_IMAGES_DIRNAME, ACCESS_LOG_FILENAME
-from recognizer.core.domain.access import AccessEvent, AccessMethod
+from recognizer.core.domain.access import AccessEvent, AccessFailureReason, AccessMethod
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import AccessLogError
 
@@ -112,6 +112,26 @@ def test_password_failure_round_trip(tmp_path: Path) -> None:
     assert repo.list_all() == (stored,)
 
 
+def test_attempted_and_reason_round_trip(tmp_path: Path) -> None:
+    repo = FileAccessLogRepository(tmp_path / "access")
+    event = AccessEvent(
+        face_id="F-0001",
+        name="Ada",
+        role=Role.OPERATOR,
+        timestamp=TS_OLD,
+        method=AccessMethod.PASSWORD,
+        success=False,
+        attempted="12.345.678",
+        reason=AccessFailureReason.WRONG_PASSWORD,
+    )
+
+    stored = repo.append(event=event, image=None)
+
+    assert stored.attempted == "12.345.678"
+    assert stored.reason is AccessFailureReason.WRONG_PASSWORD
+    assert repo.list_all() == (stored,)
+
+
 def test_legacy_line_without_method_defaults_to_face_success(tmp_path: Path) -> None:
     repo = FileAccessLogRepository(tmp_path / "access")
     payload = {
@@ -127,6 +147,29 @@ def test_legacy_line_without_method_defaults_to_face_success(tmp_path: Path) -> 
 
     assert events[0].method is AccessMethod.FACE
     assert events[0].success is True
+    assert events[0].attempted == ""
+    assert events[0].reason is None
+
+
+def test_unknown_reason_is_ignored(tmp_path: Path) -> None:
+    repo = FileAccessLogRepository(tmp_path / "access")
+    payload = {
+        "face_id": "F-0001",
+        "name": "Ada",
+        "role": "operator",
+        "timestamp": TS_OLD,
+        "image": "",
+        "method": "clave",
+        "success": False,
+        "attempted": "999",
+        "reason": "se fue la luz",
+    }
+    (repo.access_dir / ACCESS_LOG_FILENAME).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    events = repo.list_all()
+
+    assert events[0].reason is None
+    assert events[0].attempted == "999"
 
 
 def test_unknown_method_falls_back_to_face(tmp_path: Path) -> None:

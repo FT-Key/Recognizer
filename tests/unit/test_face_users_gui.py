@@ -290,7 +290,7 @@ class FakeFaceRepository:
         self.updated: list[EnrolledFace] = []
         self.deleted: list[str] = []
 
-    def next_id(self) -> str:
+    def new_id(self) -> str:
         return "F-9999"
 
     def save(self, face: EnrolledFace) -> None:

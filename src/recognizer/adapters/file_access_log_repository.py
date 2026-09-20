@@ -19,7 +19,7 @@ from recognizer.core.constants import (
     ACCESS_LOG_FILENAME,
     FACE_PREVIEW_SUFFIX,
 )
-from recognizer.core.domain.access import AccessEvent, AccessMethod
+from recognizer.core.domain.access import AccessEvent, AccessFailureReason, AccessMethod
 from recognizer.core.domain.identity import Role
 from recognizer.core.errors import AccessLogError
 from recognizer.core.ports.access_log import AccessLogRepository
@@ -33,6 +33,8 @@ ACCESS_TIMESTAMP_KEY = "timestamp"
 ACCESS_IMAGE_KEY = "image"
 ACCESS_METHOD_KEY = "method"
 ACCESS_SUCCESS_KEY = "success"
+ACCESS_ATTEMPTED_KEY = "attempted"
+ACCESS_REASON_KEY = "reason"
 
 _UNSAFE_FILENAME_CHARS = re.compile(r"[^A-Za-z0-9._-]")
 
@@ -52,6 +54,8 @@ def _event_to_payload(event: AccessEvent) -> dict[str, object]:
         ACCESS_IMAGE_KEY: event.image,
         ACCESS_METHOD_KEY: event.method.value,
         ACCESS_SUCCESS_KEY: event.success,
+        ACCESS_ATTEMPTED_KEY: event.attempted,
+        ACCESS_REASON_KEY: event.reason.value if event.reason is not None else "",
     }
 
 
@@ -91,6 +95,15 @@ def _parse_event(line: str) -> AccessEvent | None:
             LOGGER.warning("Medio desconocido %r en el registro; se usa facial.", method_raw)
     success_raw = raw.get(ACCESS_SUCCESS_KEY, True)
     success = success_raw if isinstance(success_raw, bool) else True
+    attempted_raw = raw.get(ACCESS_ATTEMPTED_KEY, "")
+    attempted = attempted_raw if isinstance(attempted_raw, str) else ""
+    reason: AccessFailureReason | None = None
+    reason_raw = raw.get(ACCESS_REASON_KEY, "")
+    if isinstance(reason_raw, str) and reason_raw:
+        try:
+            reason = AccessFailureReason(reason_raw)
+        except ValueError:
+            LOGGER.warning("Motivo desconocido %r en el registro; se ignora.", reason_raw)
     return AccessEvent(
         face_id=face_id,
         name=name,
@@ -99,6 +112,8 @@ def _parse_event(line: str) -> AccessEvent | None:
         image=image,
         method=method,
         success=success,
+        attempted=attempted,
+        reason=reason,
     )
 
 

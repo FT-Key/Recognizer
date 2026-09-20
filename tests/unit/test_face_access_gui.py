@@ -13,7 +13,11 @@ import pytest
 from recognizer.adapters.file_access_log_repository import FileAccessLogRepository
 from recognizer.cli import face_access_gui, menu_gui
 from recognizer.cli.face_access_gui import run_access_panel
-from recognizer.core.domain.access import AccessEvent, AccessMethod
+from recognizer.core.domain.access import (
+    AccessEvent,
+    AccessFailureReason,
+    AccessMethod,
+)
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.ports.access_log import AccessLogRepository
@@ -248,6 +252,8 @@ def _event(
     *,
     method: AccessMethod = AccessMethod.FACE,
     success: bool = True,
+    attempted: str = "",
+    reason: AccessFailureReason | None = None,
 ) -> AccessEvent:
     return AccessEvent(
         face_id=face_id,
@@ -257,6 +263,8 @@ def _event(
         image="",
         method=method,
         success=success,
+        attempted=attempted,
+        reason=reason,
     )
 
 
@@ -427,7 +435,15 @@ def test_rows_show_method_result_and_color_tags(monkeypatch: pytest.MonkeyPatch)
     repo = FakeAccessRepository(
         (
             _event("F-0001", "Ada", TS_OLD),
-            _event("F-0002", "Bo", TS_NEW, method=AccessMethod.PASSWORD, success=False),
+            _event(
+                "F-0002",
+                "Bo",
+                TS_NEW,
+                method=AccessMethod.PASSWORD,
+                success=False,
+                attempted="87654321",
+                reason=AccessFailureReason.UNKNOWN_USER,
+            ),
         )
     )
 
@@ -439,7 +455,7 @@ def test_rows_show_method_result_and_color_tags(monkeypatch: pytest.MonkeyPatch)
     assert tree.rows["0"][method_index] == AccessMethod.FACE.value
     assert tree.rows["0"][result_index] == face_access_gui.ACCESS_RESULT_OK_TEXT
     assert tree.rows["1"][method_index] == AccessMethod.PASSWORD.value
-    assert tree.rows["1"][result_index] == face_access_gui.ACCESS_RESULT_FAIL_TEXT
+    assert tree.rows["1"][result_index] == AccessFailureReason.UNKNOWN_USER.value
     assert tree.row_tags["0"] == (face_access_gui.ACCESS_TAG_OK,)
     assert tree.row_tags["1"] == (face_access_gui.ACCESS_TAG_FAIL,)
     assert tree.tag_styles[face_access_gui.ACCESS_TAG_OK]["foreground"] == (
@@ -459,7 +475,17 @@ def test_password_failure_modal_shows_red_status_and_no_photo_note(
 ) -> None:
     _install_fakes(monkeypatch)
     repo = FakeAccessRepository(
-        (_event("F-0002", "Bo", TS_NEW, method=AccessMethod.PASSWORD, success=False),)
+        (
+            _event(
+                "Nadie",
+                "Nadie",
+                TS_NEW,
+                method=AccessMethod.PASSWORD,
+                success=False,
+                attempted="99999999",
+                reason=AccessFailureReason.UNKNOWN_USER,
+            ),
+        )
     )
 
     _run(_identity("F-0001", Role.ADMIN), repo)
@@ -471,6 +497,8 @@ def test_password_failure_modal_shows_red_status_and_no_photo_note(
     assert face_access_gui.ACCESS_STATUS_PASSWORD_FAIL in texts
     assert face_access_gui.ACCESS_MODAL_NO_PHOTO_PASSWORD in texts
     assert face_access_gui.ACCESS_STATUS_PASSWORD_OK not in texts
+    assert any("99999999" in text for text in texts)
+    assert any(AccessFailureReason.UNKNOWN_USER.value in text for text in texts)
 
 
 def test_password_success_modal_explains_missing_photo(

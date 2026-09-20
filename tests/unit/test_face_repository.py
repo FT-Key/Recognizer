@@ -1,5 +1,6 @@
 """Tests del repositorio de rostros en disco (JSON), sin hardware."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -39,9 +40,9 @@ def _face(
     )
 
 
-def test_next_id_starts_at_one_on_empty_store(tmp_path: Path) -> None:
+def test_new_id_matches_pattern_on_empty_store(tmp_path: Path) -> None:
     repo = FileFaceRepository(tmp_path / "faces")
-    assert repo.next_id() == "F-0001"
+    assert re.match(r"^F-[A-Z0-9]{4}$", repo.new_id()) is not None
 
 
 def test_save_and_find_by_id_roundtrip(tmp_path: Path) -> None:
@@ -56,20 +57,26 @@ def test_find_by_id_missing_returns_none(tmp_path: Path) -> None:
     assert repo.find_by_id("F-9999") is None
 
 
-def test_next_id_advances_after_save(tmp_path: Path) -> None:
+def test_new_id_avoids_known_ids(tmp_path: Path) -> None:
     repo = FileFaceRepository(tmp_path / "faces")
     repo.save(_face("F-0001"))
-    assert repo.next_id() == "F-0002"
     repo.save(_face("F-0002", "Bo"))
-    assert repo.next_id() == "F-0003"
+
+    for _ in range(20):
+        fresh = repo.new_id()
+        assert re.match(r"^F-[A-Z0-9]{4}$", fresh) is not None
+        assert fresh not in {"F-0001", "F-0002"}
 
 
-def test_counter_persists_across_instances(tmp_path: Path) -> None:
+def test_new_id_roundtrip_after_save(tmp_path: Path) -> None:
     store = tmp_path / "faces"
-    FileFaceRepository(store).save(_face("F-0001"))
+    repo = FileFaceRepository(store)
+    fresh = repo.new_id()
+    repo.save(_face(fresh, "Bo"))
+
     reopened = FileFaceRepository(store)
-    assert reopened.next_id() == "F-0002"
-    assert reopened.find_by_id("F-0001") == _face("F-0001")
+    assert reopened.find_by_id(fresh) == _face(fresh, "Bo")
+    assert reopened.new_id() != fresh
 
 
 def test_list_all_returns_sorted_faces(tmp_path: Path) -> None:
@@ -111,7 +118,7 @@ def test_save_updates_existing_face(tmp_path: Path) -> None:
     )
     repo.save(updated)
     assert repo.find_by_id("F-0001") == updated
-    assert repo.next_id() == "F-0002"
+    assert repo.new_id() != "F-0001"
 
 
 def test_session_json_is_not_treated_as_face(tmp_path: Path) -> None:
@@ -121,7 +128,7 @@ def test_session_json_is_not_treated_as_face(tmp_path: Path) -> None:
     (store / "session.json").write_text('{"face_id": "F-0001"}', encoding="utf-8")
 
     assert [face.face_id for face in repo.list_all()] == ["F-0001"]
-    assert repo.next_id() == "F-0002"
+    assert repo.new_id() != "F-0001"
     assert repo.find_by_name("session") == ()
 
 
@@ -134,7 +141,7 @@ def test_legacy_index_with_non_face_ids_is_ignored(tmp_path: Path) -> None:
     )
 
     assert [face.face_id for face in repo.list_all()] == ["F-0001"]
-    assert repo.next_id() == "F-0002"
+    assert repo.new_id() != "F-0001"
 
 
 def test_save_preview_without_json_writes_image_only(tmp_path: Path) -> None:
@@ -253,7 +260,7 @@ def test_update_changes_name_role_and_preview(tmp_path: Path) -> None:
     assert found.name == "Ada Lovelace"
     assert found.role is Role.ADMIN
     assert found.preview == PREVIEW_NAME
-    assert repo.next_id() == "F-0002"
+    assert repo.new_id() != "F-0001"
 
 
 def test_delete_removes_json_and_preview(tmp_path: Path) -> None:
@@ -305,7 +312,7 @@ def test_corrupt_index_is_rebuilt(tmp_path: Path) -> None:
     (store / "index.json").write_text("no json", encoding="utf-8")
 
     assert repo.list_all() == ()
-    assert repo.next_id() == "F-0001"
+    assert re.match(r"^F-[A-Z0-9]{4}$", repo.new_id()) is not None
 
 
 def test_index_with_dict_entries_is_accepted(tmp_path: Path) -> None:
@@ -315,7 +322,6 @@ def test_index_with_dict_entries_is_accepted(tmp_path: Path) -> None:
         '{"counter": 1, "faces": [{"face_id": "F-0001"}]}', encoding="utf-8"
     )
 
-    assert repo.next_id() == "F-0002"
     assert repo.list_all() == ()
 
 

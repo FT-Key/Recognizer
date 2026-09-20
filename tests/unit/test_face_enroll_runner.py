@@ -8,6 +8,7 @@ el callback de inferencia una vez, de modo que se ejercita la logica real de
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import ClassVar
@@ -222,8 +223,10 @@ def test_enroll_with_password_persists_verifiable_hash(
     result = face_auth.run_face_enroll(REQUEST, reader=reader)
 
     assert result == 0
-    found = FileFaceRepository(store).find_by_id("F-0001")
-    assert found is not None
+    faces = FileFaceRepository(store).list_all()
+    assert len(faces) == 1
+    found = faces[0]
+    assert re.match(r"^F-[A-Z0-9]{4}$", found.face_id) is not None
     assert found.name == "Nuevo"
     assert found.national_id == "23456789"
     assert found.password_hash

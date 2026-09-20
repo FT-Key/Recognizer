@@ -7,7 +7,8 @@ Sin numpy ni infraestructura: los embeddings son tuplas de flotantes.
 """
 
 import math
-from collections.abc import Iterable, Mapping
+import secrets
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -21,9 +22,11 @@ from recognizer.core.constants import (
     DEFAULT_MAX_FACE_WIDTH_RATIO,
     DEFAULT_MIN_FACE_SHARPNESS,
     DEFAULT_MIN_FACE_WIDTH_RATIO,
+    FACE_ID_ALPHABET,
     FACE_ID_PREFIX,
     FACE_ID_WIDTH,
     FACE_MAX_COSINE_DISTANCE,
+    MAX_FACE_ID_ATTEMPTS,
     MIN_VECTOR_NORM,
     NATIONAL_ID_MAX_DIGITS,
     NATIONAL_ID_MIN_DIGITS,
@@ -263,17 +266,28 @@ def assess_capture(
     return CaptureGuidance.GOOD
 
 
-def next_face_id(existing: Mapping[str, object] | Iterable[str]) -> str:
-    """Siguiente identificador secuencial ``F-%04d`` tras el maximo existente."""
-    names: Iterable[str] = existing.keys() if isinstance(existing, Mapping) else existing
-    highest = 0
-    for name in names:
-        if not name.startswith(FACE_ID_PREFIX):
-            continue
-        suffix = name[len(FACE_ID_PREFIX) :]
-        if suffix.isdigit():
-            highest = max(highest, int(suffix))
-    return f"{FACE_ID_PREFIX}{highest + 1:0{FACE_ID_WIDTH}d}"
+def new_face_id(
+    existing: Mapping[str, object] | Iterable[str],
+    *,
+    choice: Callable[[Sequence[str]], str] = secrets.choice,
+) -> str:
+    """Identificador aleatorio libre (``F-`` + 4 alfanumericos).
+
+    No es secuencial a proposito: un ID predecible delata orden de alta y
+    quien es admin. ``choice`` se inyecta en tests (por defecto CSPRNG).
+    Los IDs viejos (``F-0001``) siguen validos; solo los nuevos son aleatorios.
+
+    Raises:
+        ValueError: si no se encontro un ID libre tras varios intentos.
+    """
+    known = set(existing.keys() if isinstance(existing, Mapping) else existing)
+    for _ in range(MAX_FACE_ID_ATTEMPTS):
+        suffix = "".join(choice(FACE_ID_ALPHABET) for _ in range(FACE_ID_WIDTH))
+        candidate = f"{FACE_ID_PREFIX}{suffix}"
+        if candidate not in known:
+            return candidate
+    msg = "No se pudo generar un ID facial libre."
+    raise ValueError(msg)
 
 
 class EnrollmentBuilder:

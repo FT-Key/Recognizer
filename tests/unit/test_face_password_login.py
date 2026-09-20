@@ -16,7 +16,11 @@ import pytest
 from recognizer.cli.apps import face_auth
 from recognizer.core.config import AppConfig, FaceAuthConfig
 from recognizer.core.constants import FACE_LOGIN_PASSWORD_PROMPT, FACE_LOGIN_USER_PROMPT
-from recognizer.core.domain.access import AccessEvent, AccessMethod
+from recognizer.core.domain.access import (
+    AccessEvent,
+    AccessFailureReason,
+    AccessMethod,
+)
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.credentials import hash_password
 from recognizer.core.domain.face import EnrolledFace, FaceEmbedding
@@ -118,6 +122,8 @@ def test_password_login_success_writes_session_and_access(
     assert event.name == "Ada"
     assert event.method is AccessMethod.PASSWORD
     assert event.success is True
+    assert event.attempted == "12.345.678"
+    assert event.reason is None
     assert image is None
 
 
@@ -182,6 +188,8 @@ def test_password_login_wrong_password_returns_one(
     assert event.name == "Ada"
     assert event.method is AccessMethod.PASSWORD
     assert event.success is False
+    assert event.attempted == "F-0001"
+    assert event.reason is AccessFailureReason.WRONG_PASSWORD
     assert image is None
 
 
@@ -208,6 +216,8 @@ def test_password_login_unknown_user_logs_failure_with_entered_text(
     assert event.role is Role.VIEWER
     assert event.method is AccessMethod.PASSWORD
     assert event.success is False
+    assert event.attempted == "Nadie"
+    assert event.reason is AccessFailureReason.UNKNOWN_USER
 
 
 def test_password_login_without_faces_returns_one(
