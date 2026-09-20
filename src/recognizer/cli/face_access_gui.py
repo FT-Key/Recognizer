@@ -16,7 +16,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from recognizer.cli import menu_gui
-from recognizer.core.domain.access import AccessEvent
+from recognizer.core.domain.access import AccessEvent, AccessMethod
 from recognizer.core.domain.app import AppRunRequest
 from recognizer.core.domain.identity import Identity, Role
 from recognizer.core.ports.access_log import AccessLogRepository
@@ -28,21 +28,44 @@ LOGGER = logging.getLogger("recognizer.menu.face.access")
 
 ACCESS_PANEL_TITLE = "Registro de accesos"
 ACCESS_HEADER_TITLE = "ACCESOS"
-ACCESS_HEADER_SUBTITLE = "logins faciales registrados"
-ACCESS_MY_HEADER_SUBTITLE = "tus logins faciales"
+ACCESS_HEADER_SUBTITLE = "logins faciales y con clave"
+ACCESS_MY_HEADER_SUBTITLE = "tus logins"
 ACCESS_TABLE_LABEL = "Historial"
 ACCESS_VIEW_TEXT = "Ver detalle"
 ACCESS_BACK_TEXT = "Volver"
 ACCESS_FOOTER_HINT = "Selecciona una fila · ESC: volver"
 ACCESS_NO_STORE = "Sin registro de accesos; panel cancelado."
 ACCESS_NO_SELECTION = "Selecciona una fila para ver el detalle."
-ACCESS_COLUMNS = ("timestamp", "name", "id", "role")
-ACCESS_COLUMN_HEADINGS = ("Fecha", "Nombre", "ID", "Rol")
-ACCESS_COLUMN_WIDTHS = (220, 200, 90, 100)
+ACCESS_COLUMNS = ("timestamp", "name", "id", "role", "method", "result")
+ACCESS_COLUMN_HEADINGS = ("Fecha", "Nombre", "ID", "Rol", "Método", "Resultado")
+ACCESS_COLUMN_WIDTHS = (210, 170, 90, 100, 90, 90)
+ACCESS_TAG_OK = "access_ok"
+ACCESS_TAG_FAIL = "access_fail"
+ACCESS_RESULT_OK_TEXT = "éxito"
+ACCESS_RESULT_FAIL_TEXT = "fallido"
 ACCESS_MODAL_TITLE = "Detalle del login"
 ACCESS_MODAL_NO_PHOTO = "sin foto disponible"
+ACCESS_MODAL_NO_PHOTO_PASSWORD = "sin foto: el acceso fue con clave, no con cámara"
 ACCESS_MODAL_BACK_TEXT = "Volver"
-ACCESS_MODAL_INFO_TEMPLATE = "Fecha: {timestamp}\nNombre: {name}\nID: {face_id}\nRol: {role}"
+ACCESS_MODAL_INFO_TEMPLATE = (
+    "Fecha: {timestamp}\nNombre: {name}\nID: {face_id}\nRol: {role}\n"
+    "Método: {method}\nResultado: {result}"
+)
+ACCESS_STATUS_FACE_OK = "Inicio facial exitoso"
+ACCESS_STATUS_PASSWORD_OK = "Inicio con clave exitoso"
+ACCESS_STATUS_PASSWORD_FAIL = "Inicio con clave fallido"
+
+
+def _result_text(success: bool) -> str:
+    """Texto de la columna Resultado y del detalle."""
+    return ACCESS_RESULT_OK_TEXT if success else ACCESS_RESULT_FAIL_TEXT
+
+
+def _status_text(access: AccessEvent) -> str:
+    """Banner del detalle: qué medio y resultado tuvo el intento."""
+    if access.method is AccessMethod.PASSWORD:
+        return ACCESS_STATUS_PASSWORD_OK if access.success else ACCESS_STATUS_PASSWORD_FAIL
+    return ACCESS_STATUS_FACE_OK
 
 
 def run_access_panel(
@@ -173,6 +196,12 @@ def run_access_panel(
         tree.column(key, width=width, anchor=menu_gui.ANCHOR_WEST)
     scrollbar = ttk.Scrollbar(table_frame, orient=menu_gui.ORIENT_VERTICAL, command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
+    # Éxito en verde, fallo en rojo: se distingue de un vistazo.
+    try:
+        tree.tag_configure(ACCESS_TAG_OK, foreground=theme.success)
+        tree.tag_configure(ACCESS_TAG_FAIL, foreground=theme.danger)
+    except Exception as exc:  # fakes o Tk sin display
+        logger.debug("Sin tag_configure en accesos (%s).", exc)
     scrollbar.pack(side=menu_gui.SIDE_RIGHT, fill=menu_gui.FILL_Y)
     tree.pack(side=menu_gui.SIDE_LEFT, fill=menu_gui.FILL_BOTH, expand=True)
 
@@ -186,7 +215,7 @@ def run_access_panel(
         return None
 
     def _open_photo_window(access: AccessEvent) -> None:
-        """Ventana modal con la foto del login y sus datos (bloquea la lista)."""
+        """Ventana modal con el estado, los datos y la foto del login (bloquea la lista)."""
         modal = tkinter.Toplevel(window)
         modal.title(ACCESS_MODAL_TITLE)
         modal.configure(bg=theme.surface)
@@ -197,6 +226,8 @@ def run_access_panel(
                 name=access.name,
                 face_id=access.face_id,
                 role=access.role.value,
+                method=access.method.value,
+                result=_result_text(access.success),
             ),
             font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
             fg=theme.text,
@@ -204,6 +235,14 @@ def run_access_panel(
             justify=menu_gui.JUSTIFY_LEFT,
             anchor=menu_gui.ANCHOR_WEST,
         ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body, pady=theme.space_3)
+        tkinter.Label(
+            modal,
+            text=_status_text(access),
+            font=(body_family, theme.size_body, menu_gui.FONT_WEIGHT_BOLD),
+            fg=theme.success if access.success else theme.danger,
+            bg=theme.surface,
+            anchor=menu_gui.ANCHOR_WEST,
+        ).pack(fill=menu_gui.FILL_X, padx=theme.pad_body)
         photo: tkinter.PhotoImage | None = None
         path = repo.image_path(access)
         if path is not None:
@@ -218,9 +257,14 @@ def run_access_panel(
                 padx=theme.pad_body, pady=theme.space_2
             )
         else:
+            no_photo_text = (
+                ACCESS_MODAL_NO_PHOTO_PASSWORD
+                if access.method is AccessMethod.PASSWORD
+                else ACCESS_MODAL_NO_PHOTO
+            )
             tkinter.Label(
                 modal,
-                text=ACCESS_MODAL_NO_PHOTO,
+                text=no_photo_text,
                 font=(body_family, theme.size_body_small),
                 fg=theme.text_muted,
                 bg=theme.surface,
@@ -253,7 +297,15 @@ def run_access_panel(
             "",
             "end",
             iid=str(index),
-            values=(access.timestamp, access.name, access.face_id, access.role.value),
+            values=(
+                access.timestamp,
+                access.name,
+                access.face_id,
+                access.role.value,
+                access.method.value,
+                _result_text(access.success),
+            ),
+            tags=(ACCESS_TAG_OK if access.success else ACCESS_TAG_FAIL,),
         )
 
     def close() -> None:
