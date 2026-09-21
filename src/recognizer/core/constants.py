@@ -143,14 +143,6 @@ VEHICLE_LABEL = "car"
 DEFAULT_VEHICLE_MODEL_PATH = "models/yolo26n.pt"
 DEFAULT_VEHICLE_CONFIDENCE = 0.5
 
-# Privacy blur / desenfoque de rostros (etapa 19): deteccion + blur en vivo.
-DEFAULT_PRIVACY_MODEL_PATH = "models/yolo26n.pt"
-DEFAULT_PRIVACY_CONFIDENCE = 0.5
-DEFAULT_PRIVACY_TARGET_LABELS = ("face", "car", "license plate")
-DEFAULT_PRIVACY_BLUR_STRENGTH = 51
-MIN_BLUR_STRENGTH = 3
-MAX_BLUR_STRENGTH = 99
-
 DEFAULT_BROWSER_DEBUGGING_PORT: int = 9222
 DEFAULT_CDP_CONNECT_TIMEOUT: float = 2.0
 DEFAULT_CDP_COMMAND_TIMEOUT: float = 3.0
@@ -197,6 +189,19 @@ FACE_ID_WIDTH = 4
 FACE_ID_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 MAX_FACE_ID_ATTEMPTS = 100
 FACE_MAX_COSINE_DISTANCE = 2.0
+
+# Privacy blur / desenfoque de privacidad (etapa 19): deteccion facial con
+# InsightFace (solo el modulo de deteccion: no calcula embeddings) y difuminado
+# gaussiano en vivo. blur_strength es el lado del kernel (impar, 3..99);
+# face_margin agranda la caja antes de difuminar para cubrir pelo y menton.
+DEFAULT_PRIVACY_MODEL_PATH = FACE_AUTH_MODEL_PATH
+DEFAULT_PRIVACY_CONFIDENCE = DEFAULT_FACE_CONFIDENCE
+DEFAULT_PRIVACY_DET_SIZE = DEFAULT_FACE_DET_SIZE
+DEFAULT_PRIVACY_BLUR_STRENGTH = 51
+DEFAULT_PRIVACY_FACE_MARGIN = 0.15
+MIN_BLUR_STRENGTH = 3
+MAX_BLUR_STRENGTH = 99
+
 DEFAULT_FACE_DEFAULT_ROLE = "operator"
 # Clave de respaldo por usuario (login sin camara): hash PBKDF2-HMAC-SHA256 con
 # sal aleatoria. La clave se pide en el enrolamiento con confirmacion.

@@ -53,6 +53,7 @@ def test_implemented_apps_are_in_order() -> None:
         AppId.LOITERING,
         AppId.VACANCY,
         AppId.VEHICLE_COUNTER,
+        AppId.PRIVACY_BLUR,
     ]
 
 

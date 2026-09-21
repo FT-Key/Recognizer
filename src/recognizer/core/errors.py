@@ -33,6 +33,10 @@ class FaceRecognizerError(RecognizerError):
     """El reconocedor facial no pudo abrirse o fallo."""
 
 
+class FaceDetectorError(RecognizerError):
+    """El detector facial no pudo abrirse o fallo."""
+
+
 class FaceRepositoryError(RecognizerError):
     """El almacen de rostros enrolados no pudo leerse o escribirse."""
 

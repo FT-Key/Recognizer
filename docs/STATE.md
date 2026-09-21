@@ -1,8 +1,8 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 18 (conteo de autos) implementada; gate pendiente de ejecución manual
-- **Rama:** `dev`
-- **Actualizado:** 2026-09-20
+- **Fase actual:** etapa 19 (desenfoque de privacidad) implementada con gate verde; pendiente merge a `dev`
+- **Rama:** `stage/19-privacy-blur`
+- **Actualizado:** 2026-09-21
 
 ## Hecho
 - Repo `FT-Key/Recognizer` (`main`/`dev`); uv + Python 3.12; deps (+`ultralytics`).
@@ -23,15 +23,17 @@
 - Etapa 15d-login-dni-ux: login solo por ID (`F-0001`) o DNI (el nombre ya no autentica; homónimos); `EnrolledFace.national_id` (7-8 dígitos, único, legado `""`); Enter envía el diálogo de clave y el fallo muestra error rojo con reintento; enrolamiento y CRUD validan con mensajes visibles. Gate verde (1281 passed, 95.63%). Reviewer: apta.
 - Etapa 15d-intento-id: el acceso guarda lo ingresado (`attempted`, nunca la clave) y el motivo (`ID/DNI desconocido` vs `clave incorrecta`); tabla y detalle lo muestran en rojo; IDs nuevos aleatorios `F-A3F9` no secuenciales (legado válido). Gate verde (1284 passed, 95.58%). Reviewer: apta.
 - Etapa 16: asistencia (`assistance`). `AssistanceMonitor` (dominio puro, debounce confirm/release), `raised_arms` (muñeca sobre hombro, `raise_margin: 0.05`, `required_arms: 2` configurable a 1). Runner `run_assistance` con una sola vía de inferencia (reutiliza `yolo26n-pose.pt` + `PoseEstimator`), alerta edge-triggered. Overlay con brazos hombro-codo-muñeca, resaltado del lado levantado, HUD y banner. `config.yaml` con `AssistanceConfig`. Gate verde (lint, mypy strict, 80/80 targeted pass, check-arch). Pendiente smoke con cámara real.
-- Etapa 18: conteo de autos (`vehicle_counter`). `VehicleCounterConfig`, `AppId.VEHICLE_COUNTER` (`implemented=True`), runner `cli/apps/vehicle_counter.py`, overlay `adapters/overlay_vehicle.py`, import perezoso en `menu.py`, sección `vehicle_counter` en `config.yaml`. Reutiliza `LineCrossingCounter` + `UltralyticsDetector`. Tests en `tests/unit/test_vehicle_counter.py` (17 casos). Gate lint+typecheck verde; pytest pendiente de ejecución manual.
+- Etapa 18: conteo de autos (`vehicle_counter`). `VehicleCounterConfig`, `AppId.VEHICLE_COUNTER` (`implemented=True`), runner `cli/apps/vehicle_counter.py`, overlay `adapters/overlay_vehicle.py`, import perezoso en `menu.py`, sección `vehicle_counter` en `config.yaml`. Reutiliza `LineCrossingCounter` + `UltralyticsDetector`. Tests en `tests/unit/test_vehicle_counter.py` (17 casos). Gate verde (lint, typecheck, suite completa y check-arch).
+- Etapa 19: desenfoque de privacidad (`privacy_blur`). Dominio puro `core/domain/privacy.py` (`PixelRect`, `face_blur_regions`, `effective_blur_kernel`), puerto `FaceDetector`, adaptador `InsightFaceFaceDetector` (`buffalo_s`, solo módulo `detection`, sin embeddings), overlay con HUD "Rostros difuminados", runner `run_privacy_blur` con import perezoso. Gate verde (1413 passed, 94.33%, check-arch 3/3, smoke 8.3 FPS, corrida real 4.9 FPS). Reviewer: apta. Pendiente merge a `dev`.
 
 ## Siguiente (roadmap `docs/ROADMAP.md`)
-- Gate etapa 18: `uv run pytest tests/unit/ -x -q --tb=short` + `uv run check-arch` (ver `docs/history/stage-18-vehicle-counter.md`).
-- 19 privacidad (`privacy_blur`): desenfoque de caras/patentes en vivo.
-- Luego: 20 caídas / 21 edad-género / 22 somnolencia; final 23 OCR; menor prioridad 13 EPP y 14 inventario.
+- 20 caídas (`fall_detector`): YOLO pose (aspecto + centro bajo + quietud).
+- Luego: 21 edad-género / 22 somnolencia; final 23 OCR; menor prioridad 13 EPP y 14 inventario.
 
 ## Bloqueos / notas
 - Verificación manual del usuario: diálogo de clave, `.exe` v0.2.0, ESC/q+X y aspecto visual del menú 10d.
 - Calibrar con cámara real: `face_auth.min_face_width_ratio`/`match_threshold`, selector con 2 cámaras, `posture.*`, `anti_intruder.zone`, `people_counter.line`, `min_confidence`, `swap_handedness`.
+- Patentes sin soportar aún: hace falta un detector de patentes propio (no hay modelo preentrenado).
+- Calibrar `privacy_blur.*` con cámara real (`det_size`, `min_confidence`, `blur_strength`); coste CPU (~4.9 FPS en la prueba).
 - "Cabeza adelante" solo mide desvío horizontal en 2D (limitación conocida).
 - Tras editar `opencode.json`/agentes/skills/comandos: reiniciar opencode.
