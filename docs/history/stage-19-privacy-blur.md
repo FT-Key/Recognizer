@@ -50,7 +50,8 @@
   3. Documentación actualizada.
 
 ## Commits
-_pendiente_ (los agrega el orquestador)
+- `078a7e2` feat(19): desenfoque de privacidad (InsightFace det + blur).
+- `c96d5b7` merge(19): desenfoque de privacidad desde stage/19-privacy-blur (dev, push OK).
 
 ## Pendientes / riesgos
 - Patentes sin soporte (requiere detector propio).
