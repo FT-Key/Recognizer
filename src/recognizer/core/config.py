@@ -75,6 +75,10 @@ from recognizer.core.constants import (
     DEFAULT_POSTURE_TOLERANCE_HEAD_OFFSET,
     DEFAULT_POSTURE_TOLERANCE_SHOULDER_TILT,
     DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
+    DEFAULT_PRIVACY_BLUR_STRENGTH,
+    DEFAULT_PRIVACY_CONFIDENCE,
+    DEFAULT_PRIVACY_MODEL_PATH,
+    DEFAULT_PRIVACY_TARGET_LABELS,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
     DEFAULT_REQUIRE_LOGIN,
@@ -95,8 +99,10 @@ from recognizer.core.constants import (
     DEFAULT_VEHICLE_MODEL_PATH,
     FACE_AUTH_MODEL_PATH,
     MAX_ANGLE_DEG,
+    MAX_BLUR_STRENGTH,
     MAX_RAISED_ARMS,
     MIN_ANGLE_DEG,
+    MIN_BLUR_STRENGTH,
     MIN_RAISED_ARMS,
     PERSON_LABEL,
     URL_PREFIXES,
@@ -771,6 +777,44 @@ class VehicleCounterConfig(BaseModel):
     min_confidence: float = Field(default=DEFAULT_VEHICLE_CONFIDENCE, ge=0, le=1)
     target_label: str = Field(default=VEHICLE_LABEL, min_length=1)
     line: CountingLineConfig = Field(default_factory=CountingLineConfig)
+
+
+class PrivacyBlurConfig(BaseModel):
+    """Desenfoque de privacidad: detecta objetos con YOLO y difumina sus cajas.
+
+    ``target_labels`` es la lista de clases COCO a difuminar (``person`` por
+    defecto; se puede ampliar con ``car``, ``face``, etc.).
+    ``blur_strength`` es el lado del kernel gaussiano (impar, 3..201);
+    mayor valor = mas borroso.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_PRIVACY_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_PRIVACY_CONFIDENCE, ge=0, le=1)
+    target_labels: tuple[str, ...] = Field(default=DEFAULT_PRIVACY_TARGET_LABELS, min_length=1)
+    blur_strength: int = Field(
+        default=DEFAULT_PRIVACY_BLUR_STRENGTH,
+        ge=MIN_BLUR_STRENGTH,
+        le=MAX_BLUR_STRENGTH,
+    )
+
+    @field_validator("blur_strength")
+    @classmethod
+    def _must_be_odd(cls, value: int) -> int:
+        if value % 2 == 0:
+            msg = "blur_strength debe ser impar (kernel gaussiano)."
+            raise ValueError(msg)
+        return value
+
+    @field_validator("target_labels")
+    @classmethod
+    def _no_empty_labels(cls, labels: tuple[str, ...]) -> tuple[str, ...]:
+        for label in labels:
+            if not label.strip():
+                msg = "Cada target_label debe ser una cadena no vacia."
+                raise ValueError(msg)
+        return labels
 
 
 class FaceAuthConfig(BaseModel):
