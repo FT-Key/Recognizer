@@ -601,7 +601,8 @@ def test_run_gui_menu_ignores_non_selectable_rows(
         return 0
 
     monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: fake_runner)
-    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(5).command)
+    # Posicion 11 = FALL_DETECTOR (proximamente): fila no seleccionable.
+    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(11).command)
 
     result = run_gui_menu(
         request=REQUEST,
@@ -613,7 +614,7 @@ def test_run_gui_menu_ignores_non_selectable_rows(
     assert result == 0
     assert calls == []
     assert fake_root_cls.instances[0].withdraw_calls == 0
-    assert _app_button(5).state == menu_gui.STATE_DISABLED
+    assert _app_button(11).state == menu_gui.STATE_DISABLED
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:

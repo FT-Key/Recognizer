@@ -78,7 +78,7 @@ class FaceAnalysisFacade(Protocol):
         ...
 
 
-def _split_model_path(model_path: str) -> tuple[str, str]:
+def split_model_path(model_path: str) -> tuple[str, str]:
     """Divide ``models/buffalo_s`` en raiz (``models``) y nombre (``buffalo_s``)."""
     candidate = Path(model_path)
     name = candidate.name
@@ -86,15 +86,18 @@ def _split_model_path(model_path: str) -> tuple[str, str]:
     return parent, name
 
 
-def _create_analysis(*, model_path: str) -> _AnalysisLike:
+def create_analysis(
+    *, model_path: str, modules: tuple[str, ...] = FACE_ANALYSIS_MODULES
+) -> _AnalysisLike:
+    """Crea la fachada de InsightFace con los modulos pedidos (import perezoso)."""
     from insightface.app import FaceAnalysis
 
-    root, name = _split_model_path(model_path)
+    root, name = split_model_path(model_path)
     analysis = FaceAnalysis(
         name=name,
         root=root,
         providers=[CPU_PROVIDER],
-        allowed_modules=list(FACE_ANALYSIS_MODULES),
+        allowed_modules=list(modules),
     )
     return cast("_AnalysisLike", analysis)
 
@@ -183,7 +186,7 @@ class InsightFaceFacade:
             msg = "El reconocedor facial ya esta abierto."
             raise FaceRecognizerError(msg)
         try:
-            analysis = _create_analysis(model_path=self._config.model_path)
+            analysis = create_analysis(model_path=self._config.model_path)
             analysis.prepare(ctx_id=0, det_size=(self._det_size, self._det_size))
         except (OSError, RuntimeError, ValueError, ImportError) as exc:
             msg = f"No se pudo cargar el modelo facial: {self._config.model_path}"

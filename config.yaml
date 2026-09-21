@@ -453,3 +453,18 @@ vehicle_counter:
     invert: false
     confirm_frames: 2
     track_timeout_frames: 30
+
+# Desenfoque privacidad (etapa 19): difumina las caras detectadas en vivo.
+# Reutiliza el detector del reconocimiento facial (models/buffalo_s) pero solo
+# con el modulo de deteccion: no calcula embeddings ni guarda imagenes.
+# det_size: lado de entrada del detector (px). 640 detecta caras mas lejanas;
+#   bajalo a 320 en CPU lenta (perderas caras pequenas).
+# min_confidence: confianza minima de la deteccion para difuminar.
+# blur_strength: lado del kernel gaussiano (impar, 3..99); mayor = mas borroso.
+# margin_ratio: agranda la caja antes de difuminar (cubre pelo y menton).
+privacy_blur:
+  model_path: models/buffalo_s
+  min_confidence: 0.5
+  det_size: 640
+  blur_strength: 51
+  margin_ratio: 0.15

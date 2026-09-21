@@ -77,8 +77,9 @@ from recognizer.core.constants import (
     DEFAULT_POSTURE_TOLERANCE_TORSO_ANGLE_DEG,
     DEFAULT_PRIVACY_BLUR_STRENGTH,
     DEFAULT_PRIVACY_CONFIDENCE,
+    DEFAULT_PRIVACY_DET_SIZE,
+    DEFAULT_PRIVACY_FACE_MARGIN,
     DEFAULT_PRIVACY_MODEL_PATH,
-    DEFAULT_PRIVACY_TARGET_LABELS,
     DEFAULT_RELEASE_FRAMES,
     DEFAULT_REPEAT_SECONDS,
     DEFAULT_REQUIRE_LOGIN,
@@ -780,24 +781,28 @@ class VehicleCounterConfig(BaseModel):
 
 
 class PrivacyBlurConfig(BaseModel):
-    """Desenfoque de privacidad: detecta objetos con YOLO y difumina sus cajas.
+    """Desenfoque de privacidad: detecta rostros y difumina sus cajas.
 
-    ``target_labels`` es la lista de clases COCO a difuminar (``person`` por
-    defecto; se puede ampliar con ``car``, ``face``, etc.).
-    ``blur_strength`` es el lado del kernel gaussiano (impar, 3..201);
-    mayor valor = mas borroso.
+    Reutiliza el detector del reconocimiento facial (``models/buffalo_s``) con
+    el modulo de deteccion solamente: no calcula embeddings, asi que es mas
+    barato que un login. ``det_size`` es el lado de entrada del detector
+    (mayor = detecta caras mas lejanas y cuesta mas); ``blur_strength`` es el
+    lado del kernel gaussiano (impar, 3..99; mayor = mas borroso) y
+    ``margin_ratio`` agranda la caja antes de difuminar para cubrir pelo y
+    menton.
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     model_path: str = Field(default=DEFAULT_PRIVACY_MODEL_PATH, min_length=1)
     min_confidence: float = Field(default=DEFAULT_PRIVACY_CONFIDENCE, ge=0, le=1)
-    target_labels: tuple[str, ...] = Field(default=DEFAULT_PRIVACY_TARGET_LABELS, min_length=1)
+    det_size: int = Field(default=DEFAULT_PRIVACY_DET_SIZE, ge=128, le=1280)
     blur_strength: int = Field(
         default=DEFAULT_PRIVACY_BLUR_STRENGTH,
         ge=MIN_BLUR_STRENGTH,
         le=MAX_BLUR_STRENGTH,
     )
+    margin_ratio: float = Field(default=DEFAULT_PRIVACY_FACE_MARGIN, ge=0, le=1)
 
     @field_validator("blur_strength")
     @classmethod
@@ -806,15 +811,6 @@ class PrivacyBlurConfig(BaseModel):
             msg = "blur_strength debe ser impar (kernel gaussiano)."
             raise ValueError(msg)
         return value
-
-    @field_validator("target_labels")
-    @classmethod
-    def _no_empty_labels(cls, labels: tuple[str, ...]) -> tuple[str, ...]:
-        for label in labels:
-            if not label.strip():
-                msg = "Cada target_label debe ser una cadena no vacia."
-                raise ValueError(msg)
-        return labels
 
 
 class FaceAuthConfig(BaseModel):
@@ -922,6 +918,7 @@ class AppConfig(BaseModel):
     loitering: LoiteringConfig = Field(default_factory=LoiteringConfig)
     vacancy: VacancyConfig = Field(default_factory=VacancyConfig)
     vehicle_counter: VehicleCounterConfig = Field(default_factory=VehicleCounterConfig)
+    privacy_blur: PrivacyBlurConfig = Field(default_factory=PrivacyBlurConfig)
     face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 

@@ -148,7 +148,7 @@ def test_run_menu_skips_coming_soon_without_runner(
     result = run_menu(
         request=REQUEST,
         apps_config=AppsConfig(),
-        input_fn=_scripted(["10", "0"]),  # posicion 10 = PRIVACY_BLUR (coming soon)
+        input_fn=_scripted(["11", "0"]),  # posicion 11 = FALL_DETECTOR (coming soon)
         logger=TEST_LOGGER,
     )
 

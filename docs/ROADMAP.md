@@ -18,14 +18,14 @@ Fuente de verdad del orden en el menú: `DEFAULT_APPS` en
 | 4 | Postura ergonómica | `posture` | implementada |
 | 5 | Reconocimiento facial | `face_auth` | implementada (enrolamiento) |
 | 6 | Manos arriba / asistencia | `assistance` | implementada |
+| 7 | Conteo de autos | `vehicle_counter` | implementada |
+| 8 | Desenfoque privacidad | `privacy_blur` | implementada |
 
 ## 2. Fáciles — sin entrenamiento (etapas próximas)
 
 | # | App | Id | Modelo pre-entrenado |
 |---|---|---|---|
-| 7 | Zona permanencia | `loitering` | `yolo26n.pt` + track (dwell por `track_id`) |
-| 8 | Conteo de autos | `vehicle_counter` | `yolo26n.pt` (`target_label: car`) |
-| 9 | Desenfoque privacidad | `privacy_blur` | `yolo26n.pt` / `buffalo_s` det + blur |
+| 9 | Zona permanencia | `loitering` | `yolo26n.pt` + track (dwell por `track_id`) |
 
 ## 3. Intermedias — sin entrenamiento
 

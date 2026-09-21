@@ -132,7 +132,8 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
     AppInfo(
         app_id=AppId.PRIVACY_BLUR,
         title="Desenfoque privacidad",
-        description="Difumina caras/patentes en vivo; sin entrenamiento.",
+        description="Difumina las caras en vivo con InsightFace; sin entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.FALL_DETECTOR,

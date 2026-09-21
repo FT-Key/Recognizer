@@ -163,6 +163,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.vehicle_counter import run_vehicle_counter
 
             return run_vehicle_counter
+        case AppId.PRIVACY_BLUR:
+            from recognizer.cli.apps.privacy_blur import run_privacy_blur
+
+            return run_privacy_blur
         case _:
             return None
 
