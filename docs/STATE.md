@@ -1,7 +1,7 @@
 # Estado — Recognizer
 
-- **Fase actual:** etapa 19 (desenfoque de privacidad) implementada con gate verde; pendiente merge a `dev`
-- **Rama:** `stage/19-privacy-blur`
+- **Fase actual:** etapa 19 (desenfoque de privacidad) completada y mergeada a `dev`; siguiente etapa 20 (caídas)
+- **Rama:** `dev`
 - **Actualizado:** 2026-09-21
 
 ## Hecho
@@ -24,7 +24,7 @@
 - Etapa 15d-intento-id: el acceso guarda lo ingresado (`attempted`, nunca la clave) y el motivo (`ID/DNI desconocido` vs `clave incorrecta`); tabla y detalle lo muestran en rojo; IDs nuevos aleatorios `F-A3F9` no secuenciales (legado válido). Gate verde (1284 passed, 95.58%). Reviewer: apta.
 - Etapa 16: asistencia (`assistance`). `AssistanceMonitor` (dominio puro, debounce confirm/release), `raised_arms` (muñeca sobre hombro, `raise_margin: 0.05`, `required_arms: 2` configurable a 1). Runner `run_assistance` con una sola vía de inferencia (reutiliza `yolo26n-pose.pt` + `PoseEstimator`), alerta edge-triggered. Overlay con brazos hombro-codo-muñeca, resaltado del lado levantado, HUD y banner. `config.yaml` con `AssistanceConfig`. Gate verde (lint, mypy strict, 80/80 targeted pass, check-arch). Pendiente smoke con cámara real.
 - Etapa 18: conteo de autos (`vehicle_counter`). `VehicleCounterConfig`, `AppId.VEHICLE_COUNTER` (`implemented=True`), runner `cli/apps/vehicle_counter.py`, overlay `adapters/overlay_vehicle.py`, import perezoso en `menu.py`, sección `vehicle_counter` en `config.yaml`. Reutiliza `LineCrossingCounter` + `UltralyticsDetector`. Tests en `tests/unit/test_vehicle_counter.py` (17 casos). Gate verde (lint, typecheck, suite completa y check-arch).
-- Etapa 19: desenfoque de privacidad (`privacy_blur`). Dominio puro `core/domain/privacy.py` (`PixelRect`, `face_blur_regions`, `effective_blur_kernel`), puerto `FaceDetector`, adaptador `InsightFaceFaceDetector` (`buffalo_s`, solo módulo `detection`, sin embeddings), overlay con HUD "Rostros difuminados", runner `run_privacy_blur` con import perezoso. Gate verde (1413 passed, 94.33%, check-arch 3/3, smoke 8.3 FPS, corrida real 4.9 FPS). Reviewer: apta. Pendiente merge a `dev`.
+- Etapa 19: desenfoque de privacidad (`privacy_blur`). Dominio puro `core/domain/privacy.py` (`PixelRect`, `face_blur_regions`, `effective_blur_kernel`), puerto `FaceDetector`, adaptador `InsightFaceFaceDetector` (`buffalo_s`, solo módulo `detection`, sin embeddings), overlay con HUD "Rostros difuminados", runner `run_privacy_blur` con import perezoso. Gate verde (1417 passed, 94.48%, check-arch 3/3, smoke 8.3 FPS, corrida real 4.9 FPS). Reviewer: apta. Merge `c96d5b7` en `dev` (push OK).
 
 ## Siguiente (roadmap `docs/ROADMAP.md`)
 - 20 caídas (`fall_detector`): YOLO pose (aspecto + centro bajo + quietud).
