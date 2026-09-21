@@ -16,7 +16,7 @@ apps:
     loitering: true
     vacancy: true
     vehicle_counter: true
-    # privacy_blur: true
+    privacy_blur: true
     # fall_detector: true
     # gender_age: true
     # drowsiness: true
