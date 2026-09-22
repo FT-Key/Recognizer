@@ -20,6 +20,7 @@ Fuente de verdad del orden en el menú: `DEFAULT_APPS` en
 | 6 | Manos arriba / asistencia | `assistance` | implementada |
 | 7 | Conteo de autos | `vehicle_counter` | implementada |
 | 8 | Desenfoque privacidad | `privacy_blur` | implementada |
+| 9 | Edad y género | `gender_age` | implementada |
 
 ## 2. Fáciles — sin entrenamiento (etapas próximas)
 
@@ -32,7 +33,6 @@ Fuente de verdad del orden en el menú: `DEFAULT_APPS` en
 | # | App | Id | Modelo pre-entrenado |
 |---|---|---|---|
 | 10 | Detector de caídas | `fall_detector` | `yolo26n-pose.pt` (aspecto + centro bajo + quietud) |
-| 11 | Edad y género | `gender_age` | `buffalo_s` módulo `genderage` |
 | 12 | Somnolencia | `drowsiness` | landmarks faciales / pose (EAR + MAR + cabeceo) |
 
 ## 4. Final — sin entrenamiento, dependencia nueva
