@@ -84,6 +84,7 @@ def test_resolve_runner_returns_implemented_runners() -> None:
     from recognizer.cli.app import run_gestures
     from recognizer.cli.apps.anti_intruder import run_anti_intruder
     from recognizer.cli.apps.assistance import run_assistance
+    from recognizer.cli.apps.gender_age import run_gender_age
     from recognizer.cli.apps.people_counter import run_people_counter
     from recognizer.cli.apps.posture import run_posture
 
@@ -92,6 +93,7 @@ def test_resolve_runner_returns_implemented_runners() -> None:
     assert resolve_runner(AppId.ANTI_INTRUDER) is run_anti_intruder
     assert resolve_runner(AppId.POSTURE) is run_posture
     assert resolve_runner(AppId.ASSISTANCE) is run_assistance
+    assert resolve_runner(AppId.GENDER_AGE) is run_gender_age
     assert resolve_runner(AppId.PPE_DETECTOR) is None
 
 

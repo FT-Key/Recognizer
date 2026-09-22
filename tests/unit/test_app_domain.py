@@ -54,6 +54,7 @@ def test_implemented_apps_are_in_order() -> None:
         AppId.VACANCY,
         AppId.VEHICLE_COUNTER,
         AppId.PRIVACY_BLUR,
+        AppId.GENDER_AGE,
     ]
 
 
