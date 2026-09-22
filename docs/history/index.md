@@ -52,3 +52,4 @@ etapa que se necesite.
 | 16 | Asistencia / manos arriba (YOLO pose, edge-triggered) | completada | [stage-16-assistance.md](stage-16-assistance.md) |
 | 18 | Conteo de autos (YOLO + ByteTrack + linea) | completada | [stage-18-vehicle-counter.md](stage-18-vehicle-counter.md) |
 | 19 | Desenfoque privacidad (InsightFace det + blur) | completada | [stage-19-privacy-blur.md](stage-19-privacy-blur.md) |
+| 21 | Edad y genero (InsightFace det + genderage, overlay) | completada | [stage-21-gender-age.md](stage-21-gender-age.md) |
