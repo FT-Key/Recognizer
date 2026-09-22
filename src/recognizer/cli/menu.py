@@ -167,6 +167,10 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.privacy_blur import run_privacy_blur
 
             return run_privacy_blur
+        case AppId.GENDER_AGE:
+            from recognizer.cli.apps.gender_age import run_gender_age
+
+            return run_gender_age
         case _:
             return None
 

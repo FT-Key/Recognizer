@@ -18,7 +18,7 @@ apps:
     vehicle_counter: true
     privacy_blur: true
     # fall_detector: true
-    # gender_age: true
+    gender_age: true
     # drowsiness: true
     # ocr_reader: true
     # ppe_detector: true
@@ -468,3 +468,19 @@ privacy_blur:
   det_size: 640
   blur_strength: 51
   margin_ratio: 0.15
+
+# Edad y genero (etapa 21): estima edad y genero de cada rostro en vivo.
+# Reutiliza el pack facial (models/buffalo_s) con deteccion + genderage: no
+# calcula embeddings ni guarda identidades. La edad se suaviza con la mediana y
+# el genero con voto mayoritario por rostro (emparejado por IoU entre
+# fotogramas) para evitar el parpadeo del estimador.
+# det_size: lado de entrada del detector (px). 640 detecta caras mas lejanas;
+#   bajalo a 320 en CPU lenta (perderas caras pequenas).
+# min_confidence: confianza minima de la deteccion para estimar atributos.
+# smoothing_window: fotogramas de historial por rostro. 1 = valor crudo, sin
+#   suavizado; subelo para una etiqueta mas estable (la edad es aproximada).
+gender_age:
+  model_path: models/buffalo_s
+  min_confidence: 0.5
+  det_size: 640
+  smoothing_window: 15

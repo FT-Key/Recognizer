@@ -144,6 +144,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.GENDER_AGE,
         title="Edad y genero",
         description="Estima edad/genero con InsightFace; sin entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.DROWSINESS,

@@ -28,6 +28,10 @@ from recognizer.core.constants import (
     DEFAULT_FACE_STORE_DIR,
     DEFAULT_FRAME_HEIGHT,
     DEFAULT_FRAME_WIDTH,
+    DEFAULT_GENDER_AGE_CONFIDENCE,
+    DEFAULT_GENDER_AGE_DET_SIZE,
+    DEFAULT_GENDER_AGE_MODEL_PATH,
+    DEFAULT_GENDER_AGE_SMOOTHING_WINDOW,
     DEFAULT_GESTURE_MODEL_PATH,
     DEFAULT_HAND_MODEL_PATH,
     DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS,
@@ -813,6 +817,25 @@ class PrivacyBlurConfig(BaseModel):
         return value
 
 
+class GenderAgeConfig(BaseModel):
+    """Edad y genero: detecta rostros y estima sus atributos.
+
+    Reutiliza el pack del reconocimiento facial (``models/buffalo_s``) con los
+    modulos de deteccion y ``genderage``: no calcula embeddings, pero si
+    atributos por cara. ``det_size`` es el lado de entrada del detector (mayor =
+    detecta caras mas lejanas y cuesta mas). ``smoothing_window`` es cuantos
+    fotogramas se conservan por rostro para suavizar la edad con la mediana y el
+    genero con voto mayoritario (1 = valor crudo, sin suavizado).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_GENDER_AGE_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_GENDER_AGE_CONFIDENCE, ge=0, le=1)
+    det_size: int = Field(default=DEFAULT_GENDER_AGE_DET_SIZE, ge=128, le=1280)
+    smoothing_window: int = Field(default=DEFAULT_GENDER_AGE_SMOOTHING_WINDOW, ge=1, le=120)
+
+
 class FaceAuthConfig(BaseModel):
     """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
 
@@ -919,6 +942,7 @@ class AppConfig(BaseModel):
     vacancy: VacancyConfig = Field(default_factory=VacancyConfig)
     vehicle_counter: VehicleCounterConfig = Field(default_factory=VehicleCounterConfig)
     privacy_blur: PrivacyBlurConfig = Field(default_factory=PrivacyBlurConfig)
+    gender_age: GenderAgeConfig = Field(default_factory=GenderAgeConfig)
     face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 

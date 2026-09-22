@@ -37,6 +37,10 @@ class FaceDetectorError(RecognizerError):
     """El detector facial no pudo abrirse o fallo."""
 
 
+class FaceAttributeError(RecognizerError):
+    """El estimador de edad/genero no pudo abrirse o fallo."""
+
+
 class FaceRepositoryError(RecognizerError):
     """El almacen de rostros enrolados no pudo leerse o escribirse."""
 

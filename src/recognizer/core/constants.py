@@ -202,6 +202,21 @@ DEFAULT_PRIVACY_FACE_MARGIN = 0.15
 MIN_BLUR_STRENGTH = 3
 MAX_BLUR_STRENGTH = 99
 
+# Edad y genero (etapa 21): reutiliza el pack facial (buffalo_s) con deteccion +
+# genderage, sin embeddings. La edad se suaviza con la mediana y el genero con
+# voto mayoritario por rostro emparejado con IoU entre fotogramas, para evitar
+# el parpadeo tipico del estimador (window = 1 muestra el valor crudo).
+DEFAULT_GENDER_AGE_MODEL_PATH = FACE_AUTH_MODEL_PATH
+DEFAULT_GENDER_AGE_CONFIDENCE = DEFAULT_FACE_CONFIDENCE
+DEFAULT_GENDER_AGE_DET_SIZE = DEFAULT_FACE_DET_SIZE
+DEFAULT_GENDER_AGE_SMOOTHING_WINDOW = 15
+GENDER_AGE_IOU_THRESHOLD = 0.3
+GENDER_AGE_MAX_MISSES = 10
+# Rango valido de la edad estimada; fuera de el se recorta (el modelo puede
+# devolver valores extremos con iluminacion pobre o caras parciales).
+MIN_ESTIMATED_AGE = 0
+MAX_ESTIMATED_AGE = 120
+
 DEFAULT_FACE_DEFAULT_ROLE = "operator"
 # Clave de respaldo por usuario (login sin camara): hash PBKDF2-HMAC-SHA256 con
 # sal aleatoria. La clave se pide en el enrolamiento con confirmacion.
