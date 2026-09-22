@@ -75,7 +75,9 @@
 
 ## Commits
 
-Pendiente (git-ops) — los hashes se agregan al cerrar.
+- `c4918ae` feat(21): edad y genero (gender_age).
+- `59af9c9` test(21): tests de edad y genero + catalogo/menu.
+- `45cb564` docs(21): historial, STATE, ROADMAP e indice de la etapa.
 
 ## Pendientes / riesgos
 
