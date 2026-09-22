@@ -41,6 +41,10 @@ class FaceAttributeError(RecognizerError):
     """El estimador de edad/genero no pudo abrirse o fallo."""
 
 
+class FaceMeshError(RecognizerError):
+    """El landmark facial (face mesh) no pudo abrirse o fallo."""
+
+
 class FaceRepositoryError(RecognizerError):
     """El almacen de rostros enrolados no pudo leerse o escribirse."""
 

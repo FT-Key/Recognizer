@@ -48,7 +48,7 @@ def test_render_catalog_lists_apps_in_order_with_labels() -> None:
 
     assert body[0].startswith("  1) Reconocimiento de gestos")
     assert LABEL_AVAILABLE in body[0]
-    assert body[1].startswith("  2) Contador de personas")
+    assert body[1].startswith("  2) Reconocimiento facial")
     assert LABEL_AVAILABLE in body[1]
     assert body[-1].strip() == "0) Salir"
 
@@ -60,6 +60,33 @@ def test_render_catalog_marks_training_requirement() -> None:
     # FACE_AUTH (enrolamiento) ya está implementada: su fila es [disponible].
     assert "Reconocimiento facial" in text
     assert LABEL_AVAILABLE in text
+
+
+def test_render_catalog_main_group_lists_primary_and_other_apps_entry() -> None:
+    from recognizer.core.domain.app import AppGroup
+
+    text = render_catalog(AppCatalog(), AppsConfig(), group=AppGroup.MAIN)
+
+    assert "Reconocimiento de gestos" in text
+    assert "Reconocimiento facial" in text
+    assert "Zona permanencia" in text
+    assert "Zona vacia" in text
+    assert "Otras apps" in text
+    # Las secundarias no van en el menu principal.
+    assert "Somnolencia" not in text
+    assert "OCR en vivo" not in text
+
+
+def test_render_catalog_other_group_lists_secondary_apps() -> None:
+    from recognizer.core.domain.app import AppGroup
+
+    text = render_catalog(AppCatalog(), AppsConfig(), group=AppGroup.OTHER)
+
+    assert "Somnolencia" in text
+    assert "OCR en vivo" in text
+    assert "requiere entrenamiento" in text
+    assert "Volver" in text
+    assert "Reconocimiento de gestos" not in text
 
 
 def test_availability_label_variants() -> None:
@@ -147,14 +174,38 @@ def test_run_menu_skips_coming_soon_without_runner(
 
     monkeypatch.setattr(menu, "resolve_runner", fail_resolve)
 
+    # 7 = "Otras apps"; 9 = PPE_DETECTOR (proximamente) en el submenu; 0 = volver; 0 = salir.
     result = run_menu(
         request=REQUEST,
         apps_config=AppsConfig(),
-        input_fn=_scripted(["11", "0"]),  # posicion 11 = FALL_DETECTOR (coming soon)
+        input_fn=_scripted(["7", "9", "0", "0"]),
         logger=TEST_LOGGER,
     )
 
     assert result == 0
+
+
+def test_run_menu_opens_other_apps_submenu_and_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[AppRunRequest] = []
+
+    def fake_runner(request: AppRunRequest) -> int:
+        calls.append(request)
+        return 0
+
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: fake_runner)
+
+    # 7 = "Otras apps"; 1 = Postura (primera secundaria); 0 = volver; 0 = salir.
+    result = run_menu(
+        request=REQUEST,
+        apps_config=AppsConfig(),
+        input_fn=_scripted(["7", "1", "0", "0"]),
+        logger=TEST_LOGGER,
+    )
+
+    assert result == 0
+    assert calls == [REQUEST]
 
 
 def test_run_menu_skips_app_disabled_in_config(

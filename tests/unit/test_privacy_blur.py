@@ -486,6 +486,55 @@ class _FakeDetectorCM:
         return ()
 
 
+_WORKERS: list["_FakeWorker"] = []
+
+
+class _FakeSourceContext:
+    """Context manager que devuelve la fuente sin arrancar el hilo de drenado."""
+
+    def __init__(self, source: object) -> None:
+        self._source = source
+
+    def __enter__(self) -> object:
+        return self._source
+
+    def __exit__(self, *_exc_info: object) -> None:
+        return None
+
+
+class _FakeWorker:
+    """Doble del worker de inferencia: no arranca hilo; expone infer/on_result."""
+
+    def __init__(self, *, infer: object, on_result: object, **_kwargs: object) -> None:
+        self.infer = infer
+        self.on_result = on_result
+        _WORKERS.append(self)
+
+    def __enter__(self) -> "_FakeWorker":
+        return self
+
+    def __exit__(self, *_exc_info: object) -> None:
+        return None
+
+    @property
+    def error(self) -> None:
+        return None
+
+
+class _DrivenSource:
+    """Fuente que corre la inferencia del worker de forma sincrona en read()."""
+
+    def __init__(self, camera: _FakeCamera) -> None:
+        self._camera = camera
+
+    def read(self) -> Frame | None:
+        frame = self._camera.read()
+        if frame is not None and _WORKERS:
+            worker = _WORKERS[-1]
+            worker.on_result(worker.infer(frame))  # type: ignore[operator]
+        return frame
+
+
 def _patch_runner_env(
     monkeypatch: pytest.MonkeyPatch,
     *,
@@ -495,6 +544,7 @@ def _patch_runner_env(
 ) -> _FakeDetectorCM:
     resolved = app_config if app_config is not None else AppConfig()
     detector = _FakeDetectorCM(resolved.privacy_blur, script)
+    _WORKERS.clear()
 
     monkeypatch.setattr(pb_module, "prepare_workspace", lambda path: path)
     monkeypatch.setattr(pb_module, "load_config", lambda path: resolved)  # noqa: ARG005
@@ -503,7 +553,11 @@ def _patch_runner_env(
         "resolve_camera_config",
         lambda *, app_config, device_override: CameraConfig(),  # noqa: ARG005
     )
-    monkeypatch.setattr(pb_module, "OpenCVCamera", lambda config: _FakeCamera(config, frames))
+    monkeypatch.setattr(
+        pb_module, "OpenCVCamera", lambda config: _DrivenSource(_FakeCamera(config, frames))
+    )
+    monkeypatch.setattr(pb_module, "LatestFrameSource", _FakeSourceContext)
+    monkeypatch.setattr(pb_module, "LatestInferenceWorker", _FakeWorker)
     monkeypatch.setattr(pb_module, "InsightFaceFaceDetector", lambda config: detector)  # noqa: ARG005
     monkeypatch.setattr(cv2, "destroyAllWindows", lambda: None)
     return detector

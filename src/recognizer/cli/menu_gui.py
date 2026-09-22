@@ -35,7 +35,13 @@ from typing import TYPE_CHECKING, Final
 from recognizer.cli.menu import LABEL_NO_PERMISSION, availability_label
 from recognizer.cli.paths import desktop_icon_path, desktop_logo_path, display_font_paths
 from recognizer.core.config import AppsConfig
-from recognizer.core.domain.app import AppAvailability, AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.app import (
+    AppAvailability,
+    AppCatalog,
+    AppGroup,
+    AppId,
+    AppRunRequest,
+)
 from recognizer.core.domain.camera import CameraInfo
 from recognizer.core.domain.identity import (
     AllowAllPolicy,
@@ -58,6 +64,14 @@ GUI_EXIT_TEXT = "Salir"
 GUI_HEADER_TITLE = "R E C O G N I Z E R"
 GUI_HEADER_SUBTITLE = "control por camara · elige una aplicacion"
 GUI_APPS_SECTION = "APLICACIONES"
+GUI_OTHER_APPS_TITLE = "Otras apps"
+GUI_OTHER_APPS_DESCRIPTION = "Apps secundarias y futuras (menos utiles o por crear)."
+LABEL_OTHER_APPS = "[abrir]"
+GUI_OTHER_APPS_SECTION = "OTRAS APPS"
+GUI_OTHER_APPS_WINDOW_TITLE = "Otras apps"
+GUI_OTHER_APPS_SUBTITLE = "apps secundarias y futuras"
+GUI_OTHER_APPS_BACK_TEXT = "Volver"
+GUI_OTHER_APPS_FOOTER_HINT = "Enter: abrir · ESC: volver"
 GUI_FOOTER_HINT = "Enter: abrir · ESC: salir"
 BUTTON_TEXT_TEMPLATE = "{number}. {title}\n{description}"
 GUI_CAMERA_LABEL = "Cámara"
@@ -267,6 +281,7 @@ class MenuRow:
     description: str = ""
     availability: AppAvailability = AppAvailability.AVAILABLE
     denied: bool = False
+    opens_other_apps: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -282,18 +297,22 @@ def build_menu_rows(
     catalog: AppCatalog,
     apps_config: AppsConfig,
     *,
+    group: AppGroup | None = None,
     identity: Identity | None = None,
     policy: AppPolicy | None = None,
 ) -> tuple[MenuRow, ...]:
     """Deriva las filas del menu grafico sin tocar tkinter (logica pura).
 
-    Con ``identity`` y ``policy`` las apps disponibles pero no permitidas se
-    marcan con ``[sin permiso]`` y no son seleccionables; sin ambas, las filas
-    son las historicas (sin filtro).
+    ``group=None`` lista todas las apps (comportamiento historico). Con
+    ``group=AppGroup.MAIN`` lista las principales y agrega al final la entrada
+    "Otras apps" (que abre el submenu); con ``AppGroup.OTHER`` lista las
+    secundarias. Con ``identity`` y ``policy`` las apps disponibles pero no
+    permitidas se marcan con ``[sin permiso]`` y no son seleccionables.
     """
     rows: list[MenuRow] = []
     current = identity if identity is not None else anonymous_identity()
-    for number, info in enumerate(catalog.apps, start=1):
+    infos = catalog.apps if group is None else catalog.apps_in_group(group)
+    for number, info in enumerate(infos, start=1):
         availability = catalog.availability(info.app_id, enabled=apps_config.enabled)
         label = availability_label(info, availability)
         denied = (
@@ -315,7 +334,145 @@ def build_menu_rows(
                 denied=denied,
             )
         )
+    if group is AppGroup.MAIN:
+        rows.append(
+            MenuRow(
+                number=len(rows) + 1,
+                title=GUI_OTHER_APPS_TITLE,
+                label=LABEL_OTHER_APPS,
+                app_id=None,
+                selectable=True,
+                description=GUI_OTHER_APPS_DESCRIPTION,
+                availability=AppAvailability.AVAILABLE,
+                opens_other_apps=True,
+            )
+        )
     return tuple(rows)
+
+
+def _open_app(
+    row: MenuRow,
+    *,
+    window: tkinter.Tk | tkinter.Toplevel,
+    request: AppRunRequest,
+    engine: AppPolicy | None,
+    identity_provider: IdentityProvider | None,
+    logger: logging.Logger,
+) -> None:
+    """Abre la app de la fila (con permisos y submenu facial); oculta `window`.
+
+    Es comun al menu principal y al submenu "Otras apps": la ventana que se
+    oculta mientras corre la app es la que recibe el llamador.
+    """
+    if row.app_id is None or not row.selectable:
+        logger.info("'%s' no esta disponible %s.", row.title, row.label)
+        return
+    if engine is not None:
+        fresh = (
+            identity_provider.current_identity()
+            if identity_provider is not None
+            else anonymous_identity()
+        )
+        if not engine.can_launch(fresh, app_id=row.app_id):
+            logger.warning(
+                "'%s' requiere un rol con permiso (tu rol: %s).",
+                row.title,
+                fresh.role.value,
+            )
+            return
+    if row.app_id is AppId.FACE_AUTH:
+        from recognizer.cli.face_menu_gui import run_face_submenu
+
+        logger.info("Abriendo '%s'... (ESC para volver al menu)", row.title)
+        window.withdraw()
+        try:
+            run_face_submenu(request, identity_provider=identity_provider, logger=logger)
+        finally:
+            window.deiconify()
+        logger.info("Volviendo al menu principal.")
+        return
+    from recognizer.cli.menu import resolve_runner
+
+    runner = resolve_runner(row.app_id)
+    if runner is None:
+        logger.error("No hay runner para '%s'.", row.app_id.value)
+        return
+    logger.info("Abriendo '%s'... (ESC/q para volver al menu)", row.title)
+    window.withdraw()
+    try:
+        runner(request)
+    finally:
+        window.deiconify()
+    logger.info("Volviendo al menu principal.")
+
+
+def _build_app_rows(
+    parent: tkinter.Frame,
+    rows: tuple[MenuRow, ...],
+    *,
+    theme: MenuTheme,
+    display_family: str,
+    body_family: str,
+    wraplength: int,
+    open_row: Callable[[MenuRow], None],
+) -> list[tuple[MenuRow, tkinter.Button]]:
+    """Crea un boton + badge por fila; devuelve las filas seleccionables.
+
+    Comun al menu principal y al submenu "Otras apps".
+    """
+    import tkinter
+
+    focusable: list[tuple[MenuRow, tkinter.Button]] = []
+    for row in rows:
+        selectable = row.selectable and (row.app_id is not None or row.opens_other_apps)
+        row_frame = tkinter.Frame(parent, bg=theme.surface)
+        row_frame.pack(fill=FILL_X, padx=theme.space_1, pady=theme.pad_row)
+        button = tkinter.Button(
+            row_frame,
+            text=BUTTON_TEXT_TEMPLATE.format(
+                number=row.number, title=row.title, description=row.description
+            ),
+            command=partial(open_row, row),
+            anchor=ANCHOR_WEST,
+            justify=JUSTIFY_LEFT,
+            wraplength=wraplength,
+            relief=RELIEF_RAISED,
+            bd=BUTTON_BORDER_WIDTH,
+            padx=theme.pad_button_x,
+            pady=theme.pad_button_y,
+            font=(body_family, theme.size_body, FONT_WEIGHT_BOLD),
+            bg=theme.surface_alt if selectable else theme.surface,
+            fg=theme.text if selectable else theme.text_muted,
+            activebackground=theme.primary_soft,
+            activeforeground=theme.text,
+            disabledforeground=theme.text_muted,
+            cursor=CURSOR_HAND if selectable else CURSOR_ARROW,
+            takefocus=selectable,
+            highlightthickness=FOCUS_HIGHLIGHT_WIDTH,
+            highlightbackground=theme.surface,
+            highlightcolor=theme.primary_strong,
+            state=STATE_NORMAL if selectable else STATE_DISABLED,
+        )
+        badge = tkinter.Label(
+            row_frame,
+            text=row.label,
+            font=(display_family, theme.size_badge, FONT_WEIGHT_BOLD),
+            bg=_badge_background(row.availability, theme),
+            fg=theme.text if row.denied else badge_foreground(row.availability, theme),
+            padx=theme.pad_badge_x,
+            pady=theme.pad_badge_y,
+            relief=RELIEF_RAISED,
+            bd=BADGE_BORDER_WIDTH,
+        )
+        badge.pack(side=SIDE_RIGHT, padx=(theme.space_2, theme.space_3))
+        button.pack(side=SIDE_LEFT, fill=FILL_X, expand=True)
+        if selectable:
+            action = partial(open_row, row)
+            button.bind(EVENT_RETURN, _event_handler(action, consume=True))
+            button.bind(EVENT_SPACE, _event_handler(action, consume=True))
+            button.bind(EVENT_DOUBLE_CLICK, _event_handler(action, consume=False))
+            focusable.append((row, button))
+    return focusable
 
 
 def _line_height(font_size: int) -> int:
@@ -509,7 +666,9 @@ def _apply_branding(root: tkinter.Tk, *, logger: logging.Logger) -> _Branding:
     return _Branding(display_family=display_family, logo=logo, icon=icon)
 
 
-def _center_window(root: tkinter.Tk, *, row_count: int, logger: logging.Logger) -> int | None:
+def _center_window(
+    root: tkinter.Tk | tkinter.Toplevel, *, row_count: int, logger: logging.Logger
+) -> int | None:
     """Dimensiona y centra la ventana; devuelve el ancho usado o ``None``.
 
     Si no hay display lo deja pasar y devuelve ``None`` para que el llamador
@@ -551,8 +710,6 @@ def run_gui_menu(
     """
     import tkinter
 
-    from recognizer.cli.menu import resolve_runner
-
     resolved_catalog = catalog if catalog is not None else AppCatalog()
     engine = policy
     current: Identity | None = None
@@ -564,7 +721,9 @@ def run_gui_menu(
             if identity_provider is not None
             else anonymous_identity()
         )
-    rows = build_menu_rows(resolved_catalog, apps_config, identity=current, policy=engine)
+    rows = build_menu_rows(
+        resolved_catalog, apps_config, group=AppGroup.MAIN, identity=current, policy=engine
+    )
     theme = DEFAULT_THEME
 
     tk_cls = tk_factory if tk_factory is not None else tkinter.Tk
@@ -591,48 +750,30 @@ def run_gui_menu(
         return replace(request, device=selected_device)
 
     def open_row(row: MenuRow) -> None:
-        if row.app_id is None or not row.selectable:
-            logger.info("'%s' no esta disponible %s.", row.title, row.label)
-            return
-        if engine is not None:
-            fresh = (
-                identity_provider.current_identity()
-                if identity_provider is not None
-                else anonymous_identity()
-            )
-            if not engine.can_launch(fresh, app_id=row.app_id):
-                logger.warning(
-                    "'%s' requiere un rol con permiso (tu rol: %s).",
-                    row.title,
-                    fresh.role.value,
-                )
-                return
-        if row.app_id is AppId.FACE_AUTH:
-            from recognizer.cli.face_menu_gui import run_face_submenu
-
+        if row.opens_other_apps:
             logger.info("Abriendo '%s'... (ESC para volver al menu)", row.title)
             root.withdraw()
             try:
-                run_face_submenu(
-                    effective_request(),
+                run_other_apps_submenu(
+                    request=effective_request(),
+                    apps_config=apps_config,
+                    catalog=resolved_catalog,
                     identity_provider=identity_provider,
+                    policy=policy,
                     logger=logger,
                 )
             finally:
                 root.deiconify()
             logger.info("Volviendo al menu principal.")
             return
-        runner = resolve_runner(row.app_id)
-        if runner is None:
-            logger.error("No hay runner para '%s'.", row.app_id.value)
-            return
-        logger.info("Abriendo '%s'... (ESC/q para volver al menu)", row.title)
-        root.withdraw()
-        try:
-            runner(effective_request())
-        finally:
-            root.deiconify()
-        logger.info("Volviendo al menu principal.")
+        _open_app(
+            row,
+            window=root,
+            request=effective_request(),
+            engine=engine,
+            identity_provider=identity_provider,
+            logger=logger,
+        )
 
     def focus_at(index: int) -> None:
         nonlocal focused_index
@@ -864,55 +1005,17 @@ def run_gui_menu(
     button_wraplength = _button_wraplength(
         window_width if window_width is not None else WINDOW_WIDTH
     )
-    for row in rows:
-        selectable = row.selectable and row.app_id is not None
-        row_frame = tkinter.Frame(body, bg=theme.surface)
-        row_frame.pack(fill=FILL_X, padx=theme.space_1, pady=theme.pad_row)
-        button = tkinter.Button(
-            row_frame,
-            text=BUTTON_TEXT_TEMPLATE.format(
-                number=row.number, title=row.title, description=row.description
-            ),
-            command=partial(open_row, row),
-            anchor=ANCHOR_WEST,
-            justify=JUSTIFY_LEFT,
+    focusable.extend(
+        _build_app_rows(
+            body,
+            rows,
+            theme=theme,
+            display_family=display_family,
+            body_family=body_family,
             wraplength=button_wraplength,
-            relief=RELIEF_RAISED,
-            bd=BUTTON_BORDER_WIDTH,
-            padx=theme.pad_button_x,
-            pady=theme.pad_button_y,
-            font=(body_family, theme.size_body, FONT_WEIGHT_BOLD),
-            bg=theme.surface_alt if selectable else theme.surface,
-            fg=theme.text if selectable else theme.text_muted,
-            activebackground=theme.primary_soft,
-            activeforeground=theme.text,
-            disabledforeground=theme.text_muted,
-            cursor=CURSOR_HAND if selectable else CURSOR_ARROW,
-            takefocus=selectable,
-            highlightthickness=FOCUS_HIGHLIGHT_WIDTH,
-            highlightbackground=theme.surface,
-            highlightcolor=theme.primary_strong,
-            state=STATE_NORMAL if selectable else STATE_DISABLED,
+            open_row=open_row,
         )
-        badge = tkinter.Label(
-            row_frame,
-            text=row.label,
-            font=(display_family, theme.size_badge, FONT_WEIGHT_BOLD),
-            bg=_badge_background(row.availability, theme),
-            fg=theme.text if row.denied else badge_foreground(row.availability, theme),
-            padx=theme.pad_badge_x,
-            pady=theme.pad_badge_y,
-            relief=RELIEF_RAISED,
-            bd=BADGE_BORDER_WIDTH,
-        )
-        badge.pack(side=SIDE_RIGHT, padx=(theme.space_2, theme.space_3))
-        button.pack(side=SIDE_LEFT, fill=FILL_X, expand=True)
-        if selectable:
-            open_row_action = partial(open_row, row)
-            button.bind(EVENT_RETURN, _event_handler(open_row_action, consume=True))
-            button.bind(EVENT_SPACE, _event_handler(open_row_action, consume=True))
-            button.bind(EVENT_DOUBLE_CLICK, _event_handler(open_row_action, consume=False))
-            focusable.append((row, button))
+    )
 
     if focusable:
         focus_at(0)
@@ -929,4 +1032,178 @@ def run_gui_menu(
         root.mainloop()
     except KeyboardInterrupt:
         logger.info("Interrumpido; saliendo del menu.")
+    return 0
+
+
+def run_other_apps_submenu(
+    *,
+    request: AppRunRequest,
+    apps_config: AppsConfig,
+    catalog: AppCatalog,
+    identity_provider: IdentityProvider | None = None,
+    policy: AppPolicy | None = None,
+    logger: logging.Logger = LOGGER,
+    tk_factory: Callable[[], tkinter.Toplevel] | None = None,
+) -> int:
+    """Muestra el submenu "Otras apps" (Toplevel) y vuelve al cerrarlo (0).
+
+    Lista las apps de ``AppGroup.OTHER`` (secundarias y por crear). Abrir una
+    oculta el submenu y corre su runner; ESC/Volver/X lo destruye y devuelve el
+    control al menu principal. ``tk_factory`` inyecta el Toplevel en tests.
+    """
+    import tkinter
+
+    theme = DEFAULT_THEME
+    engine = policy
+    current: Identity | None = None
+    if identity_provider is not None or engine is not None:
+        if engine is None:
+            engine = AllowAllPolicy()
+        current = (
+            identity_provider.current_identity()
+            if identity_provider is not None
+            else anonymous_identity()
+        )
+    rows = build_menu_rows(
+        catalog, apps_config, group=AppGroup.OTHER, identity=current, policy=engine
+    )
+
+    tk_cls = tk_factory if tk_factory is not None else tkinter.Toplevel
+    window = tk_cls()
+    window.title(GUI_OTHER_APPS_WINDOW_TITLE)
+    window.configure(bg=theme.surface)
+    _center_window(window, row_count=len(rows), logger=logger)
+
+    body_family = theme.font_body
+    display_family = theme.font_display_fallback
+
+    def close() -> None:
+        window.destroy()
+
+    header = tkinter.Frame(window, bg=theme.primary)
+    header.pack(side=SIDE_TOP, fill=FILL_X)
+    tkinter.Label(
+        header,
+        text=GUI_OTHER_APPS_SECTION,
+        font=(display_family, theme.size_display_small, FONT_WEIGHT_BOLD),
+        fg=theme.primary_contrast,
+        bg=theme.primary,
+        anchor=ANCHOR_WEST,
+    ).pack(fill=FILL_X, padx=theme.pad_header, pady=(theme.space_2, BORDER_NONE))
+    tkinter.Label(
+        header,
+        text=GUI_OTHER_APPS_SUBTITLE,
+        font=(body_family, theme.size_body_small),
+        fg=theme.primary_contrast,
+        bg=theme.primary,
+        anchor=ANCHOR_WEST,
+    ).pack(fill=FILL_X, padx=theme.pad_header, pady=(BORDER_NONE, theme.space_2))
+
+    footer = tkinter.Frame(window, bg=theme.surface_alt)
+    footer.pack(side=SIDE_BOTTOM, fill=FILL_X)
+    tkinter.Label(
+        footer,
+        text=GUI_OTHER_APPS_FOOTER_HINT,
+        font=(body_family, theme.size_body_small),
+        fg=theme.text_muted,
+        bg=theme.surface_alt,
+        anchor=ANCHOR_WEST,
+    ).pack(side=SIDE_LEFT, padx=theme.pad_footer, pady=theme.pad_footer)
+    back_button = tkinter.Button(
+        footer,
+        text=GUI_OTHER_APPS_BACK_TEXT,
+        command=close,
+        relief=RELIEF_RAISED,
+        bd=BUTTON_BORDER_WIDTH,
+        padx=theme.pad_button_x,
+        pady=theme.space_1,
+        font=(body_family, theme.size_body, FONT_WEIGHT_BOLD),
+        bg=theme.primary,
+        fg=theme.primary_contrast,
+        activebackground=theme.primary_strong,
+        activeforeground=theme.primary_contrast,
+        cursor=CURSOR_HAND,
+        takefocus=True,
+        highlightthickness=FOCUS_HIGHLIGHT_WIDTH,
+        highlightbackground=theme.surface_alt,
+        highlightcolor=theme.primary_strong,
+    )
+    back_button.pack(side=SIDE_RIGHT, padx=theme.pad_footer, pady=theme.pad_footer)
+    back_button.bind(EVENT_RETURN, _event_handler(close, consume=True))
+    back_button.bind(EVENT_SPACE, _event_handler(close, consume=True))
+
+    body_outer = tkinter.Frame(window, bg=theme.surface)
+    body_outer.pack(
+        side=SIDE_TOP, fill=FILL_BOTH, expand=True, padx=theme.pad_body, pady=theme.space_4
+    )
+    canvas = tkinter.Canvas(
+        body_outer, bg=theme.surface, highlightthickness=BORDER_NONE, bd=BORDER_NONE
+    )
+    scrollbar = tkinter.Scrollbar(body_outer, orient=ORIENT_VERTICAL, command=canvas.yview)
+    canvas.configure(yscrollcommand=scrollbar.set)
+    scrollbar.pack(side=SIDE_RIGHT, fill=FILL_Y)
+    canvas.pack(side=SIDE_LEFT, fill=FILL_BOTH, expand=True)
+    body = tkinter.Frame(canvas, bg=theme.surface)
+    body_window = canvas.create_window(
+        (BORDER_NONE, BORDER_NONE), window=body, anchor=ANCHOR_NORTH_WEST
+    )
+    body.bind(
+        EVENT_CONFIGURE,
+        lambda _event: canvas.configure(scrollregion=canvas.bbox(TK_ALL)),
+    )
+    canvas.bind(
+        EVENT_CONFIGURE,
+        lambda event: canvas.itemconfigure(body_window, width=event.width),
+    )
+
+    def open_row(row: MenuRow) -> None:
+        _open_app(
+            row,
+            window=window,
+            request=request,
+            engine=engine,
+            identity_provider=identity_provider,
+            logger=logger,
+        )
+
+    focusable = _build_app_rows(
+        body,
+        rows,
+        theme=theme,
+        display_family=display_family,
+        body_family=body_family,
+        wraplength=_button_wraplength(WINDOW_WIDTH),
+        open_row=open_row,
+    )
+
+    focused_index = 0
+
+    def focus_at(index: int) -> None:
+        nonlocal focused_index
+        if not focusable:
+            return
+        focused_index = max(0, min(index, len(focusable) - 1))
+        focusable[focused_index][1].focus_set()
+
+    def open_focused() -> None:
+        if not focusable:
+            logger.info("No hay aplicaciones disponibles.")
+            return
+        open_row(focusable[focused_index][0])
+
+    if focusable:
+        focus_at(0)
+
+    window.protocol(EVENT_CLOSE_WINDOW, close)
+    window.bind(EVENT_ESCAPE, lambda _event: close())
+    window.bind(EVENT_RETURN, lambda _event: open_focused())
+    window.bind(EVENT_SPACE, lambda _event: open_focused())
+    window.bind(EVENT_UP, lambda _event: focus_at(focused_index - 1))
+    window.bind(EVENT_DOWN, lambda _event: focus_at(focused_index + 1))
+    window.bind(EVENT_MOUSEWHEEL, lambda event: _scroll_canvas(canvas, event))
+
+    try:
+        window.wait_window()
+    except KeyboardInterrupt:
+        logger.info("Interrumpido; volviendo al menu.")
     return 0

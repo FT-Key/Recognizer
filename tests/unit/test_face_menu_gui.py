@@ -20,7 +20,7 @@ from recognizer.cli import face_menu_gui, menu, menu_gui
 from recognizer.cli.face_adapters import allowed_roles
 from recognizer.cli.face_menu_gui import run_face_submenu
 from recognizer.core.config import AppsConfig
-from recognizer.core.domain.app import AppCatalog, AppId, AppRunRequest
+from recognizer.core.domain.app import AppCatalog, AppGroup, AppId, AppRunRequest
 from recognizer.core.domain.camera import CameraInfo
 from recognizer.core.domain.identity import Identity, Role, anonymous_identity
 from recognizer.core.ports.camera_discovery import CameraEnumerator
@@ -911,7 +911,7 @@ def test_menu_opens_face_submenu_instead_of_direct_runner(
     monkeypatch.setattr("recognizer.cli.face_menu_gui.run_face_submenu", fake_submenu)
     face_row = next(
         row
-        for row in menu_gui.build_menu_rows(AppCatalog(), AppsConfig())
+        for row in menu_gui.build_menu_rows(AppCatalog(), AppsConfig(), group=AppGroup.MAIN)
         if row.app_id is AppId.FACE_AUTH
     )
     fake_root_cls.on_mainloop = lambda _root: _menu_press(_menu_app_button(face_row.number).command)

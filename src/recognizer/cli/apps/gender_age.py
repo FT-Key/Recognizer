@@ -1,25 +1,29 @@
 """App Edad y genero: estima edad y genero de los rostros en vivo.
 
 Una sola via de inferencia: el estimador facial de InsightFace (deteccion +
-genderage, sin embeddings). Cada fotograma estima los atributos, los suaviza por
-rostro y los dibuja; ESC/q vuelve al menu. No guarda imagenes ni identidades.
+genderage, sin embeddings). La estimacion y el suavizado corren en un worker
+(`LatestFrameSource`) y el bucle principal solo dibuja; asi la camara de red
+(telofono) no acumula retraso. ESC/q vuelve al menu. No guarda imagenes ni
+identidades.
 """
 
 import logging
 from contextlib import ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 
 from recognizer.adapters.camera_opencv import OpenCVCamera
 from recognizer.adapters.insightface_attributes import InsightFaceAttributeEstimator
+from recognizer.adapters.latest_frame_source import LatestFrameSource
 from recognizer.adapters.overlay_gender_age import draw_gender_age_overlay
 from recognizer.bootstrap import resolve_camera_config
 from recognizer.cli.console import log_step
+from recognizer.cli.inference_worker import LatestInferenceWorker
 from recognizer.cli.paths import prepare_workspace
 from recognizer.cli.runtime import RuntimeCallbacks, run_camera_loop
 from recognizer.core.domain.app import AppRunRequest
-from recognizer.core.domain.face_attributes import AgeGenderSmoother
+from recognizer.core.domain.face_attributes import AgeGenderSmoother, FaceAttributes
 from recognizer.core.errors import RecognizerError
 from recognizer.core.pipeline.builder import PipelineBuilder
 from recognizer.core.pipeline.context import FrameContext
@@ -34,7 +38,7 @@ WINDOW_NAME = "Edad y genero"
 class _HudState:
     """Estado mutable compartido por los callbacks del bucle de camara."""
 
-    faces: int = 0
+    faces: tuple[FaceAttributes, ...] = field(default_factory=tuple)
 
 
 def run_gender_age(request: AppRunRequest) -> int:
@@ -61,29 +65,44 @@ def run_gender_age(request: AppRunRequest) -> int:
         smoother = AgeGenderSmoother(window=gender_age_config.smoothing_window)
         state = _HudState()
 
+        def _on_result(faces: tuple[FaceAttributes, ...]) -> None:
+            state.faces = faces
+
         def _on_context(context: FrameContext) -> None:
-            faces = smoother.update(estimator.estimate(context.frame))
-            state.faces = len(faces)
-            draw_gender_age_overlay(context.frame.data, faces=faces)
+            if worker.error is not None:
+                raise worker.error
+            draw_gender_age_overlay(context.frame.data, faces=state.faces)
 
         def _on_progress(count: int, fps: float) -> None:
             LOGGER.info(
                 "Fotogramas: %d | FPS medio: %.1f | Rostros: %d",
                 count,
                 fps,
-                state.faces,
+                len(state.faces),
             )
 
         with ExitStack() as stack:
+            camera = OpenCVCamera(camera_config)
             with log_step(LOGGER, f"Abriendo camara (device={camera_config.device_index})"):
-                camera = stack.enter_context(OpenCVCamera(camera_config))
+                # LatestFrameSource abre la camara y arranca el hilo de captura;
+                # no se entra la camara aparte (seria una doble apertura).
+                source = stack.enter_context(LatestFrameSource(camera))
             with log_step(
                 LOGGER, f"Cargando detector de edad/genero ({gender_age_config.model_path})"
             ):
                 stack.enter_context(estimator)
+            worker = stack.enter_context(
+                LatestInferenceWorker(
+                    source=source,
+                    infer=lambda frame: smoother.update(estimator.estimate(frame)),
+                    on_result=_on_result,
+                    logger=LOGGER,
+                    name="recognizer-gender-age-infer",
+                )
+            )
             LOGGER.info("Listo. Pulsa ESC o q para volver al menu.")
             frames, fps = run_camera_loop(
-                camera,
+                source,
                 pipeline=pipeline,
                 window_name=WINDOW_NAME,
                 show_window=show_window,
@@ -107,6 +126,6 @@ def run_gender_age(request: AppRunRequest) -> int:
         "App OK: %d fotogramas, %.1f FPS medio, rostros en el ultimo fotograma: %d.",
         frames,
         fps,
-        state.faces,
+        len(state.faces),
     )
     return 0

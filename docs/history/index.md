@@ -53,3 +53,6 @@ etapa que se necesite.
 | 18 | Conteo de autos (YOLO + ByteTrack + linea) | completada | [stage-18-vehicle-counter.md](stage-18-vehicle-counter.md) |
 | 19 | Desenfoque privacidad (InsightFace det + blur) | completada | [stage-19-privacy-blur.md](stage-19-privacy-blur.md) |
 | 21 | Edad y genero (InsightFace det + genderage, overlay) | completada | [stage-21-gender-age.md](stage-21-gender-age.md) |
+| 23-lat | Fix OCR: latencia y rendimiento (worker async, downscale, cambio) | completada | [stage-23-ocr-latency.md](stage-23-ocr-latency.md) |
+| 23-worker | Fix latencia cámara de red: worker genérico (somnolencia, edad/género, privacidad) | completada | [stage-23-inference-worker.md](stage-23-inference-worker.md) |
+| menú | Menú por secciones: principal + submenú "Otras apps" | completada | [menu-sections.md](menu-sections.md) |

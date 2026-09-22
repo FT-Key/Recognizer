@@ -245,8 +245,9 @@ def test_menu_renders_anti_intruder_as_available() -> None:
 
     text = menu.render_catalog(AppCatalog(), AppsConfig())
 
-    assert "  3) Anti-intrusos" in text
-    assert menu.LABEL_AVAILABLE in text.splitlines()[6]
+    assert "Anti-intrusos" in text
+    row = next(line for line in text.splitlines() if "Anti-intrusos" in line)
+    assert menu.LABEL_AVAILABLE in row
 
 
 # --- Runner con dobles (bucle de camara real) ---

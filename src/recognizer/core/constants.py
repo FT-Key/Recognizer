@@ -22,6 +22,9 @@ LATEST_FRAME_FAILURE_SLEEP_SECONDS = 0.01
 # Worker de inferencia facial: espera a un fotograma nuevo y se detiene limpio.
 FACE_WORKER_WAIT_TIMEOUT_SECONDS = 0.2
 FACE_WORKER_JOIN_TIMEOUT_SECONDS = 2.0
+# Worker de inferencia generico (apps que no tienen worker propio): idem.
+INFERENCE_WORKER_WAIT_TIMEOUT_SECONDS = 0.2
+INFERENCE_WORKER_JOIN_TIMEOUT_SECONDS = 2.0
 
 DEFAULT_HAND_MODEL_PATH = "models/hand_landmarker.task"
 DEFAULT_MAX_HANDS = 2
@@ -202,6 +205,21 @@ DEFAULT_PRIVACY_FACE_MARGIN = 0.15
 MIN_BLUR_STRENGTH = 3
 MAX_BLUR_STRENGTH = 99
 
+# Detector de caidas (etapa 20): YOLO pose + aspecto + centro bajo + quietud.
+# aspect_ratio < max_aspect_ratio: la persona es mas ancha que alta (cayo).
+# center_y > min_center_y: el centro de masa esta abajo (en el suelo).
+# stillness < max_stillness: poca varianza del centro Y (quietud).
+DEFAULT_FALL_MODEL_PATH = "models/yolo26n-pose.pt"
+DEFAULT_FALL_MIN_CONFIDENCE = 0.5
+DEFAULT_FALL_KEYPOINT_CONFIDENCE = 0.5
+DEFAULT_FALL_ASPECT_RATIO = 0.8
+DEFAULT_FALL_CENTER_Y = 0.6
+DEFAULT_FALL_STILLNESS_THRESHOLD = 0.02
+DEFAULT_FALL_STILLNESS_WINDOW = 10
+DEFAULT_FALL_CONFIRM_FRAMES = 5
+DEFAULT_FALL_RELEASE_FRAMES = 10
+DEFAULT_FALL_ALERT_REPEAT_SECONDS = 2.0
+
 # Edad y genero (etapa 21): reutiliza el pack facial (buffalo_s) con deteccion +
 # genderage, sin embeddings. La edad se suaviza con la mediana y el genero con
 # voto mayoritario por rostro emparejado con IoU entre fotogramas, para evitar
@@ -216,6 +234,62 @@ GENDER_AGE_MAX_MISSES = 10
 # devolver valores extremos con iluminacion pobre o caras parciales).
 MIN_ESTIMATED_AGE = 0
 MAX_ESTIMATED_AGE = 120
+
+# Somnolencia (etapa 22): YOLO pose + MediaPipe Face Mesh + EAR/MAR + cabeza caida.
+# Senales de pose: cabeza caida (nariz vs hombros), cabeceo (oscilacion nariz).
+# Senales faciales: EAR (ojos cerrados), MAR (bostezo).
+DEFAULT_DROWSINESS_MODEL_PATH = "models/yolo26n-pose.pt"
+DEFAULT_DROWSINESS_MIN_CONFIDENCE = 0.5
+DEFAULT_DROWSINESS_KEYPOINT_CONFIDENCE = 0.5
+DEFAULT_DROWSINESS_CONFIRM_FRAMES = 10
+DEFAULT_DROWSINESS_RELEASE_FRAMES = 15
+# head_droop: diferencia Y nariz - centro hombros. Valores altos = cabeza caida.
+DEFAULT_DROWSINESS_HEAD_DROOP_THRESHOLD = 0.12
+# nod_amplitude: amplitud max-min de la nariz Y en la ventana. Oscilacion = cabeceo.
+DEFAULT_DROWSINESS_NOD_AMPLITUDE_THRESHOLD = 0.04
+DEFAULT_DROWSINESS_NODDING_WINDOW = 20
+# EAR (Eye Aspect Ratio): ojos cerrados cuando EAR < threshold.
+# Un ojo abierto tiene EAR ~0.3, cerrado ~0.05.
+DEFAULT_DROWSINESS_EAR_THRESHOLD = 0.18
+DEFAULT_DROWSINESS_EYE_CLOSE_FRAMES = 8
+# MAR (Mouth Aspect Ratio): bostezo cuando MAR > threshold.
+# Boca cerrada ~0.02, bostezo > 0.5.
+DEFAULT_DROWSINESS_MAR_THRESHOLD = 0.5
+DEFAULT_DROWSINESS_YAWN_FRAMES = 5
+# Face Mesh modelo
+DEFAULT_DROWSINESS_FACE_MESH_MODEL_PATH = "models/face_landmarker.task"
+DEFAULT_DROWSINESS_FACE_DETECTION_CONFIDENCE = 0.5
+DEFAULT_DROWSINESS_FACE_PRESENCE_CONFIDENCE = 0.5
+
+# OCR en vivo (etapa 23): EasyOCR sobre ROI configurable.
+DEFAULT_OCR_LANGUAGES: tuple[str, ...] = ("en", "es")
+DEFAULT_OCR_MIN_CONFIDENCE = 0.3
+DEFAULT_OCR_PROCESS_EVERY_N_FRAMES = 3
+DEFAULT_OCR_ROI_X_MIN = 0.1
+DEFAULT_OCR_ROI_Y_MIN = 0.1
+DEFAULT_OCR_ROI_X_MAX = 0.9
+DEFAULT_OCR_ROI_Y_MAX = 0.9
+DEFAULT_OCR_MAX_RESULTS = 20
+# Worker de OCR: corre EasyOCR fuera del hilo de dibujo (la inferencia tarda
+# cientos de ms y congelaba la ventana). Espera al fotograma nuevo y se para limpio.
+OCR_WORKER_WAIT_TIMEOUT_SECONDS = 0.2
+OCR_WORKER_JOIN_TIMEOUT_SECONDS = 2.0
+# FPS maximo de inferencia OCR (0 = sin limite, solo manda process_every_n_frames).
+DEFAULT_OCR_MAX_INFERENCE_FPS = 2.0
+# Rendimiento: EasyOCR en CPU es lento y escala con los pixeles. Se reduce el
+# recorte de la ROI a `max_width` antes de inferir, se limita el lienzo de CRAFT
+# y se evita reescalar (`mag_ratio`). Valores pensados para CPU sin GPU.
+DEFAULT_OCR_MAX_WIDTH = 640
+DEFAULT_OCR_CANVAS_SIZE = 1280
+DEFAULT_OCR_MAG_RATIO = 1.0
+# Camaras de red (telefono) entregan alta resolucion: el worker reduce el
+# fotograma a este ancho antes de convertir/detectar (0 = sin reduccion).
+DEFAULT_OCR_MAX_FRAME_WIDTH = 1280
+# Deteccion de cambios: si la ROI no cambio (diferencia media < umbral sobre una
+# firma en escala de grises) se reutilizan las cajas y no se corre OCR de nuevo.
+# Evita reprocesar una escena estatica cada pocos segundos.
+DEFAULT_OCR_CHANGE_THRESHOLD = 8.0
+OCR_SIGNATURE_SIZE = 32
 
 DEFAULT_FACE_DEFAULT_ROLE = "operator"
 # Clave de respaldo por usuario (login sin camara): hash PBKDF2-HMAC-SHA256 con

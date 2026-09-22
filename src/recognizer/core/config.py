@@ -16,6 +16,21 @@ from recognizer.core.constants import (
     DEFAULT_ASSISTANCE_REQUIRED_ARMS,
     DEFAULT_BROWSER_DEBUGGING_PORT,
     DEFAULT_CAMERA_DEVICE_INDEX,
+    DEFAULT_DROWSINESS_CONFIRM_FRAMES,
+    DEFAULT_DROWSINESS_EAR_THRESHOLD,
+    DEFAULT_DROWSINESS_EYE_CLOSE_FRAMES,
+    DEFAULT_DROWSINESS_FACE_DETECTION_CONFIDENCE,
+    DEFAULT_DROWSINESS_FACE_MESH_MODEL_PATH,
+    DEFAULT_DROWSINESS_FACE_PRESENCE_CONFIDENCE,
+    DEFAULT_DROWSINESS_HEAD_DROOP_THRESHOLD,
+    DEFAULT_DROWSINESS_KEYPOINT_CONFIDENCE,
+    DEFAULT_DROWSINESS_MAR_THRESHOLD,
+    DEFAULT_DROWSINESS_MIN_CONFIDENCE,
+    DEFAULT_DROWSINESS_MODEL_PATH,
+    DEFAULT_DROWSINESS_NOD_AMPLITUDE_THRESHOLD,
+    DEFAULT_DROWSINESS_NODDING_WINDOW,
+    DEFAULT_DROWSINESS_RELEASE_FRAMES,
+    DEFAULT_DROWSINESS_YAWN_FRAMES,
     DEFAULT_ENROLLMENT_SAMPLES,
     DEFAULT_FACE_CONFIDENCE,
     DEFAULT_FACE_CONFIRM_FRAMES,
@@ -26,6 +41,16 @@ from recognizer.core.constants import (
     DEFAULT_FACE_PROCESS_EVERY_N_FRAMES,
     DEFAULT_FACE_RELEASE_FRAMES,
     DEFAULT_FACE_STORE_DIR,
+    DEFAULT_FALL_ALERT_REPEAT_SECONDS,
+    DEFAULT_FALL_ASPECT_RATIO,
+    DEFAULT_FALL_CENTER_Y,
+    DEFAULT_FALL_CONFIRM_FRAMES,
+    DEFAULT_FALL_KEYPOINT_CONFIDENCE,
+    DEFAULT_FALL_MIN_CONFIDENCE,
+    DEFAULT_FALL_MODEL_PATH,
+    DEFAULT_FALL_RELEASE_FRAMES,
+    DEFAULT_FALL_STILLNESS_THRESHOLD,
+    DEFAULT_FALL_STILLNESS_WINDOW,
     DEFAULT_FRAME_HEIGHT,
     DEFAULT_FRAME_WIDTH,
     DEFAULT_GENDER_AGE_CONFIDENCE,
@@ -59,6 +84,20 @@ from recognizer.core.constants import (
     DEFAULT_MIN_PASSWORD_LENGTH,
     DEFAULT_MIN_PRESENCE_CONFIDENCE,
     DEFAULT_MIN_TRACKING_CONFIDENCE,
+    DEFAULT_OCR_CANVAS_SIZE,
+    DEFAULT_OCR_CHANGE_THRESHOLD,
+    DEFAULT_OCR_LANGUAGES,
+    DEFAULT_OCR_MAG_RATIO,
+    DEFAULT_OCR_MAX_FRAME_WIDTH,
+    DEFAULT_OCR_MAX_INFERENCE_FPS,
+    DEFAULT_OCR_MAX_RESULTS,
+    DEFAULT_OCR_MAX_WIDTH,
+    DEFAULT_OCR_MIN_CONFIDENCE,
+    DEFAULT_OCR_PROCESS_EVERY_N_FRAMES,
+    DEFAULT_OCR_ROI_X_MAX,
+    DEFAULT_OCR_ROI_X_MIN,
+    DEFAULT_OCR_ROI_Y_MAX,
+    DEFAULT_OCR_ROI_Y_MIN,
     DEFAULT_PEOPLE_CONFIDENCE,
     DEFAULT_PEOPLE_MODEL_PATH,
     DEFAULT_POINTER_ACTIVE_ZONE_MAX,
@@ -836,6 +875,125 @@ class GenderAgeConfig(BaseModel):
     smoothing_window: int = Field(default=DEFAULT_GENDER_AGE_SMOOTHING_WINDOW, ge=1, le=120)
 
 
+class FallDetectorAlertConfig(BaseModel):
+    """Alerta sonora del detector de caidas: activacion y repeticion."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_FALL_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class FallDetectorConfig(BaseModel):
+    """Detector de caidas: modelo YOLO pose, umbrales y debounce.
+
+    Detecta caidas analizando la pose del cuerpo: aspecto (alto/ancho),
+    centro de masa Y y quietud (varianza del centro entre fotogramas).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_FALL_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_FALL_MIN_CONFIDENCE, ge=0, le=1)
+    min_keypoint_confidence: float = Field(default=DEFAULT_FALL_KEYPOINT_CONFIDENCE, ge=0, le=1)
+    max_aspect_ratio: float = Field(default=DEFAULT_FALL_ASPECT_RATIO, gt=0, le=5.0)
+    min_center_y: float = Field(default=DEFAULT_FALL_CENTER_Y, ge=0, le=1)
+    max_stillness: float = Field(default=DEFAULT_FALL_STILLNESS_THRESHOLD, gt=0, le=1)
+    stillness_window: int = Field(default=DEFAULT_FALL_STILLNESS_WINDOW, ge=1, le=120)
+    confirm_frames: int = Field(default=DEFAULT_FALL_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_FALL_RELEASE_FRAMES, ge=1)
+    alert: FallDetectorAlertConfig = Field(default_factory=FallDetectorAlertConfig)
+
+
+class DrowsinessAlertConfig(BaseModel):
+    """Alerta sonora de somnolencia: activacion y repeticion."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    enabled: bool = True
+    repeat_seconds: float = Field(default=DEFAULT_INTRUSION_ALERT_REPEAT_SECONDS, ge=0)
+
+
+class DrowsinessConfig(BaseModel):
+    """Detector de somnolencia: YOLO pose + MediaPipe Face Mesh.
+
+    Senales de pose: cabeza caida (nariz vs hombros), cabeceo (oscilacion).
+    Senales faciales: EAR (ojos cerrados), MAR (bostezo).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    model_path: str = Field(default=DEFAULT_DROWSINESS_MODEL_PATH, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_DROWSINESS_MIN_CONFIDENCE, ge=0, le=1)
+    min_keypoint_confidence: float = Field(
+        default=DEFAULT_DROWSINESS_KEYPOINT_CONFIDENCE, ge=0, le=1
+    )
+    head_droop_threshold: float = Field(default=DEFAULT_DROWSINESS_HEAD_DROOP_THRESHOLD, ge=0, le=1)
+    nod_amplitude_threshold: float = Field(
+        default=DEFAULT_DROWSINESS_NOD_AMPLITUDE_THRESHOLD, ge=0, le=1
+    )
+    nodding_window: int = Field(default=DEFAULT_DROWSINESS_NODDING_WINDOW, ge=1, le=120)
+    ear_threshold: float = Field(default=DEFAULT_DROWSINESS_EAR_THRESHOLD, ge=0, le=1)
+    eye_close_frames: int = Field(default=DEFAULT_DROWSINESS_EYE_CLOSE_FRAMES, ge=1, le=60)
+    mar_threshold: float = Field(default=DEFAULT_DROWSINESS_MAR_THRESHOLD, ge=0, le=1)
+    yawn_frames: int = Field(default=DEFAULT_DROWSINESS_YAWN_FRAMES, ge=1, le=60)
+    face_mesh_model_path: str = Field(default=DEFAULT_DROWSINESS_FACE_MESH_MODEL_PATH, min_length=1)
+    face_detection_confidence: float = Field(
+        default=DEFAULT_DROWSINESS_FACE_DETECTION_CONFIDENCE, ge=0, le=1
+    )
+    face_presence_confidence: float = Field(
+        default=DEFAULT_DROWSINESS_FACE_PRESENCE_CONFIDENCE, ge=0, le=1
+    )
+    confirm_frames: int = Field(default=DEFAULT_DROWSINESS_CONFIRM_FRAMES, ge=1)
+    release_frames: int = Field(default=DEFAULT_DROWSINESS_RELEASE_FRAMES, ge=1)
+    alert: DrowsinessAlertConfig = Field(default_factory=DrowsinessAlertConfig)
+
+
+class OCRReaderConfig(BaseModel):
+    """OCR en vivo: EasyOCR sobre una region de interes (ROI).
+
+    ``languages`` es una tupla de codigos de idioma (``"en"``, ``"es"``, etc.).
+    ``min_confidence`` filtra detecciones debiles. ``roi`` define la region del
+    fotograma donde buscar texto (coordenadas normalizadas 0..1).
+    ``process_every_n_frames`` controla cada cuantos fotogramas se ejecuta OCR;
+    subelo en CPU lenta. ``max_results`` limita la cantidad de textos devueltos.
+    ``max_inference_fps`` limita cuantas veces por segundo corre OCR (0 = sin tope);
+    la inferencia corre en un hilo aparte para no congelar la ventana.
+
+    En CPU el coste escala con los pixeles: ``max_width`` reduce el recorte de la
+    ROI antes de inferir (0 = sin reduccion), ``canvas_size``/``mag_ratio`` acotan
+    el lienzo interno de CRAFT. ``change_threshold`` evita reprocesar la ROI cuando
+    no cambio (diferencia media 0..255 sobre una firma en grises; 0 = siempre).
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    languages: tuple[str, ...] = Field(default=DEFAULT_OCR_LANGUAGES, min_length=1)
+    min_confidence: float = Field(default=DEFAULT_OCR_MIN_CONFIDENCE, ge=0, le=1)
+    process_every_n_frames: int = Field(default=DEFAULT_OCR_PROCESS_EVERY_N_FRAMES, ge=1)
+    max_results: int = Field(default=DEFAULT_OCR_MAX_RESULTS, ge=1)
+    max_inference_fps: float = Field(default=DEFAULT_OCR_MAX_INFERENCE_FPS, ge=0)
+    max_width: int = Field(default=DEFAULT_OCR_MAX_WIDTH, ge=0)
+    canvas_size: int = Field(default=DEFAULT_OCR_CANVAS_SIZE, ge=320)
+    mag_ratio: float = Field(default=DEFAULT_OCR_MAG_RATIO, gt=0)
+    max_frame_width: int = Field(default=DEFAULT_OCR_MAX_FRAME_WIDTH, ge=0)
+    change_threshold: float = Field(default=DEFAULT_OCR_CHANGE_THRESHOLD, ge=0)
+    roi_x_min: float = Field(default=DEFAULT_OCR_ROI_X_MIN, ge=0, le=1)
+    roi_y_min: float = Field(default=DEFAULT_OCR_ROI_Y_MIN, ge=0, le=1)
+    roi_x_max: float = Field(default=DEFAULT_OCR_ROI_X_MAX, ge=0, le=1)
+    roi_y_max: float = Field(default=DEFAULT_OCR_ROI_Y_MAX, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _validate_roi(self) -> Self:
+        if self.roi_x_min >= self.roi_x_max:
+            msg = "La ROI requiere roi_x_min < roi_x_max."
+            raise ValueError(msg)
+        if self.roi_y_min >= self.roi_y_max:
+            msg = "La ROI requiere roi_y_min < roi_y_max."
+            raise ValueError(msg)
+        return self
+
+
 class FaceAuthConfig(BaseModel):
     """Reconocimiento facial: modelo InsightFace, captura, matching y almacen.
 
@@ -943,6 +1101,9 @@ class AppConfig(BaseModel):
     vehicle_counter: VehicleCounterConfig = Field(default_factory=VehicleCounterConfig)
     privacy_blur: PrivacyBlurConfig = Field(default_factory=PrivacyBlurConfig)
     gender_age: GenderAgeConfig = Field(default_factory=GenderAgeConfig)
+    fall_detector: FallDetectorConfig = Field(default_factory=FallDetectorConfig)
+    drowsiness: DrowsinessConfig = Field(default_factory=DrowsinessConfig)
+    ocr_reader: OCRReaderConfig = Field(default_factory=OCRReaderConfig)
     face_auth: FaceAuthConfig = Field(default_factory=FaceAuthConfig)
     apps: AppsConfig = Field(default_factory=AppsConfig)
 

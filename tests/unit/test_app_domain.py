@@ -9,6 +9,7 @@ from recognizer.core.domain.app import (
     DEFAULT_APPS,
     AppAvailability,
     AppCatalog,
+    AppGroup,
     AppId,
     AppInfo,
     AppPreparation,
@@ -22,10 +23,10 @@ def test_catalog_order_is_gestures_then_no_training_then_training() -> None:
 
     assert ids == [
         AppId.GESTURES,
+        AppId.FACE_AUTH,
         AppId.PEOPLE_COUNTER,
         AppId.ANTI_INTRUDER,
         AppId.POSTURE,
-        AppId.FACE_AUTH,
         AppId.ASSISTANCE,
         AppId.LOITERING,
         AppId.VACANCY,
@@ -45,16 +46,19 @@ def test_implemented_apps_are_in_order() -> None:
 
     assert implemented == [
         AppId.GESTURES,
+        AppId.FACE_AUTH,
         AppId.PEOPLE_COUNTER,
         AppId.ANTI_INTRUDER,
         AppId.POSTURE,
-        AppId.FACE_AUTH,
         AppId.ASSISTANCE,
         AppId.LOITERING,
         AppId.VACANCY,
         AppId.VEHICLE_COUNTER,
         AppId.PRIVACY_BLUR,
+        AppId.FALL_DETECTOR,
         AppId.GENDER_AGE,
+        AppId.DROWSINESS,
+        AppId.OCR_READER,
     ]
 
 
@@ -138,6 +142,41 @@ def test_app_info_defaults() -> None:
 
     assert info.implemented is False
     assert info.preparation is None
+    assert info.group is AppGroup.OTHER
+
+
+def test_main_group_has_the_six_primary_apps() -> None:
+    catalog = AppCatalog()
+
+    main = [info.app_id for info in catalog.apps_in_group(AppGroup.MAIN)]
+
+    assert main == [
+        AppId.GESTURES,
+        AppId.FACE_AUTH,
+        AppId.PEOPLE_COUNTER,
+        AppId.ANTI_INTRUDER,
+        AppId.LOITERING,
+        AppId.VACANCY,
+    ]
+
+
+def test_other_group_has_the_secondary_and_pending_apps() -> None:
+    catalog = AppCatalog()
+
+    other = [info.app_id for info in catalog.apps_in_group(AppGroup.OTHER)]
+
+    assert other == [
+        AppId.POSTURE,
+        AppId.ASSISTANCE,
+        AppId.VEHICLE_COUNTER,
+        AppId.PRIVACY_BLUR,
+        AppId.FALL_DETECTOR,
+        AppId.GENDER_AGE,
+        AppId.DROWSINESS,
+        AppId.OCR_READER,
+        AppId.PPE_DETECTOR,
+        AppId.INVENTORY,
+    ]
 
 
 def test_run_request_defaults() -> None:

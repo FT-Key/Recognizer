@@ -41,6 +41,17 @@ class AppPreparation(StrEnum):
     ENROLLMENT = "enrolamiento"
 
 
+class AppGroup(StrEnum):
+    """Seccion del launcher donde se muestra la app.
+
+    ``MAIN`` son las apps principales del menu; ``OTHER`` van en el submenu
+    "Otras apps" (las que funcionan peor o aun no existen).
+    """
+
+    MAIN = "main"
+    OTHER = "other"
+
+
 class AppAvailability(StrEnum):
     """Estado de una app en el menu, derivado del catalogo y la configuracion."""
 
@@ -58,6 +69,7 @@ class AppInfo:
     description: str
     implemented: bool = False
     preparation: AppPreparation | None = None
+    group: AppGroup = AppGroup.OTHER
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,33 +82,17 @@ class AppRunRequest:
     show_window: bool = True
 
 
-# Orden pedido por el usuario: primero las implementadas, luego las faciles
-# (sin entrenamiento, etapas proximas), luego las intermedias, OCR al final y
-# al ultimo las que requieren entrenamiento (menor prioridad).
+# Orden pedido por el usuario: en el menu principal (``AppGroup.MAIN``) van las
+# apps mas utiles (gestos, facial, contador, anti-intrusos, permanencia y zona
+# vacia); el resto vive en el submenu "Otras apps" (``AppGroup.OTHER``), incluidas
+# las que aun requieren entrenamiento (menor prioridad).
 DEFAULT_APPS: tuple[AppInfo, ...] = (
     AppInfo(
         app_id=AppId.GESTURES,
         title="Reconocimiento de gestos",
         description="Controla el equipo con gestos de mano (MediaPipe).",
         implemented=True,
-    ),
-    AppInfo(
-        app_id=AppId.PEOPLE_COUNTER,
-        title="Contador de personas",
-        description="Cuenta personas en camara con YOLO; no requiere entrenamiento.",
-        implemented=True,
-    ),
-    AppInfo(
-        app_id=AppId.ANTI_INTRUDER,
-        title="Anti-intrusos",
-        description="Detecta personas en una zona y dispara una alerta; no requiere entrenamiento.",
-        implemented=True,
-    ),
-    AppInfo(
-        app_id=AppId.POSTURE,
-        title="Postura ergonomica",
-        description="Avisa de mala postura con pose de cuerpo completo; no requiere entrenamiento.",
-        implemented=True,
+        group=AppGroup.MAIN,
     ),
     AppInfo(
         app_id=AppId.FACE_AUTH,
@@ -104,6 +100,27 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         description="Registra tu cara y saluda al entrar; requiere enrolamiento, no entrenamiento.",
         implemented=True,
         preparation=AppPreparation.ENROLLMENT,
+        group=AppGroup.MAIN,
+    ),
+    AppInfo(
+        app_id=AppId.PEOPLE_COUNTER,
+        title="Contador de personas",
+        description="Cuenta personas en camara con YOLO; no requiere entrenamiento.",
+        implemented=True,
+        group=AppGroup.MAIN,
+    ),
+    AppInfo(
+        app_id=AppId.ANTI_INTRUDER,
+        title="Anti-intrusos",
+        description="Detecta personas en una zona y dispara una alerta; no requiere entrenamiento.",
+        implemented=True,
+        group=AppGroup.MAIN,
+    ),
+    AppInfo(
+        app_id=AppId.POSTURE,
+        title="Postura ergonomica",
+        description="Avisa de mala postura con pose de cuerpo completo; no requiere entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.ASSISTANCE,
@@ -116,12 +133,14 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         title="Zona permanencia",
         description="Avisa si alguien permanece en zona mas de N segundos; sin entrenamiento.",
         implemented=True,
+        group=AppGroup.MAIN,
     ),
     AppInfo(
         app_id=AppId.VACANCY,
         title="Zona vacia",
         description="Avisa si no hay nadie en la camara; util para museos/salas.",
         implemented=True,
+        group=AppGroup.MAIN,
     ),
     AppInfo(
         app_id=AppId.VEHICLE_COUNTER,
@@ -139,6 +158,7 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.FALL_DETECTOR,
         title="Detector de caidas",
         description="Detecta caidas por pose y dispara alerta; sin entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.GENDER_AGE,
@@ -150,11 +170,13 @@ DEFAULT_APPS: tuple[AppInfo, ...] = (
         app_id=AppId.DROWSINESS,
         title="Somnolencia",
         description="Detecta ojos cerrados/bostezo y cabeceo; sin entrenamiento.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.OCR_READER,
         title="OCR en vivo",
         description="Lee texto/patentes en un ROI con OCR; sin entrenamiento, nueva dependencia.",
+        implemented=True,
     ),
     AppInfo(
         app_id=AppId.PPE_DETECTOR,
@@ -183,6 +205,10 @@ class AppCatalog:
             if info.app_id == app_id:
                 return info
         return None
+
+    def apps_in_group(self, group: AppGroup) -> tuple[AppInfo, ...]:
+        """Apps de una seccion del launcher (``MAIN``/``OTHER``), en orden."""
+        return tuple(info for info in self.apps if info.group is group)
 
     def require(self, app_id: AppId) -> AppInfo:
         """Devuelve la app con ese id o falla con ``ConfigError``."""

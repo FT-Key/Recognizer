@@ -38,6 +38,7 @@ from recognizer.core.config import AppConfig, AppsConfig
 from recognizer.core.domain.app import (
     AppAvailability,
     AppCatalog,
+    AppGroup,
     AppId,
     AppPreparation,
     AppRunRequest,
@@ -119,6 +120,9 @@ class FakeRoot:
         hook = FakeRoot.on_mainloop
         if hook is not None:
             hook(self)
+
+    def wait_window(self) -> None:
+        pass
 
 
 class _WidgetBase:
@@ -505,10 +509,63 @@ def test_run_gui_menu_badges_use_contrast_foreground(monkeypatch: pytest.MonkeyP
     training_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.TRAINING.value}"
     badges = {label.text: label for label in FakeLabel.instances}
     assert badges[LABEL_AVAILABLE].fg == DEFAULT_THEME.primary_contrast
-    assert badges[training_label].fg == DEFAULT_THEME.text
+    assert badges[menu_gui.LABEL_OTHER_APPS].fg == DEFAULT_THEME.primary_contrast
+    assert badges[LABEL_DISABLED].fg == DEFAULT_THEME.text
+    # Las apps por entrenar viven en el submenu "Otras apps", no en el principal.
+    assert training_label not in badges
     # FACE_AUTH (enrolamiento) ya está implementada: usa badge disponible.
     assert f"{LABEL_COMING_SOON} - requiere {AppPreparation.ENROLLMENT.value}" not in badges
-    assert badges[LABEL_DISABLED].fg == DEFAULT_THEME.text
+
+
+def test_run_other_apps_submenu_lists_secondary_apps(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_tk_fakes(monkeypatch)
+    monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: None)
+
+    result = menu_gui.run_other_apps_submenu(
+        request=REQUEST,
+        apps_config=AppsConfig(),
+        catalog=AppCatalog(),
+        logger=TEST_LOGGER,
+        tk_factory=cast("Callable[[], tkinter.Toplevel]", lambda: FakeRoot()),
+    )
+
+    assert result == 0
+    training_label = f"{LABEL_COMING_SOON} - requiere {AppPreparation.TRAINING.value}"
+    badges = {label.text: label for label in FakeLabel.instances}
+    # Las apps secundarias y por crear estan aqui.
+    assert training_label in badges
+    titles = [button.text for button in FakeButton.instances]
+    assert any("Somnolencia" in text for text in titles)
+    assert any("OCR en vivo" in text for text in titles)
+    assert not any("Reconocimiento de gestos" in text for text in titles)
+
+
+def test_run_gui_menu_opens_other_apps_submenu(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake_root_cls = _install_tk_fakes(monkeypatch)
+    calls: list[int] = []
+
+    def fake_submenu(**_kwargs: object) -> int:
+        calls.append(1)
+        return 0
+
+    monkeypatch.setattr(menu_gui, "run_other_apps_submenu", fake_submenu)
+    # La ultima fila del menu principal es "Otras apps" y debe ser seleccionable.
+    other_number = len(AppCatalog().apps_in_group(AppGroup.MAIN)) + 1
+    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(other_number).command)
+
+    assert (
+        run_gui_menu(
+            request=REQUEST,
+            apps_config=AppsConfig(),
+            logger=TEST_LOGGER,
+            tk_factory=_tk_factory(),
+        )
+        == 0
+    )
+
+    assert calls == [1]
+    assert _app_button(other_number).state == menu_gui.STATE_NORMAL
+    assert fake_root_cls.instances[0].withdraw_calls == 1
 
 
 def test_run_gui_menu_uses_clamped_width_for_wraplength_on_narrow_screen(
@@ -601,12 +658,12 @@ def test_run_gui_menu_ignores_non_selectable_rows(
         return 0
 
     monkeypatch.setattr(menu, "resolve_runner", lambda _app_id: fake_runner)
-    # Posicion 11 = FALL_DETECTOR (proximamente): fila no seleccionable.
-    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(11).command)
+    # Posicion 1 = Reconocimiento de gestos, deshabilitada: fila no seleccionable.
+    fake_root_cls.on_mainloop = lambda _root: _press(_app_button(1).command)
 
     result = run_gui_menu(
         request=REQUEST,
-        apps_config=AppsConfig(),
+        apps_config=AppsConfig(enabled={AppId.GESTURES: False}),
         logger=TEST_LOGGER,
         tk_factory=_tk_factory(),
     )
@@ -614,7 +671,7 @@ def test_run_gui_menu_ignores_non_selectable_rows(
     assert result == 0
     assert calls == []
     assert fake_root_cls.instances[0].withdraw_calls == 0
-    assert _app_button(11).state == menu_gui.STATE_DISABLED
+    assert _app_button(1).state == menu_gui.STATE_DISABLED
 
 
 def test_close_paths_return_zero(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -242,8 +242,9 @@ def test_menu_renders_posture_as_available() -> None:
 
     text = menu.render_catalog(AppCatalog(), AppsConfig())
 
-    assert "  4) Postura ergonomica" in text
-    assert menu.LABEL_AVAILABLE in text.splitlines()[7]
+    assert "Postura ergonomica" in text
+    row = next(line for line in text.splitlines() if "Postura ergonomica" in line)
+    assert menu.LABEL_AVAILABLE in row
 
 
 # --- Runner con dobles (bucle de camara real) ---

@@ -21,19 +21,19 @@ Fuente de verdad del orden en el menú: `DEFAULT_APPS` en
 | 7 | Conteo de autos | `vehicle_counter` | implementada |
 | 8 | Desenfoque privacidad | `privacy_blur` | implementada |
 | 9 | Edad y género | `gender_age` | implementada |
+| 10 | Detector de caídas | `fall_detector` | implementada |
+| 11 | Detector de somnolencia | `drowsiness` | implementada |
 
 ## 2. Fáciles — sin entrenamiento (etapas próximas)
 
 | # | App | Id | Modelo pre-entrenado |
 |---|---|---|---|
-| 9 | Zona permanencia | `loitering` | `yolo26n.pt` + track (dwell por `track_id`) |
+| 12 | Zona permanencia | `loitering` | `yolo26n.pt` + track (dwell por `track_id`) |
 
 ## 3. Intermedias — sin entrenamiento
 
 | # | App | Id | Modelo pre-entrenado |
 |---|---|---|---|
-| 10 | Detector de caídas | `fall_detector` | `yolo26n-pose.pt` (aspecto + centro bajo + quietud) |
-| 12 | Somnolencia | `drowsiness` | landmarks faciales / pose (EAR + MAR + cabeceo) |
 
 ## 4. Final — sin entrenamiento, dependencia nueva
 

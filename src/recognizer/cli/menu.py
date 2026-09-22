@@ -16,6 +16,7 @@ from recognizer.core.constants import ANONYMOUS_FACE_ID
 from recognizer.core.domain.app import (
     AppAvailability,
     AppCatalog,
+    AppGroup,
     AppId,
     AppInfo,
     AppRunRequest,
@@ -40,6 +41,9 @@ EXIT_CHOICES = frozenset({"0", "q", "salir", "exit"})
 MENU_TITLE = "R E C O G N I Z E R  -  MENU"
 MENU_SUBTITLE = "elige una aplicacion (ESC/q dentro de una app vuelve aqui)"
 EXIT_LINE = "  0) Salir"
+BACK_LINE = "  0) Volver"
+OTHER_APPS_TITLE = "Otras apps"
+LABEL_OTHER_APPS = "[abrir]"
 TITLE_COLUMN = 32
 
 LABEL_AVAILABLE = "[disponible]"
@@ -171,6 +175,18 @@ def resolve_runner(app_id: AppId) -> AppRunner | None:
             from recognizer.cli.apps.gender_age import run_gender_age
 
             return run_gender_age
+        case AppId.FALL_DETECTOR:
+            from recognizer.cli.apps.fall_detector import run_fall_detector
+
+            return run_fall_detector
+        case AppId.DROWSINESS:
+            from recognizer.cli.apps.drowsiness import run_drowsiness
+
+            return run_drowsiness
+        case AppId.OCR_READER:
+            from recognizer.cli.apps.ocr_reader import run_ocr_reader
+
+            return run_ocr_reader
         case _:
             return None
 
@@ -190,13 +206,16 @@ def render_catalog(
     catalog: AppCatalog,
     apps_config: AppsConfig,
     *,
+    group: AppGroup | None = None,
     identity: Identity | None = None,
     policy: AppPolicy | None = None,
 ) -> str:
-    """Construye el texto multilinea del menu con todas las apps y su estado.
+    """Construye el texto multilinea del menu con las apps y su estado.
 
-    Con ``identity`` y ``policy`` las apps no permitidas se marcan con
-    ``[sin permiso]``; sin ambas, el render es el historico (sin filtro).
+    ``group=None`` lista todas las apps (historico). Con ``AppGroup.MAIN`` lista
+    las principales y agrega al final la entrada "Otras apps"; con
+    ``AppGroup.OTHER`` lista solo las secundarias. Con ``identity`` y ``policy``
+    las apps no permitidas se marcan con ``[sin permiso]``.
     """
     lines = [
         BANNER_BORDER,
@@ -204,7 +223,8 @@ def render_catalog(
         MENU_SUBTITLE.center(BANNER_WIDTH),
         BANNER_BORDER,
     ]
-    for number, info in enumerate(catalog.apps, start=1):
+    infos = catalog.apps if group is None else catalog.apps_in_group(group)
+    for number, info in enumerate(infos, start=1):
         availability = catalog.availability(info.app_id, enabled=apps_config.enabled)
         label = availability_label(info, availability)
         if (
@@ -214,8 +234,49 @@ def render_catalog(
         ):
             label = f"{label} {LABEL_NO_PERMISSION}"
         lines.append(f"  {number}) {info.title:<{TITLE_COLUMN}} {label}")
-    lines.append(EXIT_LINE)
+    if group is AppGroup.MAIN:
+        number = len(infos) + 1
+        lines.append(f"  {number}) {OTHER_APPS_TITLE:<{TITLE_COLUMN}} {LABEL_OTHER_APPS}")
+    lines.append(BACK_LINE if group is AppGroup.OTHER else EXIT_LINE)
     return "\n".join(lines)
+
+
+def _launch_info(
+    info: AppInfo,
+    *,
+    catalog: AppCatalog,
+    apps_config: AppsConfig,
+    request: AppRunRequest,
+    engine: AppPolicy | None,
+    current: Identity | None,
+    logger: logging.Logger,
+) -> None:
+    """Ejecuta la app si esta disponible y permitida; informa si no."""
+    availability = catalog.availability(info.app_id, enabled=apps_config.enabled)
+    if availability is AppAvailability.COMING_SOON:
+        logger.info("'%s' aun no esta implementada (proximamente).", info.title)
+        return
+    if availability is AppAvailability.DISABLED:
+        logger.info("'%s' esta deshabilitada en config.yaml (apps.enabled).", info.title)
+        return
+    if (
+        engine is not None
+        and current is not None
+        and not engine.can_launch(current, app_id=info.app_id)
+    ):
+        logger.warning(
+            "'%s' requiere un rol con permiso (tu rol: %s).",
+            info.title,
+            current.role.value,
+        )
+        return
+    runner = resolve_runner(info.app_id)
+    if runner is None:
+        logger.error("No hay runner para '%s'.", info.app_id.value)
+        return
+    logger.info("Abriendo '%s'... (ESC/q para volver al menu)", info.title)
+    runner(request)
+    logger.info("Volviendo al menu principal.")
 
 
 def run_menu(
@@ -230,83 +291,91 @@ def run_menu(
 ) -> int:
     """Muestra el menu en bucle hasta que el usuario sale.
 
-    Cada app se ejecuta de forma sincrona; al terminar (ESC/q) se vuelve a
-    mostrar el menu. Devuelve 0 al salir. Con ``identity_provider`` y
-    ``policy`` las apps sin permiso se marcan y su lanzamiento se bloquea;
-    sin ambas, el menu es el historico (sin filtro, para tests y modo abierto).
+    El menu principal lista las apps de ``AppGroup.MAIN`` mas una entrada
+    "Otras apps" que abre el submenu con las secundarias. Cada app corre de
+    forma sincrona; al terminar (ESC/q) se vuelve a mostrar el menu. Devuelve 0
+    al salir. Con ``identity_provider`` y ``policy`` las apps sin permiso se
+    marcan y su lanzamiento se bloquea; sin ambas, el menu es el historico.
     """
     resolved_catalog = catalog if catalog is not None else AppCatalog()
     reader = input_fn if input_fn is not None else input
     engine = policy
-    if identity_provider is None and engine is None:
-        current: Identity | None = None
-    else:
-        if engine is None:
-            engine = AllowAllPolicy()
-        current = None  # se resuelve en cada vuelta (la sesion puede cambiar)
+    if identity_provider is not None and engine is None:
+        engine = AllowAllPolicy()
+    main_infos = resolved_catalog.apps_in_group(AppGroup.MAIN)
+    other_infos = resolved_catalog.apps_in_group(AppGroup.OTHER)
 
-    while True:
-        if engine is not None:
-            current = (
-                identity_provider.current_identity()
-                if identity_provider is not None
-                else anonymous_identity()
-            )
-            logger.info(
-                "\n%s",
-                render_catalog(resolved_catalog, apps_config, identity=current, policy=engine),
-            )
-        else:
-            logger.info("\n%s", render_catalog(resolved_catalog, apps_config))
+    def current_identity() -> Identity | None:
+        if engine is None:
+            return None
+        return (
+            identity_provider.current_identity()
+            if identity_provider is not None
+            else anonymous_identity()
+        )
+
+    def read_choice() -> str | None:
         try:
-            raw = reader(PROMPT)
+            return reader(PROMPT)
         except EOFError:
             logger.info("Entrada cerrada; saliendo del menu.")
-            return 0
+            return None
         except KeyboardInterrupt:
             logger.info("Interrumpido; saliendo del menu.")
-            return 0
+            return None
 
-        choice = raw.strip().lower()
-        if choice in EXIT_CHOICES:
-            logger.info("Hasta luego.")
-            return 0
-        if not choice.isdigit():
-            logger.warning("Opcion no valida: %r", raw)
-            continue
-
-        info = resolved_catalog.by_number(int(choice))
-        if info is None:
-            logger.warning("No existe la opcion %s.", choice)
-            continue
-
-        availability = resolved_catalog.availability(info.app_id, enabled=apps_config.enabled)
-        if availability is AppAvailability.COMING_SOON:
-            logger.info("'%s' aun no esta implementada (proximamente).", info.title)
-            continue
-        if availability is AppAvailability.DISABLED:
-            logger.info("'%s' esta deshabilitada en config.yaml (apps.enabled).", info.title)
-            continue
-        if (
-            engine is not None
-            and current is not None
-            and not engine.can_launch(current, app_id=info.app_id)
-        ):
-            logger.warning(
-                "'%s' requiere un rol con permiso (tu rol: %s).",
-                info.title,
-                current.role.value,
+    def show(*, group: AppGroup) -> None:
+        identity = current_identity()
+        if engine is not None:
+            logger.info(
+                "\n%s",
+                render_catalog(
+                    resolved_catalog, apps_config, group=group, identity=identity, policy=engine
+                ),
             )
-            continue
+        else:
+            logger.info("\n%s", render_catalog(resolved_catalog, apps_config, group=group))
 
-        runner = resolve_runner(info.app_id)
-        if runner is None:
-            logger.error("No hay runner para '%s'.", info.app_id.value)
-            continue
+    def menu_loop(infos: tuple[AppInfo, ...], *, group: AppGroup, allow_other: bool) -> bool:
+        """Un bucle de menu; devuelve True si hay que salir del launcher."""
+        while True:
+            show(group=group)
+            raw = read_choice()
+            if raw is None:
+                return True
+            choice = raw.strip().lower()
+            if choice == "0":
+                if group is AppGroup.OTHER:
+                    logger.info("Volviendo al menu principal.")
+                    return False
+                logger.info("Hasta luego.")
+                return True
+            if choice in EXIT_CHOICES:
+                logger.info("Hasta luego.")
+                return True
+            if not choice.isdigit():
+                logger.warning("Opcion no valida: %r", raw)
+                continue
+            number = int(choice)
+            if allow_other and number == len(infos) + 1:
+                if menu_loop(other_infos, group=AppGroup.OTHER, allow_other=False):
+                    return True
+                continue
+            if not 1 <= number <= len(infos):
+                logger.warning("No existe la opcion %s.", choice)
+                continue
+            _launch_info(
+                infos[number - 1],
+                catalog=resolved_catalog,
+                apps_config=apps_config,
+                request=request,
+                engine=engine,
+                current=current_identity(),
+                logger=logger,
+            )
 
-        logger.info("Abriendo '%s'... (ESC/q para volver al menu)", info.title)
-        runner(request)
-        logger.info("Volviendo al menu principal.")
+    menu_loop(main_infos, group=AppGroup.MAIN, allow_other=True)
+    return 0
 
 
 def run_launcher(

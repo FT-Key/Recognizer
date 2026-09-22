@@ -11,7 +11,9 @@ requires-python = ">=3.12,<3.13"
 license = { text = "MIT" }
 authors = [{ name = "FT-Key" }]
 dependencies = [
+    "easyocr>=1.7.0",
     "insightface>=0.7.1",
+    "lap>=0.5.12",
     "mediapipe>=1.0.1",
     "numpy>=2.5.3",
     "onnxruntime>=1.17.1",
@@ -23,6 +25,11 @@ dependencies = [
     "ultralytics>=8.4.155",
     "websocket-client>=1.8.0",
 ]
+
+[tool.uv]
+# easyocr arrastra opencv-python-headless (sin GUI); instalar ambos rompe cv2.
+# Excluimos la variante headless para que solo quede opencv-python (con cv2.imshow).
+exclude-dependencies = ["opencv-python-headless", "opencv-contrib-python"]
 
 [project.scripts]
 recognizer = "recognizer.cli.app:main"
@@ -103,6 +110,10 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["ultralytics", "ultralytics.*", "torch", "torch.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["easyocr", "easyocr.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

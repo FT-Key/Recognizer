@@ -17,10 +17,10 @@ apps:
     vacancy: true
     vehicle_counter: true
     privacy_blur: true
-    # fall_detector: true
+    fall_detector: true
     gender_age: true
-    # drowsiness: true
-    # ocr_reader: true
+    drowsiness: true
+    ocr_reader: true
     # ppe_detector: true
     # inventory: true
 
@@ -484,3 +484,102 @@ gender_age:
   min_confidence: 0.5
   det_size: 640
   smoothing_window: 15
+
+# Detector de caidas (etapa 20): detecta caidas analizando la pose con YOLO pose.
+# Compara tres senales: aspecto (alto/ancho del torso), centro de masa Y
+# (posicion vertical) y quietud (varianza del centro entre fotogramas).
+# max_aspect_ratio: si la relacion alto/ancho es menor, la persona es mas ancha
+#   que alta (cayo). 0.8 funciona bien para distinguir pie de acostado.
+# min_center_y: el centro de masa debe estar por debajo de este valor (0=arriba,
+#   1=abajo). 0.6 detecta personas en el suelo sin falsos positivos de pie.
+# max_stillness: varianza maxima del centro Y para considerar quietud.
+#   0.02 es sensible; subelo si hay falsos positivos por movimiento leve.
+# stillness_window: fotogramas de historial para calcular la quietud.
+# confirm_frames/release_frames: debounce del aviso.
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dure la caida (0 = una vez).
+fall_detector:
+  model_path: models/yolo26n-pose.pt
+  min_confidence: 0.5
+  min_keypoint_confidence: 0.5
+  max_aspect_ratio: 0.8
+  min_center_y: 0.6
+  max_stillness: 0.02
+  stillness_window: 10
+  confirm_frames: 5
+  release_frames: 10
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# Detector de somnolencia (etapa 22): detecta somnolencia analizando la pose
+# con YOLO pose. Compara tres senales: cabeza caida (nariz vs hombros),
+# cabeceo (oscilacion de la nariz) y quietud (varianza del centro corporal).
+# head_droop_threshold: diferencia Y nariz - centro hombros; valores altos
+#   indican cabeza caida. 0.12 funciona bien para detectar cabeza baja.
+# nod_amplitude_threshold: amplitud max-min de la nariz Y en la ventana;
+#   oscilacion = cabeceo. 0.04 detecta cabeceo leve.
+# nodding_window: fotogramas de historial para detectar oscilacion.
+# stillness_threshold: varianza maxima del centro corporal para considerar
+#   quietud. Baja = quieto = posible somnolencia.
+# stillness_window: fotogramas de historial para calcular la quietud.
+# confirm_frames/release_frames: debounce del aviso.
+# alert: alerta sonora del sistema (winsound en Windows).
+#   enabled: false deja solo la alerta visual del overlay.
+#   repeat_seconds: repeticion de la alerta mientras dure la somnolencia.
+drowsiness:
+  model_path: models/yolo26n-pose.pt
+  min_confidence: 0.5
+  min_keypoint_confidence: 0.5
+  head_droop_threshold: 0.12
+  nod_amplitude_threshold: 0.04
+  nodding_window: 20
+  # EAR (Eye Aspect Ratio): ojos cerrados cuando EAR < threshold.
+  ear_threshold: 0.18
+  eye_close_frames: 8
+  # MAR (Mouth Aspect Ratio): bostezo cuando MAR > threshold.
+  mar_threshold: 0.5
+  yawn_frames: 5
+  # Face Mesh modelo
+  face_mesh_model_path: models/face_landmarker.task
+  face_detection_confidence: 0.5
+  face_presence_confidence: 0.5
+  confirm_frames: 10
+  release_frames: 15
+  alert:
+    enabled: true
+    repeat_seconds: 2.0
+
+# OCR en vivo (etapa 23): lee texto en una region de interes con EasyOCR.
+# languages: codigos de idioma (en, es, fr, etc.). Se descargan modelos al inicio.
+# min_confidence: confianza minima para mostrar un texto detectado.
+# process_every_n_frames: cada cuantos fotogramas se ejecuta OCR. Subilo en CPU
+#   lenta para reducir uso de CPU; la vista sigue fluida.
+# max_inference_fps: tope de inferencias por segundo (0 = sin tope).
+# max_width: reduce el recorte de la ROI a este ancho antes de inferir. En CPU el
+#   coste escala con los pixeles: bajalo si va lento (0 = sin reduccion).
+# max_frame_width: reduce el fotograma completo a este ancho antes de procesar.
+#   Util con camaras de red (telefono) de alta resolucion; 0 = sin reduccion.
+# canvas_size / mag_ratio: acotan el lienzo interno de CRAFT (menor = mas rapido,
+#   pero pierde texto pequeno).
+# change_threshold: si la ROI no cambio (diferencia media 0..255 en grises) no se
+#   vuelve a correr OCR y se conservan las cajas; 0 = procesar siempre.
+# max_results: limite de textos devueltos por fotograma.
+# roi: region de interes normalizada 0..1 sobre el fotograma. Solo se busca
+#   texto dentro de esta zona (una ROI mas chica = mas rapido y mejor detalle).
+ocr_reader:
+  languages: [en, es]
+  min_confidence: 0.3
+  process_every_n_frames: 3
+  max_inference_fps: 2.0
+  max_width: 640
+  max_frame_width: 1280
+  canvas_size: 1280
+  mag_ratio: 1.0
+  change_threshold: 8.0
+  max_results: 20
+  roi_x_min: 0.1
+  roi_y_min: 0.1
+  roi_x_max: 0.9
+  roi_y_max: 0.9

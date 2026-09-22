@@ -599,8 +599,9 @@ def test_menu_renders_people_counter_as_available() -> None:
 
     text = menu.render_catalog(AppCatalog(), AppsConfig())
 
-    assert "  2) Contador de personas" in text
-    assert menu.LABEL_AVAILABLE in text.splitlines()[5]
+    assert "Contador de personas" in text
+    row = next(line for line in text.splitlines() if "Contador de personas" in line)
+    assert menu.LABEL_AVAILABLE in row
 
 
 # --- Runner con dobles (bucle de camara real) ---

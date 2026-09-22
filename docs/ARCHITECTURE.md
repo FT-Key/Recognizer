@@ -198,7 +198,7 @@ Recognizer tiene **dos aplicaciones** que comparten el mismo core conceptual
 
 Ver `docs/WEB-PLAN.md` para detalles de la versión web.
 
-## Latencia y desacople de inferencia (app facial)
+## Latencia y desacople de inferencia (apps con inferencia lenta)
 
 Todas las apps comparten `cli/runtime.run_camera_loop`: lee un fotograma, ejecuta el
 pipeline y dibuja. El bucle es **single-thread**: el ritmo de lectura es el ritmo de
@@ -207,31 +207,43 @@ inferencia.
 - **Apps rápidas** (gestos/MediaPipe, contador/anti-intrusos/postura/YOLO nano): la
   inferencia va a ~10-30 FPS, así que el bucle lee la cámara casi tan rápido como llega el
   stream. Con `CAP_PROP_BUFFERSIZE=1` alcanza para que no haya retraso.
-- **App facial** (InsightFace `buffalo_s` en CPU): la inferencia va a ~2-5 FPS. El bucle se
-  queda cientos de ms dentro del reconocedor sin leer, **no drena el stream** y la cámara de
-  red (teléfono/enlace móvil) acumula retraso hasta segundos; la app de enlace incluso avisa
+- **Apps lentas** (facial con InsightFace `buffalo_s`, OCR con EasyOCR, somnolencia, edad y
+  género, desenfoque de privacidad; todas en CPU): la inferencia va a ~0.3-5 FPS. El bucle se
+  queda cientos de ms o segundos dentro del reconocedor sin leer, **no drena el stream** y la
+  cámara de red (teléfono/enlace móvil) acumula retraso; la app de enlace incluso avisa
   *"calidad de red deficiente"*. `CAP_PROP_BUFFERSIZE=1` no lo evita porque ese búfer es
   local; el búfer de red queda del lado del emisor.
 
-Solución en la app facial (solo ella, por ahora):
+Patrón común, sin tocar `core`:
 
 1. `adapters/latest_frame_source.py` (`LatestFrameSource`): hilo daemon que **drena la
    cámara sin parar** y guarda el último fotograma. `read()` espera al siguiente fotograma
    nuevo y devuelve una copia (para dibujar); `wait_for_new(version)` permite al worker ver
    el último sin consumirlo.
-2. `cli/apps/face_auth.py` (`_RecognitionWorker`): hilo que reconoce el último fotograma y
-   actualiza el estado (enrolamiento/login) bajo lock. El bucle principal **solo dibuja**,
-   así que la vista va a ritmo de cámara aunque la inferencia tarde.
-3. Costo de CPU acotado: `allowed_modules=["detection", "recognition"]` (se descartan
-   `landmark_2d_106`, `landmark_3d_68` y `genderage`, que se ejecutaban por cara y causaban el
-   pico al aparecer un rostro), `face_auth.det_size` (320), `face_auth.max_inference_fps`
-   (tope de 5 FPS; `0` = sin tope) y `face_auth.process_every_n_frames`.
+2. Worker de inferencia en un hilo aparte: el hilo procesa el último fotograma y entrega
+   resultados; el bucle principal **solo dibuja**, así que la vista va a ritmo de cámara
+   aunque la inferencia tarde. Hay dos formas:
+   - `cli/inference_worker.py` (`LatestInferenceWorker`): worker **genérico** (infer + on_result)
+     que usan **somnolencia**, **edad y género** y **desenfoque de privacidad**.
+   - Workers propios: `_RecognitionWorker` (facial) y `_OCRWorker` (OCR), con lógica
+     específica (matching, cambio de ROI, etc.).
+3. Costo de CPU acotado por configuración:
+   - Facial: `allowed_modules=["detection", "recognition"]` (se descartan `landmark_2d_106`,
+     `landmark_3d_68` y `genderage`, que se ejecutaban por cara y causaban el pico al
+     aparecer un rostro), `face_auth.det_size` (320), `face_auth.max_inference_fps`,
+     `face_auth.process_every_n_frames`.
+   - OCR: `ocr_reader.max_width` (reduce el recorte de la ROI a 640 antes de inferir),
+     `ocr_reader.max_frame_width` (reduce el fotograma completo a 1280; útil con cámaras de
+     red de alta resolución), `ocr_reader.canvas_size`/`mag_ratio`, `max_inference_fps`,
+     `process_every_n_frames` y `change_threshold` (si la ROI no cambió, no se vuelve a
+     correr OCR).
 
 **Cuándo aplicar el mismo patrón a otras apps:** cuando la inferencia de una app sea más
 lenta que la cámara (FPS de inferencia < FPS de captura) o la cámara sea de red y aparezca
 retraso creciente / avisos de calidad. Se hace sin tocar `core`: envolver su `FrameSource`
-con `LatestFrameSource` y mover la inferencia a un worker que entregue resultados al bucle
-de dibujo. No hace falta para apps que ya corren en tiempo real (hoy, todas menos la facial).
+con `LatestFrameSource` y mover la inferencia a un worker (`LatestInferenceWorker`) que
+entregue resultados al bucle de dibujo. Hoy lo usan facial, OCR, somnolencia, edad/género y
+privacidad; el resto corre en tiempo real.
 
 **Para qué sirve:** desacoplar la captura del cómputo. Garantiza (a) que el stream se drene
 siempre (sin retraso acumulado ni degradación de red), (b) que el usuario vea video en vivo

@@ -18,6 +18,10 @@ MODELS: dict[str, str] = {
         "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/"
         "gesture_recognizer/float16/latest/gesture_recognizer.task"
     ),
+    "face_landmarker.task": (
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/"
+        "face_landmarker/float16/latest/face_landmarker.task"
+    ),
     "blaze_face_short_range.tflite": (
         "https://storage.googleapis.com/mediapipe-models/face_detector/"
         "blaze_face_short_range/float16/latest/blaze_face_short_range.tflite"
